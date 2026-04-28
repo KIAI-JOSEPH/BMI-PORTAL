@@ -1,0 +1,96 @@
+# BMI UMS - Caddy Configuration
+# Automatic HTTPS with Let's Encrypt
+
+{
+    auto_https off
+    admin off
+}
+
+# Local development (change to your domain in production)
+:80 {
+    # Enable compression
+    encode gzip
+
+    # Security headers
+    header {
+        X-Content-Type-Options "nosniff"
+        X-Frame-Options "DENY"
+        X-XSS-Protection "1; mode=block"
+        Referrer-Policy "strict-origin-when-cross-origin"
+        Content-Security-Policy "default-src 'self'; script-src 'self' 'unsafe-inline' 'unsafe-eval'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com; img-src 'self' data: blob: https:; connect-src 'self' http://localhost:* https://localhost:*;"
+        Permissions-Policy "geolocation=(), microphone=(), camera=()"
+        Strict-Transport-Security "max-age=31536000; includeSubDomains; preload"
+        -Server
+    }
+
+    # API routes
+    handle_path /api/* {
+        reverse_proxy api:3001 {
+            header_up Host {host}
+            header_up X-Real-IP {remote}
+            header_up X-Forwarded-For {remote}
+            header_up X-Forwarded-Proto {scheme}
+        }
+    }
+
+    # PocketBase admin UI
+    handle_path /_/* {
+        reverse_proxy pocketbase:8090 {
+            header_up Host {host}
+            header_up X-Real-IP {remote}
+            header_up X-Forwarded-For {remote}
+            header_up X-Forwarded-Proto {scheme}
+        }
+    }
+
+    # PocketBase API
+    handle_path /pb/* {
+        reverse_proxy pocketbase:8090 {
+            header_up Host {host}
+            header_up X-Real-IP {remote}
+            header_up X-Forwarded-For {remote}
+            header_up X-Forwarded-Proto {scheme}
+        }
+    }
+
+    # Static files (frontend)
+    handle {
+        root * /srv
+        try_files {path} {path}/ /index.html
+        file_server
+    }
+
+    # Logging
+    log {
+        output file /var/log/caddy/access.log {
+            roll_size 10MB
+            roll_keep 5
+            roll_keep_for 48h
+        }
+    }
+}
+
+# Production configuration (uncomment and modify for production)
+# bmi.university.edu {
+#     tls your-email@bmi.edu
+#     
+#     # Import all the same directives above
+#     encode gzip
+#     
+#     header {
+#         X-Content-Type-Options "nosniff"
+#         X-Frame-Options "DENY"
+#         X-XSS-Protection "1; mode=block"
+#         Referrer-Policy "strict-origin-when-cross-origin"
+#     }
+#     
+#     handle_path /api/* {
+#         reverse_proxy api:3001
+#     }
+#     
+#     handle {
+#         root * /srv
+#         try_files {path} {path}/ /index.html
+#         file_server
+#     }
+# }
