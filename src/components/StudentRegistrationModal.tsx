@@ -1,11 +1,12 @@
 import React, { useState, useEffect } from 'react';
-import { X, UserPlus, Upload, User, CheckCircle2 } from 'lucide-react';
+import { X, UserPlus, Upload, User, CheckCircle2, Loader2 } from 'lucide-react';
 import { Student } from '../types';
+import { createStudent, updateStudent } from '../services/studentService';
 
 interface StudentRegistrationModalProps {
   isOpen: boolean;
   onClose: () => void;
-  onSuccess: (studentData: Partial<Student>) => void;
+  onSuccess: (studentData: Student) => void;
   initialData?: Student;
 }
 
@@ -30,6 +31,8 @@ const StudentRegistrationModal: React.FC<StudentRegistrationModalProps> = ({ isO
   });
   
   const [photoPreview, setPhotoPreview] = useState<string | undefined>(undefined);
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
     if (initialData) {
@@ -55,6 +58,7 @@ const StudentRegistrationModal: React.FC<StudentRegistrationModalProps> = ({ isO
         photoZoom: 1
       });
       setPhotoPreview(undefined);
+      setError(null);
     }
   }, [initialData, isOpen]);
 
@@ -72,6 +76,54 @@ const StudentRegistrationModal: React.FC<StudentRegistrationModalProps> = ({ isO
         handleChange('photo', result);
       };
       reader.readAsDataURL(file);
+    }
+  };
+
+  const handleSubmit = async () => {
+    // Validate required fields
+    if (!formData.firstName || !formData.lastName || !formData.email || !formData.phone) {
+      setError('Please fill in all required fields (First Name, Last Name, Email, Phone)');
+      return;
+    }
+
+    // Validate email format
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    if (!emailRegex.test(formData.email)) {
+      setError('Please enter a valid email address');
+      return;
+    }
+
+    // Validate phone format (at least 10 digits)
+    const phoneDigits = formData.phone.replace(/\D/g, '');
+    if (phoneDigits.length < 10) {
+      setError('Please enter a valid phone number (at least 10 digits)');
+      return;
+    }
+
+    setIsSubmitting(true);
+    setError(null);
+
+    try {
+      let result;
+      
+      if (initialData) {
+        // Update existing student
+        result = await updateStudent(initialData.id, formData);
+      } else {
+        // Create new student
+        result = await createStudent(formData);
+      }
+
+      if (result.success && result.data) {
+        onSuccess(result.data);
+        onClose();
+      } else {
+        setError(result.error || 'Failed to save student. Please try again.');
+      }
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'An unexpected error occurred');
+    } finally {
+      setIsSubmitting(false);
     }
   };
 
@@ -214,7 +266,7 @@ const StudentRegistrationModal: React.FC<StudentRegistrationModalProps> = ({ isO
                       onChange={(e) => handleChange('academicLevel', e.target.value)}
                       className="w-full p-3 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 outline-none font-bold text-xs uppercase cursor-pointer"
                     >
-                       {['Diploma', 'Degree', 'Masters', 'PhD'].map(l => <option key={l} value={l}>{l}</option>)}
+                       {['Certificate', 'Diploma', 'Degree', 'Masters', 'PhD'].map(l => <option key={l} value={l}>{l}</option>)}
                     </select>
                  </div>
                  <div className="space-y-1">
@@ -232,20 +284,38 @@ const StudentRegistrationModal: React.FC<StudentRegistrationModalProps> = ({ isO
         </div>
 
         {/* Footer */}
-        <div className="p-8 border-t border-gray-100 dark:border-gray-800 bg-white dark:bg-gray-900 flex justify-end gap-4 flex-shrink-0">
-           <button 
-             onClick={onClose}
-             className="px-6 py-3 text-[10px] font-black uppercase tracking-widest text-gray-400 hover:text-red-500 transition-colors"
-           >
-             Cancel
-           </button>
-           <button 
-             onClick={() => onSuccess(formData)}
-             className="px-10 py-3 bg-[#4B0082] text-white rounded-none shadow-xl font-black text-xs uppercase tracking-widest hover:bg-black transition-all flex items-center gap-2 border border-[#FFD700]/30"
-           >
-             <CheckCircle2 size={16} className="text-[#FFD700]" />
-             {initialData ? 'Update Record' : 'Confirm Enrollment'}
-           </button>
+        <div className="p-8 border-t border-gray-100 dark:border-gray-800 bg-white dark:bg-gray-900 flex-shrink-0">
+           {error && (
+             <div className="mb-4 p-3 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 text-red-700 dark:text-red-300 text-xs font-medium">
+               {error}
+             </div>
+           )}
+           <div className="flex justify-end gap-4">
+             <button 
+               onClick={onClose}
+               disabled={isSubmitting}
+               className="px-6 py-3 text-[10px] font-black uppercase tracking-widest text-gray-400 hover:text-red-500 transition-colors disabled:opacity-50"
+             >
+               Cancel
+             </button>
+             <button 
+               onClick={handleSubmit}
+               disabled={isSubmitting}
+               className="px-10 py-3 bg-[#4B0082] text-white rounded-none shadow-xl font-black text-xs uppercase tracking-widest hover:bg-black transition-all flex items-center gap-2 border border-[#FFD700]/30 disabled:opacity-50 disabled:cursor-not-allowed"
+             >
+               {isSubmitting ? (
+                 <>
+                   <Loader2 size={16} className="text-[#FFD700] animate-spin" />
+                   {initialData ? 'Updating...' : 'Saving...'}
+                 </>
+               ) : (
+                 <>
+                   <CheckCircle2 size={16} className="text-[#FFD700]" />
+                   {initialData ? 'Update Record' : 'Confirm Enrollment'}
+                 </>
+               )}
+             </button>
+           </div>
         </div>
 
       </div>

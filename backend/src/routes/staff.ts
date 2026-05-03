@@ -50,14 +50,15 @@ staffRouter.get('/', async (c) => {
     const category = c.req.query('category');
     const status = c.req.query('status');
     const search = c.req.query('search');
-    
-    // Build filter
+
+    const safe = (v: string) => v.replace(/["'\\]/g, '').substring(0, 100);
     const filters: string[] = [];
-    if (department) filters.push(`department = "${department}"`);
-    if (category) filters.push(`category = "${category}"`);
-    if (status) filters.push(`status = "${status}"`);
+    if (department) filters.push(`department = "${safe(department)}"`);
+    if (category) filters.push(`category = "${safe(category)}"`);
+    if (status) filters.push(`status = "${safe(status)}"`);
     if (search) {
-      filters.push(`(name ~ "${search}" || email ~ "${search}" || role ~ "${search}")`);
+      const s = safe(search);
+      filters.push(`(name ~ "${s}" || email ~ "${s}" || role ~ "${s}")`);
     }
     
     const filterString = filters.join(' && ') || undefined;
@@ -227,69 +228,67 @@ staffRouter.delete(
 
 /**
  * GET /api/v1/staff/stats/overview
- * Get staff statistics
+ * Get staff statistics — paginated counts, no full table scan
  */
 staffRouter.get('/stats/overview', async (c) => {
   try {
     const pb = getPocketBase();
-    
-    const allStaff = await pb.collection('staff').getFullList();
-    const staff = allStaff as unknown as StaffMember[];
-    
-    const stats = {
-      total: staff.length,
-      byCategory: {
-        Academic: staff.filter(s => s.category === 'Academic').length,
-        Administrative: staff.filter(s => s.category === 'Administrative').length,
-        Management: staff.filter(s => s.category === 'Management').length,
-      },
-      byStatus: {
-        'Full-time': staff.filter(s => s.status === 'Full-time').length,
-        'Part-time': staff.filter(s => s.status === 'Part-time').length,
-        'On Leave': staff.filter(s => s.status === 'On Leave').length,
-      },
-      byDepartment: staff.reduce((acc, s) => {
+
+    const [all, academic, admin, mgmt, fulltime, parttime, onleave] = await Promise.all([
+      pb.collection('staff').getList(1, 1),
+      pb.collection('staff').getList(1, 1, { filter: 'category = "Academic"' }),
+      pb.collection('staff').getList(1, 1, { filter: 'category = "Administrative"' }),
+      pb.collection('staff').getList(1, 1, { filter: 'category = "Management"' }),
+      pb.collection('staff').getList(1, 1, { filter: 'status = "Full-time"' }),
+      pb.collection('staff').getList(1, 1, { filter: 'status = "Part-time"' }),
+      pb.collection('staff').getList(1, 1, { filter: 'status = "On Leave"' }),
+    ]);
+
+    // Fetch departments (bounded)
+    const deptRecords = await pb.collection('staff').getList(1, 500, { fields: 'department' });
+    const byDepartment = (deptRecords.items as unknown as StaffMember[]).reduce(
+      (acc: Record<string, number>, s: StaffMember) => {
         acc[s.department] = (acc[s.department] || 0) + 1;
         return acc;
-      }, {} as Record<string, number>),
+      }, {}
+    );
+
+    const stats = {
+      total: all.totalItems,
+      byCategory: {
+        Academic: academic.totalItems,
+        Administrative: admin.totalItems,
+        Management: mgmt.totalItems,
+      },
+      byStatus: {
+        'Full-time': fulltime.totalItems,
+        'Part-time': parttime.totalItems,
+        'On Leave': onleave.totalItems,
+      },
+      byDepartment,
     };
-    
-    return c.json<ApiResponse<typeof stats>>({
-      success: true,
-      data: stats,
-    });
-    
+
+    return c.json<ApiResponse<typeof stats>>({ success: true, data: stats });
+
   } catch (error) {
     logger.error('Get staff stats error:', error);
-    return c.json<ApiResponse<never>>({
-      success: false,
-      error: 'Failed to fetch statistics',
-    }, 500);
+    return c.json<ApiResponse<never>>({ success: false, error: 'Failed to fetch statistics' }, 500);
   }
 });
 
 /**
- * GET /api/v1/staff/departments
+ * GET /api/v1/staff/meta/departments
  * Get all unique departments
  */
 staffRouter.get('/meta/departments', async (c) => {
   try {
     const pb = getPocketBase();
-    const staff = await pb.collection('staff').getFullList() as unknown as StaffMember[];
-    
-    const departments = [...new Set(staff.map(s => s.department))].sort();
-    
-    return c.json<ApiResponse<string[]>>({
-      success: true,
-      data: departments,
-    });
-    
+    const records = await pb.collection('staff').getList(1, 500, { fields: 'department' });
+    const departments = [...new Set((records.items as unknown as StaffMember[]).map((s: StaffMember) => s.department))].sort();
+    return c.json<ApiResponse<string[]>>({ success: true, data: departments });
   } catch (error) {
     logger.error('Get departments error:', error);
-    return c.json<ApiResponse<never>>({
-      success: false,
-      error: 'Failed to fetch departments',
-    }, 500);
+    return c.json<ApiResponse<never>>({ success: false, error: 'Failed to fetch departments' }, 500);
   }
 });
 

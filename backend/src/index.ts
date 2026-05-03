@@ -9,7 +9,7 @@ import { logger as httpLogger } from 'hono/logger';
 import { rateLimiter } from 'hono-rate-limiter';
 import { CONFIG, validateConfig } from './config/index.js';
 import { logger } from './utils/logger.js';
-import { getPocketBase, setupCollections, healthCheck as pbHealthCheck, authenticateAdmin, createDefaultAdminIfNeeded } from './services/pocketbase.js';
+import { getPocketBase, setupCollections, healthCheck as pbHealthCheck, authenticateAdmin, createDefaultAdminIfNeeded, scheduleAdminTokenRefresh } from './services/pocketbase.js';
 import { checkOllamaHealth } from './services/ollama.js';
 
 // Import routes
@@ -22,12 +22,23 @@ import certificatesRouter from './routes/certificates.js';
 import financeRouter from './routes/finance.js';
 import libraryRouter from './routes/library.js';
 import dashboardRouter from './routes/dashboard.js';
+import importRouter from './routes/import.js';
 
 // Validate configuration
 validateConfig();
 
 // Create Hono app
 const app = new Hono();
+
+// ── Body size limit middleware (must be first) ────────────────────────────────
+app.use('*', async (c, next) => {
+  const contentLength = c.req.header('content-length');
+  const MAX_BODY_SIZE = 5 * 1024 * 1024; // 5MB hard limit
+  if (contentLength && parseInt(contentLength, 10) > MAX_BODY_SIZE) {
+    return c.json({ success: false, error: 'Request body too large. Maximum 5MB.' }, 413);
+  }
+  return await next();
+});
 
 // Middleware
 app.use('*', httpLogger());
@@ -52,9 +63,17 @@ app.get('/health', async (c) => {
     pbHealthCheck(),
     checkOllamaHealth(),
   ]);
-  
+
   const status = pbHealthy ? 200 : 503;
-  
+
+  // In production, return minimal info — don't expose internal topology
+  if (CONFIG.NODE_ENV === 'production') {
+    return c.json({
+      status: pbHealthy ? 'ok' : 'degraded',
+      timestamp: new Date().toISOString(),
+    }, status);
+  }
+
   return c.json({
     success: pbHealthy,
     timestamp: new Date().toISOString(),
@@ -68,6 +87,16 @@ app.get('/health', async (c) => {
   }, status);
 });
 
+// ── API versioning headers ────────────────────────────────────────────────────
+app.use('/api/v1/*', async (c, next) => {
+  await next();
+  c.res.headers.set('API-Version', '1.0.0');
+  c.res.headers.set('API-Supported-Versions', '1.0.0');
+  // When v2 is released, add: c.res.headers.set('Deprecation', 'true');
+  // c.res.headers.set('Sunset', 'Sat, 01 Jan 2027 00:00:00 GMT');
+  // c.res.headers.set('Link', '</api/v2>; rel="successor-version"');
+});
+
 // API routes
 app.route('/api/v1/auth', authRouter);
 app.route('/api/v1/ai', aiRouter);
@@ -78,6 +107,7 @@ app.route('/api/v1/certificates', certificatesRouter);
 app.route('/api/v1/finance', financeRouter);
 app.route('/api/v1/library', libraryRouter);
 app.route('/api/v1/dashboard', dashboardRouter);
+app.route('/api/v1/import', importRouter);
 
 // 404 handler
 app.notFound((c) => {
@@ -106,7 +136,7 @@ async function startServer() {
     
     // Initialize PocketBase
     logger.info('Connecting to PocketBase...');
-    const pb = getPocketBase();
+    getPocketBase(); // Initialize connection
     
     // Check PocketBase health
     const pbHealthy = await pbHealthCheck();
@@ -120,6 +150,7 @@ async function startServer() {
     // Authenticate as admin to allow collection/user management
     try {
       await authenticateAdmin();
+      scheduleAdminTokenRefresh(); // keep token alive
       logger.info('✓ PocketBase admin authenticated');
     } catch (error) {
       logger.warn('PocketBase admin auth failed (may need manual setup):', error);
@@ -154,14 +185,13 @@ async function startServer() {
     }
     
     // Start HTTP server
-    serve({
+    server = serve({
       fetch: app.fetch,
       port: CONFIG.PORT,
       hostname: CONFIG.HOST,
     }, (info) => {
       logger.info(`✓ Server running at http://${info.address}:${info.port}`);
       logger.info(`✓ Health check: http://${info.address}:${info.port}/health`);
-      logger.info(`✓ API docs: http://${info.address}:${info.port}/api/v1`);
     });
     
   } catch (error) {
@@ -170,16 +200,29 @@ async function startServer() {
   }
 }
 
-// Handle graceful shutdown
-process.on('SIGINT', () => {
-  logger.info('Shutting down gracefully...');
-  process.exit(0);
-});
+// Handle graceful shutdown — drain in-flight requests before exiting
+let server: ReturnType<typeof serve> | null = null;
 
-process.on('SIGTERM', () => {
-  logger.info('Shutting down gracefully...');
-  process.exit(0);
-});
+function gracefulShutdown(signal: string) {
+  logger.info(`${signal} received — shutting down gracefully...`);
+  if (server) {
+    // @hono/node-server exposes close() for graceful drain
+    (server as any).close?.(() => {
+      logger.info('All connections drained. Exiting.');
+      process.exit(0);
+    });
+    // Force exit after 10 seconds if connections don't drain
+    setTimeout(() => {
+      logger.warn('Forced shutdown after 10s timeout');
+      process.exit(1);
+    }, 10_000);
+  } else {
+    process.exit(0);
+  }
+}
+
+process.on('SIGINT', () => gracefulShutdown('SIGINT'));
+process.on('SIGTERM', () => gracefulShutdown('SIGTERM'));
 
 // Start
 startServer();

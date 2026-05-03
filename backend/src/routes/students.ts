@@ -55,13 +55,17 @@ studentsRouter.get('/', async (c) => {
     const faculty = c.req.query('faculty');
     const status = c.req.query('status');
     const search = c.req.query('search');
-    
+
+    // Sanitize inputs — strip PocketBase filter special chars to prevent injection
+    const safe = (v: string) => v.replace(/["'\\]/g, '');
+
     // Build filter
     const filters: string[] = [];
-    if (faculty) filters.push(`faculty = "${faculty}"`);
-    if (status) filters.push(`status = "${status}"`);
+    if (faculty) filters.push(`faculty = "${safe(faculty)}"`);
+    if (status) filters.push(`status = "${safe(status)}"`);
     if (search) {
-      filters.push(`(firstName ~ "${search}" || lastName ~ "${search}" || email ~ "${search}")`);
+      const s = safe(search).substring(0, 100); // cap search length
+      filters.push(`(firstName ~ "${s}" || lastName ~ "${s}" || email ~ "${s}")`);
     }
     
     const filterString = filters.join(' && ') || undefined;

@@ -26,7 +26,7 @@ import {
   WifiOff,
   Scan
 } from 'lucide-react';
-import EnhancedQRScanner from './EnhancedQRScanner';
+import QRScanner from './QRScanner';
 import { verificationService } from '../services/verificationService';
 
 interface CertificateData {
@@ -61,7 +61,6 @@ const VerificationPage: React.FC<VerificationPageProps> = ({ logo }) => {
   const [verificationMode, setVerificationMode] = useState<'online' | 'offline'>('online');
   const [serialNumber, setSerialNumber] = useState('');
   const [hashValue, setHashValue] = useState('');
-  const [qrData, setQrData] = useState('');
   const [isVerifying, setIsVerifying] = useState(false);
   const [verificationResult, setVerificationResult] = useState<CertificateData | null>(null);
   const [showQRScanner, setShowQRScanner] = useState(false);
@@ -85,17 +84,29 @@ const VerificationPage: React.FC<VerificationPageProps> = ({ logo }) => {
   useEffect(() => {
     const urlParams = new URLSearchParams(window.location.search);
     const id = urlParams.get('id');
+    const sig = urlParams.get('sig');
     const hash = urlParams.get('hash');
-    
+
     if (id) {
       setSerialNumber(id);
-      if (hash) {
-        setHashValue(hash);
-      }
-      // Auto-verify when ID is provided (with or without hash)
-      setTimeout(() => {
-        handleVerification();
-      }, 100);
+      if (hash) setHashValue(hash);
+      // Auto-verify using the service directly with URL params
+      setTimeout(async () => {
+        setIsVerifying(true);
+        try {
+          const result = await verificationService.verifyCertificate({
+            serial: id,
+            sig: sig || undefined,
+            hash: hash || undefined,
+            method: 'online',
+          });
+          setVerificationResult(result);
+        } catch {
+          setVerificationResult({ valid: false, error: 'Verification service unavailable', code: 'SERVICE_ERROR' });
+        } finally {
+          setIsVerifying(false);
+        }
+      }, 300);
     }
   }, []);
 
@@ -120,104 +131,30 @@ const VerificationPage: React.FC<VerificationPageProps> = ({ logo }) => {
     }
   };
 
-  const generateMockCertificateData = (serial: string, hash?: string): CertificateData => {
-    // Simulate database lookup based on serial number
-    const studentId = serial.split('-')[2];
-    const year = serial.split('-')[1];
-    
-    // Mock student data based on serial pattern
-    const mockStudents = [
-      { id: '000101', name: 'James Smith', faculty: 'Theology', degree: 'BACHELOR OF THEOLOGY', class: 'First Class Honours', gpa: 3.8 },
-      { id: '000102', name: 'Mary Johnson', faculty: 'ICT', degree: 'BACHELOR OF COMPUTER SCIENCE', class: 'Second Class Honours (Upper Division)', gpa: 3.2 },
-      { id: '000103', name: 'John Williams', faculty: 'Business', degree: 'BACHELOR OF BUSINESS ADMINISTRATION', class: 'Second Class Honours (Lower Division)', gpa: 2.7 },
-      { id: '000104', name: 'Patricia Jones', faculty: 'Education', degree: 'BACHELOR OF EDUCATION', class: 'First Class Honours', gpa: 3.9 },
-      { id: '000105', name: 'Robert Brown', faculty: 'Theology', degree: 'MASTER OF DIVINITY', class: 'Distinction', gpa: 3.7 }
-    ];
-
-    const student = mockStudents.find(s => studentId.endsWith(s.id.slice(-3))) || mockStudents[0];
-    
-    // Simulate hash verification
-    const expectedHash = `${serial}${student.name}BMI-KEY`.split('').reduce((a, b) => {
-      a = ((a << 5) - a) + b.charCodeAt(0);
-      return a & a;
-    }, 0).toString(16).substring(0, 8);
-
-    const hashVerified = !hash || hash === expectedHash;
-
-    return {
-      valid: true,
-      certificate: {
-        serial_number: serial,
-        student_name: student.name,
-        degree_title: student.degree,
-        graduation_class: student.class,
-        faculty: student.faculty,
-        department: `Department of ${student.faculty}`,
-        issue_date: `${year}-12-21`,
-        graduation_date: `${year}-12-15`,
-        gpa: student.gpa,
-        status: 'active'
-      },
-      verification: {
-        timestamp: new Date().toISOString(),
-        method: verificationMode,
-        hash_verified: hashVerified,
-        verification_count: Math.floor(Math.random() * 50) + 1
-      }
-    };
-  };
-
   const handleVerification = async () => {
     if (!serialNumber.trim()) {
-      setVerificationResult({
-        valid: false,
-        error: 'Please enter a certificate serial number',
-        code: 'MISSING_SERIAL'
-      });
+      setVerificationResult({ valid: false, error: 'Please enter a certificate serial number', code: 'MISSING_SERIAL' });
       return;
     }
-
     setIsVerifying(true);
     setVerificationResult(null);
-
     try {
-      // Simulate API delay
-      await new Promise(resolve => setTimeout(resolve, 1500));
-
-      // Validate serial number format
       if (!serialNumber.match(/^BMI-\d{4}-\d{6}$/)) {
-        setVerificationResult({
-          valid: false,
-          error: 'Invalid certificate serial number format',
-          code: 'INVALID_FORMAT'
-        });
+        setVerificationResult({ valid: false, error: 'Invalid serial number format. Expected: BMI-YYYY-NNNNNN', code: 'INVALID_FORMAT' });
         return;
       }
-
       if (verificationMode === 'online' && !isOnline) {
-        setVerificationResult({
-          valid: false,
-          error: 'Online verification requires internet connection',
-          code: 'NO_CONNECTION'
-        });
+        setVerificationResult({ valid: false, error: 'Online verification requires internet connection', code: 'NO_CONNECTION' });
         return;
       }
-
-      // Use the actual verification service instead of mock data
       const result = await verificationService.verifyCertificate({
         serial: serialNumber,
         hash: hashValue || undefined,
-        method: verificationMode as 'online' | 'offline'
+        method: verificationMode as 'online' | 'offline',
       });
-      
       setVerificationResult(result);
-
-    } catch (error) {
-      setVerificationResult({
-        valid: false,
-        error: 'Verification service temporarily unavailable',
-        code: 'SERVICE_ERROR'
-      });
+    } catch {
+      setVerificationResult({ valid: false, error: 'Verification service temporarily unavailable', code: 'SERVICE_ERROR' });
     } finally {
       setIsVerifying(false);
     }
@@ -225,27 +162,14 @@ const VerificationPage: React.FC<VerificationPageProps> = ({ logo }) => {
 
   const handleQRScan = async (qrContent: string) => {
     try {
-      // Use the verification service to handle QR verification
-      const result = await verificationService.verifyQRCode({
-        qr_data: qrContent,
-        method: 'qr_scan'
-      });
-      
+      const result = await verificationService.verifyQRCode(qrContent);
       if (result.valid && result.certificate) {
         setSerialNumber(result.certificate.serial_number);
-        setQrData(qrContent);
-        setVerificationResult(result);
-      } else {
-        setVerificationResult(result);
       }
-      
+      setVerificationResult(result);
       setShowQRScanner(false);
-    } catch (error) {
-      setVerificationResult({
-        valid: false,
-        error: 'QR code verification failed',
-        code: 'QR_VERIFICATION_ERROR'
-      });
+    } catch {
+      setVerificationResult({ valid: false, error: 'QR code verification failed', code: 'QR_VERIFICATION_ERROR' });
       setShowQRScanner(false);
     }
   };
@@ -390,7 +314,7 @@ const VerificationPage: React.FC<VerificationPageProps> = ({ logo }) => {
                 </div>
 
                 {showQRScanner && (
-                  <EnhancedQRScanner
+                  <QRScanner
                     isOpen={showQRScanner}
                     onScan={handleQRScan}
                     onClose={() => setShowQRScanner(false)}

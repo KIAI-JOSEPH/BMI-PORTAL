@@ -23,10 +23,14 @@ export const logger = winston.createLogger({
     }),
     new winston.transports.File({ 
       filename: 'logs/error.log', 
-      level: 'error' 
+      level: 'error',
+      maxsize: 5242880, // 5MB
+      maxFiles: 5,
     }),
     new winston.transports.File({ 
-      filename: 'logs/combined.log' 
+      filename: 'logs/combined.log',
+      maxsize: 10485760, // 10MB
+      maxFiles: 10,
     }),
   ],
 });

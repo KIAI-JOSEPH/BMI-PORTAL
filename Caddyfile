@@ -2,22 +2,27 @@
 # Automatic HTTPS with Let's Encrypt
 
 {
+    # In production: remove auto_https off and set your email below
+    # email your-email@bmi.edu
     auto_https off
     admin off
 }
 
-# Local development (change to your domain in production)
+# HTTP → HTTPS redirect (active when auto_https is enabled in production)
+# :80 {
+#     redir https://{host}{uri} permanent
+# }
+
+# Local development
 :80 {
-    # Enable compression
     encode gzip
 
-    # Security headers
     header {
         X-Content-Type-Options "nosniff"
         X-Frame-Options "DENY"
         X-XSS-Protection "1; mode=block"
         Referrer-Policy "strict-origin-when-cross-origin"
-        Content-Security-Policy "default-src 'self'; script-src 'self' 'unsafe-inline' 'unsafe-eval'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com; img-src 'self' data: blob: https:; connect-src 'self' http://localhost:* https://localhost:*;"
+        Content-Security-Policy "default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com; img-src 'self' data: blob: https:; connect-src 'self'; frame-ancestors 'none';"
         Permissions-Policy "geolocation=(), microphone=(), camera=()"
         Strict-Transport-Security "max-age=31536000; includeSubDomains; preload"
         -Server
@@ -33,14 +38,10 @@
         }
     }
 
-    # PocketBase admin UI
+    # PocketBase admin UI — blocked from public access
+    # Access it directly on the server: ssh tunnel or VPN only
     handle_path /_/* {
-        reverse_proxy pocketbase:8090 {
-            header_up Host {host}
-            header_up X-Real-IP {remote}
-            header_up X-Forwarded-For {remote}
-            header_up X-Forwarded-Proto {scheme}
-        }
+        respond "Access Denied" 403
     }
 
     # PocketBase API
@@ -70,27 +71,44 @@
     }
 }
 
-# Production configuration (uncomment and modify for production)
+# ── PRODUCTION: uncomment and set your domain ────────────────────────────────
 # bmi.university.edu {
-#     tls your-email@bmi.edu
-#     
-#     # Import all the same directives above
+#     # Caddy auto-provisions Let's Encrypt TLS — set email in global block above
+#
 #     encode gzip
-#     
+#
 #     header {
 #         X-Content-Type-Options "nosniff"
 #         X-Frame-Options "DENY"
 #         X-XSS-Protection "1; mode=block"
 #         Referrer-Policy "strict-origin-when-cross-origin"
+#         Content-Security-Policy "default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com; img-src 'self' data: blob: https:; connect-src 'self'; frame-ancestors 'none';"
+#         Permissions-Policy "geolocation=(), microphone=(), camera=()"
+#         Strict-Transport-Security "max-age=31536000; includeSubDomains; preload"
+#         -Server
 #     }
-#     
+#
 #     handle_path /api/* {
-#         reverse_proxy api:3001
+#         reverse_proxy api:3001 {
+#             header_up Host {host}
+#             header_up X-Real-IP {remote}
+#             header_up X-Forwarded-For {remote}
+#             header_up X-Forwarded-Proto {scheme}
+#         }
 #     }
-#     
+#
+#     handle_path /_/* {
+#         respond "Access Denied" 403
+#     }
+#
 #     handle {
 #         root * /srv
 #         try_files {path} {path}/ /index.html
 #         file_server
 #     }
+# }
+#
+# # HTTP → HTTPS redirect for production
+# http://bmi.university.edu {
+#     redir https://bmi.university.edu{uri} permanent
 # }

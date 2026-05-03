@@ -3,7 +3,10 @@
  * Connects to local Ollama backend for AI chat responses
  */
 
-const API_URL = 'http://localhost:3001/api/v1';
+import { getToken } from './authService';
+
+// Use relative path — Vite proxy handles dev, same-origin handles production
+const API_URL = '/api/v1';
 
 export interface ChatMessage {
   role: 'user' | 'assistant' | 'system';
@@ -54,6 +57,7 @@ async function getAIResponseFromMessages(
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
+        ...(getToken() ? { Authorization: `Bearer ${getToken()}` } : {}),
       },
       body: JSON.stringify({
         messages,
@@ -99,6 +103,7 @@ export async function chatCompletions(
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
+      ...(getToken() ? { Authorization: `Bearer ${getToken()}` } : {}),
     },
     body: JSON.stringify({
       messages,
@@ -118,32 +123,29 @@ export async function chatCompletions(
   return data.data;
 }
 
-/**
- * Check if AI service is available
- */
-export async function isAIServiceAvailable(): Promise<boolean> {
+async function isBackendAvailable(): Promise<boolean> {
   try {
-    const response = await fetch(`${API_URL.replace('/api/v1', '')}/health`, {
+    const response = await fetch(`/health`, {
       method: 'GET',
       signal: AbortSignal.timeout(5000),
     });
-    const data = await response.json();
-    return data.success && data.services?.ai !== 'offline';
+    return response.ok;
   } catch {
     return false;
   }
 }
 
 /**
- * Check if backend is available
+ * Check if AI service is available
  */
-async function isBackendAvailable(): Promise<boolean> {
+export async function isAIServiceAvailable(): Promise<boolean> {
   try {
-    const response = await fetch(`${API_URL.replace('/api/v1', '')}/health`, {
+    const response = await fetch(`/health`, {
       method: 'GET',
       signal: AbortSignal.timeout(5000),
     });
-    return response.ok;
+    const data = await response.json();
+    return data.success && data.services?.ai !== 'offline';
   } catch {
     return false;
   }

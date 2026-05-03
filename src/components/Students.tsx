@@ -4,8 +4,6 @@ import {
   Users, 
   Search, 
   Plus, 
-  Filter, 
-  MoreVertical, 
   Trash2, 
   Edit, 
   Mail, 
@@ -16,23 +14,29 @@ import {
   List,
   RefreshCw,
   Globe,
-  Layers
+  Layers,
+  FileSpreadsheet
 } from 'lucide-react';
-import { Student } from '../types';
+import { Student, Course } from '../types';
 import StudentRegistrationModal from './StudentRegistrationModal';
+import ImportModal from './ImportModal';
+import { deleteStudent as deleteStudentAPI } from '../services/studentService';
 
 interface StudentsProps {
   students: Student[];
   setStudents: React.Dispatch<React.SetStateAction<Student[]>>;
+  courses?: Course[];
+  setCourses?: React.Dispatch<React.SetStateAction<Course[]>>;
 }
 
-const Students: React.FC<StudentsProps> = ({ students, setStudents }) => {
+const Students: React.FC<StudentsProps> = ({ students, setStudents, courses = [], setCourses }) => {
   const [viewMode, setViewMode] = useState<'grid' | 'table'>('table');
   const [searchTerm, setSearchTerm] = useState('');
   const [facultyFilter, setFacultyFilter] = useState('All Faculty');
   const [statusFilter, setStatusFilter] = useState('All Status');
   const [academicLevelFilter, setAcademicLevelFilter] = useState('All Levels');
   const [isModalOpen, setIsModalOpen] = useState(false);
+  const [isImportOpen, setIsImportOpen] = useState(false);
   const [editingStudent, setEditingStudent] = useState<Student | undefined>(undefined);
   const [isSyncing, setIsSyncing] = useState(false);
 
@@ -46,31 +50,33 @@ const Students: React.FC<StudentsProps> = ({ students, setStudents }) => {
     });
   }, [students, searchTerm, facultyFilter, statusFilter, academicLevelFilter]);
 
-  const handleAdd = (studentData: Partial<Student>) => {
+  const handleAdd = (student: Student) => {
     if (editingStudent) {
-      setStudents(prev => prev.map(s => s.id === editingStudent.id ? { ...s, ...studentData } as Student : s));
+      // Update existing student in local state
+      setStudents(prev => prev.map(s => s.id === student.id ? student : s));
     } else {
-      const newStudent: Student = {
-        ...studentData as Student,
-        id: `BMI-2024-${Math.floor(Math.random() * 9000) + 1000}`,
-        admissionYear: new Date().getFullYear().toString(),
-        enrollmentTerm: 'Fall 2024',
-        status: 'Active',
-        standing: 'Good',
-        gpa: 0.0,
-        avatarColor: 'bg-indigo-600',
-        photoZoom: 1,
-        photoPosition: { x: 0, y: 0 }
-      };
-      setStudents(prev => [newStudent, ...prev]);
+      // Add new student to local state
+      setStudents(prev => [student, ...prev]);
     }
     setEditingStudent(undefined);
     setIsModalOpen(false);
   };
 
-  const deleteStudent = (id: string) => {
+  const deleteStudent = async (id: string) => {
     if (window.confirm('Are you sure you want to expel/remove this student record?')) {
-      setStudents(prev => prev.filter(s => s.id !== id));
+      try {
+        const result = await deleteStudentAPI(id);
+
+        if (result.success) {
+          setStudents(prev => prev.filter(s => s.id !== id));
+          alert('Student removed successfully!');
+        } else {
+          alert(result.error || 'Failed to delete student. Please try again.');
+        }
+      } catch (error) {
+        console.error('Error deleting student:', error);
+        alert('An unexpected error occurred while deleting the student.');
+      }
     }
   };
 
@@ -110,6 +116,13 @@ const Students: React.FC<StudentsProps> = ({ students, setStudents }) => {
     }, 2500);
   };
 
+  const handleImportStudents = (newStudents: Student[], newCourses: Partial<Course>[]) => {
+    setStudents(prev => [...newStudents, ...prev]);
+    if (setCourses && newCourses.length > 0) {
+      setCourses(prev => [...(newCourses as Course[]), ...prev]);
+    }
+  };
+
   return (
     <div className="h-full flex flex-col animate-fade-in relative">
       {/* Sticky Page Header */}
@@ -132,6 +145,12 @@ const Students: React.FC<StudentsProps> = ({ students, setStudents }) => {
              {isSyncing ? <RefreshCw size={12} className="animate-spin" /> : <Globe size={12} />}
              {isSyncing ? 'Syncing...' : 'Sync Web Apps'}
            </button>
+           <button
+             onClick={() => setIsImportOpen(true)}
+             className="hidden md:flex items-center gap-2 px-3 py-1.5 bg-emerald-600 text-white rounded-none font-bold text-[9px] uppercase tracking-widest hover:bg-emerald-700 transition-all shadow-sm"
+           >
+             <FileSpreadsheet size={12} /> Import Excel
+           </button>
 
            <div className="flex bg-white dark:bg-gray-800 p-1 rounded-none shadow-sm border border-gray-100 dark:border-gray-700">
              <button onClick={() => setViewMode('grid')} className={`p-1.5 transition-all ${viewMode === 'grid' ? 'bg-[#4B0082] text-white' : 'text-gray-400 hover:text-[#4B0082]'}`}><LayoutGrid size={14} /></button>
@@ -152,7 +171,7 @@ const Students: React.FC<StudentsProps> = ({ students, setStudents }) => {
             <Layers size={14} />
             <span className="text-[9px] font-black uppercase tracking-widest">Levels</span>
          </div>
-         {['All Levels', 'Diploma', 'Degree', 'Masters', 'PhD'].map((level) => (
+         {['All Levels', 'Certificate', 'Diploma', 'Degree', 'Masters', 'PhD'].map((level) => (
             <button
               key={level}
               onClick={() => setAcademicLevelFilter(level)}
@@ -310,6 +329,15 @@ const Students: React.FC<StudentsProps> = ({ students, setStudents }) => {
         onClose={() => { setIsModalOpen(false); setEditingStudent(undefined); }}
         onSuccess={handleAdd}
         initialData={editingStudent}
+      />
+
+      <ImportModal
+        isOpen={isImportOpen}
+        onClose={() => setIsImportOpen(false)}
+        type="students"
+        existingStudents={students}
+        existingCourses={courses}
+        onImportStudents={handleImportStudents}
       />
     </div>
   );

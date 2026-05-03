@@ -1,5 +1,6 @@
 import React from 'react';
 import { createRoot } from 'react-dom/client';
+import './index.css';
 import App from './App';
 
 /**
@@ -118,6 +119,16 @@ if (!rootElement) {
 
 const root = createRoot(rootElement);
 
+// Remove preloader once React is ready
+const removePreloader = () => {
+  const preloader = document.getElementById('preloader');
+  if (preloader) {
+    preloader.style.opacity = '0';
+    preloader.style.transition = 'opacity 0.3s ease';
+    setTimeout(() => preloader.remove(), 300);
+  }
+};
+
 // Institutional Metadata Console Log
 console.log(
   "%c BMI UNIVERSITY ERP %c v2.4.1 %c Unclipped View Protocol Active ",
@@ -131,3 +142,6 @@ root.render(
     <App />
   </React.StrictMode>
 );
+
+// Remove preloader after initial render
+setTimeout(removePreloader, 100);

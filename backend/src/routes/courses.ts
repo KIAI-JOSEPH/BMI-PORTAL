@@ -48,14 +48,15 @@ coursesRouter.get('/', async (c) => {
     const level = c.req.query('level');
     const status = c.req.query('status');
     const search = c.req.query('search');
-    
-    // Build filter
+
+    const safe = (v: string) => v.replace(/["'\\]/g, '').substring(0, 100);
     const filters: string[] = [];
-    if (faculty) filters.push(`faculty = "${faculty}"`);
-    if (level) filters.push(`level = "${level}"`);
-    if (status) filters.push(`status = "${status}"`);
+    if (faculty) filters.push(`faculty = "${safe(faculty)}"`);
+    if (level) filters.push(`level = "${safe(level)}"`);
+    if (status) filters.push(`status = "${safe(status)}"`);
     if (search) {
-      filters.push(`(name ~ "${search}" || code ~ "${search}" || description ~ "${search}")`);
+      const s = safe(search);
+      filters.push(`(name ~ "${s}" || code ~ "${s}" || description ~ "${s}")`);
     }
     
     const filterString = filters.join(' && ') || undefined;
@@ -225,46 +226,55 @@ coursesRouter.delete(
 
 /**
  * GET /api/v1/courses/stats/overview
- * Get course statistics
+ * Get course statistics — paginated counts, no full table scan
  */
 coursesRouter.get('/stats/overview', async (c) => {
   try {
     const pb = getPocketBase();
-    
-    const allCourses = await pb.collection('courses').getFullList();
-    const courses = allCourses as unknown as Course[];
-    
+
+    const [
+      all, ug, pg, dip, cert,
+      published, draft, archived,
+    ] = await Promise.all([
+      pb.collection('courses').getList(1, 1),
+      pb.collection('courses').getList(1, 1, { filter: 'level = "Undergraduate"' }),
+      pb.collection('courses').getList(1, 1, { filter: 'level = "Postgraduate"' }),
+      pb.collection('courses').getList(1, 1, { filter: 'level = "Diploma"' }),
+      pb.collection('courses').getList(1, 1, { filter: 'level = "Certificate"' }),
+      pb.collection('courses').getList(1, 1, { filter: 'status = "Published"' }),
+      pb.collection('courses').getList(1, 1, { filter: 'status = "Draft"' }),
+      pb.collection('courses').getList(1, 1, { filter: 'status = "Archived"' }),
+    ]);
+
+    // Fetch credits for sum (bounded to 1000 courses)
+    const creditRecords = await pb.collection('courses').getList(1, 1000, { fields: 'faculty,credits' });
+    const courses = creditRecords.items as unknown as Course[];
+
     const stats = {
-      total: courses.length,
+      total: all.totalItems,
       byLevel: {
-        Undergraduate: courses.filter(c => c.level === 'Undergraduate').length,
-        Postgraduate: courses.filter(c => c.level === 'Postgraduate').length,
-        Diploma: courses.filter(c => c.level === 'Diploma').length,
-        Certificate: courses.filter(c => c.level === 'Certificate').length,
+        Undergraduate: ug.totalItems,
+        Postgraduate: pg.totalItems,
+        Diploma: dip.totalItems,
+        Certificate: cert.totalItems,
       },
       byStatus: {
-        Published: courses.filter(c => c.status === 'Published').length,
-        Draft: courses.filter(c => c.status === 'Draft').length,
-        Archived: courses.filter(c => c.status === 'Archived').length,
+        Published: published.totalItems,
+        Draft: draft.totalItems,
+        Archived: archived.totalItems,
       },
-      byFaculty: courses.reduce((acc, c) => {
+      byFaculty: courses.reduce((acc: Record<string, number>, c: Course) => {
         acc[c.faculty] = (acc[c.faculty] || 0) + 1;
         return acc;
-      }, {} as Record<string, number>),
-      totalCredits: courses.reduce((sum, c) => sum + c.credits, 0),
+      }, {}),
+      totalCredits: courses.reduce((sum: number, c: Course) => sum + (c.credits || 0), 0),
     };
-    
-    return c.json<ApiResponse<typeof stats>>({
-      success: true,
-      data: stats,
-    });
-    
+
+    return c.json<ApiResponse<typeof stats>>({ success: true, data: stats });
+
   } catch (error) {
     logger.error('Get course stats error:', error);
-    return c.json<ApiResponse<never>>({
-      success: false,
-      error: 'Failed to fetch statistics',
-    }, 500);
+    return c.json<ApiResponse<never>>({ success: false, error: 'Failed to fetch statistics' }, 500);
   }
 });
 

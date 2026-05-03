@@ -28,7 +28,7 @@ interface DashboardProps {
     tuition: number;
     events: number;
   };
-  onAddStudent: (student: Partial<Student>) => void;
+  onAddStudent: (student: Student) => void;
   onAddTransaction: (amt: number) => void;
 }
 
@@ -67,8 +67,8 @@ const Dashboard: React.FC<DashboardProps> = ({ userName, theme, onNavigate, stat
     setIsLoading(false);
   };
 
-  const handleStudentEnrolled = (studentData: Partial<Student>) => {
-    onAddStudent(studentData);
+  const handleStudentEnrolled = (student: Student) => {
+    onAddStudent(student);
     showToast(`Institutional Record committed to registry.`);
     setIsStudentRegistrationOpen(false);
   };

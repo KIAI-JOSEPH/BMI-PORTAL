@@ -12,33 +12,50 @@ let pb: PocketBase | null = null;
 export function getPocketBase(): PocketBase {
   if (!pb) {
     pb = new PocketBase(CONFIG.POCKETBASE_URL);
-    
-    // Auto-cancel pending requests on auth state change
     pb.autoCancellation(false);
-    
     logger.info(`PocketBase initialized at ${CONFIG.POCKETBASE_URL}`);
   }
-  
   return pb;
 }
 
 /**
- * Authenticate as admin
+ * Authenticate as superuser (PocketBase 0.22+ API)
  */
 export async function authenticateAdmin(): Promise<void> {
   const pb = getPocketBase();
-  
   try {
-    await pb.admins.authWithPassword(
+    // Use _superusers collection (PocketBase 0.22+)
+    await pb.collection('_superusers').authWithPassword(
       CONFIG.POCKETBASE_ADMIN_EMAIL,
       CONFIG.POCKETBASE_ADMIN_PASSWORD
     );
-    
     logger.info('PocketBase admin authenticated');
   } catch (error) {
     logger.error('Failed to authenticate PocketBase admin:', error);
     throw new Error('PocketBase authentication failed');
   }
+}
+
+/**
+ * Schedule periodic admin token refresh (every 30 minutes)
+ * Prevents silent auth failures when the admin token expires mid-session
+ */
+export function scheduleAdminTokenRefresh(): void {
+  const REFRESH_INTERVAL_MS = 30 * 60 * 1000; // 30 minutes
+  setInterval(async () => {
+    try {
+      const pb = getPocketBase();
+      if (pb.authStore.isValid) {
+        await pb.collection('_superusers').authRefresh();
+        logger.info('PocketBase admin token refreshed');
+      } else {
+        await authenticateAdmin();
+        logger.info('PocketBase admin re-authenticated');
+      }
+    } catch (error) {
+      logger.warn('PocketBase admin token refresh failed:', error);
+    }
+  }, REFRESH_INTERVAL_MS);
 }
 
 /**
@@ -61,6 +78,7 @@ export async function setupCollections(): Promise<void> {
       'staff',
       'courses',
       'certificates',
+      'verification_logs',
       'transactions',
       'library_items',
       'audit_logs',
@@ -123,6 +141,37 @@ async function createCollection(name: string): Promise<void> {
         department: { type: 'text' },
         isActive: { type: 'bool', required: true },
         lastLogin: { type: 'date' },
+      }
+    },
+    certificates: {
+      fields: {
+        serial_number: { type: 'text', required: true },
+        student_id: { type: 'text', required: true },
+        student_name: { type: 'text', required: true },
+        degree: { type: 'text', required: true },
+        graduation_class: { type: 'text' },
+        faculty: { type: 'text', required: true },
+        department: { type: 'text' },
+        issue_date: { type: 'text', required: true },
+        graduation_date: { type: 'text' },
+        gpa: { type: 'number', required: true },
+        status: { type: 'select', required: true, options: { values: ['ISSUED', 'REVOKED', 'SUSPENDED'] } },
+        content_hash: { type: 'text', required: true },
+        signature: { type: 'text' },
+        issuance_nonce: { type: 'text' },    // SECRET — never sent to frontend
+        hidden_token: { type: 'text' },      // derived from nonce — for fast lookup
+        offline_jwt: { type: 'text' },
+        verification_count: { type: 'number' },
+      }
+    },
+    verification_logs: {
+      fields: {
+        certificate_serial: { type: 'text', required: true },
+        result: { type: 'select', required: true, options: { values: ['valid', 'invalid', 'revoked', 'tampered', 'not_found'] } },
+        method: { type: 'text', required: true },
+        ip_address: { type: 'text' },
+        user_agent: { type: 'text' },
+        timestamp: { type: 'text', required: true },
       }
     },
   };

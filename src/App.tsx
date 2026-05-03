@@ -9,7 +9,7 @@ import Attendance from './components/Attendance';
 import Finance from './components/Finance';
 import Courses from './components/Courses';
 import Exams from './components/Exams';
-// import { Transcripts } from './components/Transcripts';
+import { Transcripts } from './components/Transcripts';
 import Certificates from './components/Certificates';
 import { Library } from './components/Library';
 import Hostels from './components/Hostels';
@@ -23,7 +23,9 @@ import AIModal from './components/AIModal';
 import Settings from './components/Settings';
 import Login from './components/Login';
 import VerificationPage from './components/VerificationPage';
+import SessionTimeoutWarning from './components/SessionTimeoutWarning';
 import { Student, StaffMember, Transaction, Course, LibraryItem } from './types';
+import { verifySession, logout as authLogout } from './services/authService';
 
 const initialCourses: Course[] = [
     { id: 'CRS-101', name: 'Systematic Theology I', code: 'THEO101', faculty: 'Theology', department: 'Biblical Studies', level: 'Undergraduate', credits: 3, status: 'Published', description: 'Introduction to core theological doctrines.', syllabus: 'God, Creation, Revelation.' },
@@ -106,12 +108,57 @@ const initialLibrary: LibraryItem[] = [
 
 function App() {
   const [isLoggedIn, setIsLoggedIn] = useState(false);
+  const [isAuthenticating, setIsAuthenticating] = useState(true);
   const [currentView, setCurrentView] = useState('dashboard');
   const [theme, setTheme] = useState('light');
   const [logo, setLogo] = useState("https://i.ibb.co/Gv2vPdJC/BMI-PNG.png");
   const [isAIModalOpen, setIsAIModalOpen] = useState(false);
   const [showVerificationPage, setShowVerificationPage] = useState(false);
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
+
+  // Session verification on mount with guaranteed timeout
+  useEffect(() => {
+    // Clean up any stale PII that may have been stored in previous versions
+    localStorage.removeItem('bmi_data_students');
+    
+    let isMounted = true;
+    let timeoutId: NodeJS.Timeout;
+
+    const checkSession = async () => {
+      // GUARANTEED timeout - will ALWAYS stop loading after 4 seconds
+      timeoutId = setTimeout(() => {
+        if (isMounted) {
+          console.warn('Forced timeout - stopping loading screen');
+          setIsLoggedIn(false);
+          setIsAuthenticating(false);
+        }
+      }, 4000);
+
+      try {
+        // Try to verify session
+        const isValid = await verifySession();
+        if (isMounted) {
+          clearTimeout(timeoutId);
+          setIsLoggedIn(isValid);
+          setIsAuthenticating(false);
+        }
+      } catch (error) {
+        console.error('Session check error:', error);
+        if (isMounted) {
+          clearTimeout(timeoutId);
+          setIsLoggedIn(false);
+          setIsAuthenticating(false);
+        }
+      }
+    };
+
+    checkSession();
+
+    return () => {
+      isMounted = false;
+      clearTimeout(timeoutId);
+    };
+  }, []);
 
   // Check if this is a verification URL - ORIGINAL working method
   useEffect(() => {
@@ -124,11 +171,8 @@ function App() {
     }
   }, []);
 
-  // Core Data States
-  const [students, setStudents] = useState<Student[]>(() => {
-    const saved = localStorage.getItem('bmi_data_students');
-    return saved ? JSON.parse(saved) : initialStudents;
-  });
+  // Core Data States — students NOT persisted to localStorage (PII protection)
+  const [students, setStudents] = useState<Student[]>(initialStudents);
 
   const [staff, setStaff] = useState<StaffMember[]>(() => {
     const saved = localStorage.getItem('bmi_data_staff');
@@ -150,8 +194,8 @@ function App() {
     return saved ? JSON.parse(saved) : initialLibrary;
   });
 
-  // Persist Data
-  useEffect(() => { localStorage.setItem('bmi_data_students', JSON.stringify(students)); }, [students]);
+  // Persist non-PII data only
+  // Students are NOT persisted — they contain PII (names, emails, phone, GPA)
   useEffect(() => { localStorage.setItem('bmi_data_staff', JSON.stringify(staff)); }, [staff]);
   useEffect(() => { localStorage.setItem('bmi_data_transactions', JSON.stringify(transactions)); }, [transactions]);
   useEffect(() => { localStorage.setItem('bmi_data_courses', JSON.stringify(courses)); }, [courses]);
@@ -174,9 +218,8 @@ function App() {
     events: 5 // Mock
   };
 
-  const handleAddStudent = (student: Partial<Student>) => {
-    const newStudent = { ...student, id: `BMI-${Date.now()}`, status: 'Applicant' } as Student;
-    setStudents(prev => [newStudent, ...prev]);
+  const handleAddStudent = (student: Student) => {
+    setStudents(prev => [student, ...prev]);
   };
 
   const handleAddTransaction = (amt: number) => {
@@ -196,20 +239,44 @@ function App() {
     return <VerificationPage logo={logo} />;
   }
 
+  if (isAuthenticating) {
+    return (
+      <div className="min-h-screen bg-gradient-to-br from-[#1a0033] via-[#4B0082] to-[#320064] flex items-center justify-center">
+        <div className="flex flex-col items-center gap-6">
+          {/* Logo */}
+          <div className="w-20 h-20 rounded-xl border-2 border-[#FFD700] bg-white p-2 shadow-2xl animate-pulse">
+            <img
+              src={logo}
+              alt="BMI University"
+              className="w-full h-full object-contain"
+            />
+          </div>
+          {/* Spinner */}
+          <div className="w-10 h-10 border-4 border-[#FFD700]/30 border-t-[#FFD700] rounded-full animate-spin"></div>
+          {/* Status Text */}
+          <div className="text-center">
+            <p className="text-[#FFD700] font-semibold text-lg">BMI University ERP</p>
+            <p className="text-white/60 text-sm mt-1">Loading system modules...</p>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
   if (!isLoggedIn) {
-    return <Login onLogin={() => setIsLoggedIn(true)} logo={logo} />;
+    return <Login onLogin={(_token, _user) => setIsLoggedIn(true)} logo={logo} />;
   }
 
   const renderContent = () => {
     switch (currentView) {
       case 'dashboard': return <Dashboard userName="Administrator" theme={theme} onNavigate={setCurrentView} stats={stats} onAddStudent={handleAddStudent} onAddTransaction={handleAddTransaction} />;
-      case 'students': return <Students students={students} setStudents={setStudents} />;
+      case 'students': return <Students students={students} setStudents={setStudents} courses={courses} setCourses={setCourses} />;
       case 'staff': return <Staff staff={staff} setStaff={setStaff} />;
       case 'attendance': return <Attendance theme={theme} students={students} />;
       case 'finance': return <Finance theme={theme} students={students} staff={staff} transactions={transactions} setTransactions={setTransactions} totalRevenue={stats.tuition} />;
       case 'courses': return <Courses theme={theme} courses={courses} setCourses={setCourses} />;
-      case 'exams': return <Exams />;
-      case 'transcripts': return <div className="p-8 text-center"><h2 className="text-2xl font-bold">Transcripts Module</h2><p>Temporarily disabled for deployment</p></div>;
+      case 'exams': return <Exams students={students} courses={courses} setStudents={setStudents} setCourses={setCourses} />;
+      case 'transcripts': return <Transcripts students={students} courses={courses} logo={logo} />;
       case 'certificates': return <Certificates students={students} logo={logo} />;
       case 'verify': return <VerificationPage logo={logo} />;
       case 'library': return <Library library={library} setLibrary={setLibrary} courses={courses} />;
@@ -247,7 +314,10 @@ function App() {
             if (view === 'ai') setIsAIModalOpen(true); 
             else setCurrentView(view); 
         }} 
-        onLogout={() => setIsLoggedIn(false)} 
+        onLogout={async () => {
+            await authLogout();
+            setIsLoggedIn(false);
+        }} 
         logo={logo}
         isOpen={isSidebarOpen}
         onClose={() => setIsSidebarOpen(false)}
@@ -261,6 +331,15 @@ function App() {
       </div>
       
       <AIModal isOpen={isAIModalOpen} onClose={() => setIsAIModalOpen(false)} />
+      
+      {/* Session Timeout Warning */}
+      {isLoggedIn && (
+        <SessionTimeoutWarning 
+          onSessionExpired={() => {
+            setIsLoggedIn(false);
+          }} 
+        />
+      )}
     </div>
   );
 }

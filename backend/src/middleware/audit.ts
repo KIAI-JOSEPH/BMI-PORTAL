@@ -1,6 +1,7 @@
 // BMI UMS - Audit Logging Middleware
 import type { Context, Next } from 'hono';
 import { auditLogger } from '../utils/logger.js';
+import { getUser } from './auth.js';
 import type { AuditLog } from '../types/index.js';
 
 /**
@@ -9,9 +10,9 @@ import type { AuditLog } from '../types/index.js';
  */
 export async function auditMiddleware(c: Context, next: Next) {
   const start = Date.now();
-  const user = c.get('user') as { sub: string; email: string } | undefined;
-  
-  // Log the request
+  // Use getUser() from auth middleware (WeakMap) — more reliable than c.get('user')
+  const user = getUser(c) ?? (c.get('user') as { sub: string; email: string } | undefined);
+
   auditLogger.info('Request started', {
     method: c.req.method,
     path: c.req.path,
@@ -21,10 +22,9 @@ export async function auditMiddleware(c: Context, next: Next) {
     userAgent: c.req.header('user-agent'),
     timestamp: new Date().toISOString(),
   });
-  
+
   await next();
-  
-  // Log the response
+
   const duration = Date.now() - start;
   auditLogger.info('Request completed', {
     method: c.req.method,
@@ -45,13 +45,11 @@ export function logAction(
   details?: Record<string, unknown>
 ) {
   return async (c: Context, next: Next) => {
-    const user = c.get('user') as { sub: string; email: string } | undefined;
-    
-    // Execute the handler first
     await next();
-    
-    // Only log if the response was successful
+
+    // Only log successful operations
     if (c.res.status >= 200 && c.res.status < 300) {
+      const user = getUser(c) ?? (c.get('user') as { sub: string; email: string } | undefined);
       auditLogger.info('Action performed', {
         action,
         resource,

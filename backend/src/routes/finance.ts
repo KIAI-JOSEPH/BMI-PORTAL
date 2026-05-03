@@ -17,10 +17,10 @@ financeRouter.use('*', auditMiddleware);
 
 // Validation schemas
 const transactionSchema = z.object({
-  ref: z.string().min(1),
-  name: z.string().min(1),
-  desc: z.string().min(1),
-  amt: z.number().positive(),
+  ref: z.string().min(1).max(50),
+  name: z.string().min(1).max(200),
+  desc: z.string().min(1).max(500),
+  amt: z.number().positive().max(10_000_000), // max 10 million per transaction
   status: z.enum(['Paid', 'Pending', 'Failed']).default('Pending'),
   date: z.string().min(1),
   studentId: z.string().optional(),
@@ -44,11 +44,13 @@ financeRouter.get('/transactions', async (c) => {
     
     const status = c.req.query('status');
     const search = c.req.query('search');
-    
+
+    const safe = (v: string) => v.replace(/["'\\]/g, '').substring(0, 100);
     const filters: string[] = [];
-    if (status) filters.push(`status = "${status}"`);
+    if (status) filters.push(`status = "${safe(status)}"`);
     if (search) {
-      filters.push(`(name ~ "${search}" || ref ~ "${search}" || desc ~ "${search}")`);
+      const s = safe(search);
+      filters.push(`(name ~ "${s}" || ref ~ "${s}" || desc ~ "${s}")`);
     }
     
     const filterString = filters.join(' && ') || undefined;
@@ -206,86 +208,92 @@ financeRouter.delete(
 
 /**
  * GET /api/v1/finance/stats
- * Get financial statistics
+ * Get financial statistics — paginated counts, no full table scan
  */
 financeRouter.get('/stats', async (c) => {
   try {
     const pb = getPocketBase();
-    
-    const allTransactions = await pb.collection('transactions').getFullList();
-    const transactions = allTransactions as unknown as Transaction[];
-    
-    const paidTransactions = transactions.filter(t => t.status === 'Paid');
-    const pendingTransactions = transactions.filter(t => t.status === 'Pending');
-    const failedTransactions = transactions.filter(t => t.status === 'Failed');
-    
-    const stats = {
-      totalTransactions: transactions.length,
-      totalRevenue: paidTransactions.reduce((sum, t) => sum + t.amt, 0),
-      pendingAmount: pendingTransactions.reduce((sum, t) => sum + t.amt, 0),
-      failedAmount: failedTransactions.reduce((sum, t) => sum + t.amt, 0),
-      byStatus: {
-        Paid: paidTransactions.length,
-        Pending: pendingTransactions.length,
-        Failed: failedTransactions.length,
-      },
-      averageTransaction: paidTransactions.length > 0 
-        ? paidTransactions.reduce((sum, t) => sum + t.amt, 0) / paidTransactions.length 
-        : 0,
-    };
-    
-    return c.json<ApiResponse<typeof stats>>({
-      success: true,
-      data: stats,
+
+    const [txAll, txPaid, txPending, txFailed] = await Promise.all([
+      pb.collection('transactions').getList(1, 1),
+      pb.collection('transactions').getList(1, 1, { filter: 'status = "Paid"' }),
+      pb.collection('transactions').getList(1, 1, { filter: 'status = "Pending"' }),
+      pb.collection('transactions').getList(1, 1, { filter: 'status = "Failed"' }),
+    ]);
+
+    // Fetch amounts for revenue calculation (last 5000 paid transactions)
+    const paidRecords = await pb.collection('transactions').getList(1, 5000, {
+      filter: 'status = "Paid"',
+      fields: 'amt',
     });
-    
+    const pendingRecords = await pb.collection('transactions').getList(1, 5000, {
+      filter: 'status = "Pending"',
+      fields: 'amt',
+    });
+    const failedRecords = await pb.collection('transactions').getList(1, 5000, {
+      filter: 'status = "Failed"',
+      fields: 'amt',
+    });
+
+    const totalRevenue = paidRecords.items.reduce((sum: number, t: any) => sum + ((t as any).amt || 0), 0);
+    const pendingAmount = pendingRecords.items.reduce((sum: number, t: any) => sum + ((t as any).amt || 0), 0);
+    const failedAmount = failedRecords.items.reduce((sum: number, t: any) => sum + ((t as any).amt || 0), 0);
+
+    const stats = {
+      totalTransactions: txAll.totalItems,
+      totalRevenue,
+      pendingAmount,
+      failedAmount,
+      byStatus: {
+        Paid: txPaid.totalItems,
+        Pending: txPending.totalItems,
+        Failed: txFailed.totalItems,
+      },
+      averageTransaction: paidRecords.items.length > 0 ? (totalRevenue as number) / paidRecords.items.length : 0,
+    };
+
+    return c.json<ApiResponse<typeof stats>>({ success: true, data: stats });
+
   } catch (error) {
     logger.error('Get finance stats error:', error);
-    return c.json<ApiResponse<never>>({
-      success: false,
-      error: 'Failed to fetch statistics',
-    }, 500);
+    return c.json<ApiResponse<never>>({ success: false, error: 'Failed to fetch statistics' }, 500);
   }
 });
 
 /**
  * GET /api/v1/finance/reports/monthly
- * Get monthly financial report
+ * Get monthly financial report — scoped to one year only
  */
 financeRouter.get('/reports/monthly', requireRole('admin', 'registrar'), async (c) => {
   try {
-    const year = c.req.query('year') || new Date().getFullYear().toString();
+    const rawYear = c.req.query('year') || new Date().getFullYear().toString();
+    // Validate year to prevent injection
+    const year = /^\d{4}$/.test(rawYear) ? rawYear : new Date().getFullYear().toString();
     const pb = getPocketBase();
-    
-    const transactions = await pb.collection('transactions').getFullList({
+
+    const transactions = await pb.collection('transactions').getList(1, 5000, {
       filter: `date >= "${year}-01-01" && date <= "${year}-12-31"`,
-    }) as unknown as Transaction[];
-    
+      fields: 'date,status,amt',
+    }) as { items: Transaction[] };
+
     const monthlyData = Array.from({ length: 12 }, (_, i) => {
       const month = i + 1;
       const monthStr = month.toString().padStart(2, '0');
-      const monthTransactions = transactions.filter(t => t.date.startsWith(`${year}-${monthStr}`));
-      
+      const monthTx = transactions.items.filter((t: Transaction) => t.date?.startsWith(`${year}-${monthStr}`));
       return {
         month,
         monthName: new Date(`${year}-${monthStr}-01`).toLocaleString('en-US', { month: 'short' }),
-        revenue: monthTransactions.filter(t => t.status === 'Paid').reduce((sum, t) => sum + t.amt, 0),
-        pending: monthTransactions.filter(t => t.status === 'Pending').reduce((sum, t) => sum + t.amt, 0),
-        count: monthTransactions.length,
+        revenue: monthTx.filter((t: Transaction) => t.status === 'Paid').reduce((sum: number, t: Transaction) => sum + (t.amt || 0), 0),
+        pending: monthTx.filter((t: Transaction) => t.status === 'Pending').reduce((sum: number, t: Transaction) => sum + (t.amt || 0), 0),
+        count: monthTx.length,
       };
     });
-    
-    return c.json<ApiResponse<typeof monthlyData>>({
-      success: true,
-      data: monthlyData,
-    });
-    
+
+    return c.json<ApiResponse<typeof monthlyData>>({ success: true, data: monthlyData });
+
   } catch (error) {
     logger.error('Get monthly report error:', error);
-    return c.json<ApiResponse<never>>({
-      success: false,
-      error: 'Failed to generate report',
-    }, 500);
+    return c.json<ApiResponse<never>>({ success: false, error: 'Failed to generate report' }, 500);
   }
 });
 

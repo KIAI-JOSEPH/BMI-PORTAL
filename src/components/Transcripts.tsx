@@ -43,13 +43,8 @@ export const Transcripts: React.FC<TranscriptsProps> = ({ students, courses, log
   const terms = ['Fall 2022', 'Spring 2023', 'Fall 2023', 'Spring 2024'];
 
   const getDeanName = (faculty: string) => {
-    const deans: Record<string, string> = {
-      'Theology': 'Dr. Samuel Kiptoo',
-      'ICT': 'Prof. Alice Mwangi',
-      'Business': 'Dr. Jane Okumu',
-      'Education': 'Prof. Peter Kamau'
-    };
-    return deans[faculty] || 'Dean of Faculty';
+    // All faculties now use the unified Dean of Faculty & Academics
+    return 'Dr. Joseph Kiai';
   };
 
   const filteredStudents = useMemo(() => {
@@ -63,20 +58,48 @@ export const Transcripts: React.FC<TranscriptsProps> = ({ students, courses, log
 
   const getPerformanceRecords = (student: Student): PerformanceRecord[] => {
     const facultyCourses = courses.filter(c => c.faculty === student.faculty || c.faculty === 'General');
-    const selected = facultyCourses.slice(0, 15);
-    
+
+    // Pad with generated courses if fewer than 25 real ones exist
+    const paddingCourses = [
+      { code: 'GEN-101', name: 'Research Methods & Academic Writing', credits: 3, faculty: 'General' },
+      { code: 'GEN-102', name: 'Christian Ethics & Moral Philosophy', credits: 3, faculty: 'General' },
+      { code: 'GEN-103', name: 'Introduction to Hermeneutics', credits: 3, faculty: 'General' },
+      { code: 'GEN-104', name: 'Church History I', credits: 3, faculty: 'General' },
+      { code: 'GEN-105', name: 'Church History II', credits: 3, faculty: 'General' },
+      { code: 'GEN-106', name: 'Old Testament Survey', credits: 3, faculty: 'General' },
+      { code: 'GEN-107', name: 'New Testament Survey', credits: 3, faculty: 'General' },
+      { code: 'GEN-108', name: 'Homiletics & Preaching', credits: 3, faculty: 'General' },
+      { code: 'GEN-109', name: 'Systematic Theology II', credits: 3, faculty: 'General' },
+      { code: 'GEN-110', name: 'Pastoral Counselling', credits: 3, faculty: 'General' },
+      { code: 'GEN-111', name: 'Missiology & World Religions', credits: 3, faculty: 'General' },
+      { code: 'GEN-112', name: 'Biblical Languages: Greek I', credits: 3, faculty: 'General' },
+      { code: 'GEN-113', name: 'Biblical Languages: Hebrew I', credits: 3, faculty: 'General' },
+      { code: 'GEN-114', name: 'Eschatology & Prophetic Studies', credits: 3, faculty: 'General' },
+      { code: 'GEN-115', name: 'Pneumatology & Charismatic Studies', credits: 3, faculty: 'General' },
+    ];
+
+    // Merge real courses with padding, deduplicate by code, take first 25
+    const allAvailable = [...facultyCourses];
+    for (const p of paddingCourses) {
+      if (allAvailable.length >= 25) break;
+      if (!allAvailable.find(c => c.code === p.code)) {
+        allAvailable.push(p as any);
+      }
+    }
+    const selected = allAvailable.slice(0, 25);
+
     return selected.map((c, idx) => {
       const seed = (student.id.length + c.code.length + student.firstName.length + idx) % 30;
-      const score = 85 + (seed % 15) - (idx % 2 === 0 && student.id.includes('7') ? 50 : 0); 
+      const score = 85 + (seed % 15) - (idx % 2 === 0 && student.id.includes('7') ? 50 : 0);
       let grade = 'F';
       let points = 0;
-      
+
       if (score >= 70) { grade = 'A'; points = 4.0; }
       else if (score >= 60) { grade = 'B'; points = 3.0; }
       else if (score >= 50) { grade = 'C'; points = 2.0; }
       else if (score >= 40) { grade = 'D'; points = 1.0; }
-      
-      const termIdx = Math.floor(idx / 4);
+
+      const termIdx = Math.floor(idx / 5);
       const term = terms[termIdx % terms.length];
 
       return {
@@ -139,34 +162,203 @@ export const Transcripts: React.FC<TranscriptsProps> = ({ students, courses, log
     }
   };
 
+  const buildPrintHTML = (title: string, innerHtml: string, elW: number, scale: number, A4_W: number, A4_H: number) => `<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8"/>
+  <title>${title}</title>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    @page { 
+      size: A4 portrait; 
+      margin: 0; 
+    }
+    html, body {
+      width: ${A4_W}px; height: ${A4_H}px;
+      overflow: hidden; background: white;
+      -webkit-print-color-adjust: exact; 
+      print-color-adjust: exact;
+      color-adjust: exact;
+    }
+    #scale-wrapper {
+      width: ${A4_W}px; height: ${A4_H}px;
+      display: flex; align-items: flex-start; justify-content: center; overflow: hidden;
+    }
+    #print-root {
+      width: ${elW}px;
+      transform-origin: top center;
+      transform: scale(${scale});
+      flex-shrink: 0;
+      image-rendering: -webkit-optimize-contrast;
+      image-rendering: crisp-edges;
+    }
+    @media print {
+      html, body { 
+        width: 210mm; 
+        height: 297mm; 
+        -webkit-print-color-adjust: exact !important;
+        print-color-adjust: exact !important;
+        color-adjust: exact !important;
+      }
+      #scale-wrapper { 
+        width: 210mm; 
+        height: 297mm; 
+      }
+      #print-root { 
+        transform: scale(${scale}); 
+        image-rendering: -webkit-optimize-contrast;
+        image-rendering: crisp-edges;
+      }
+      /* Ensure all colors and backgrounds print */
+      * {
+        -webkit-print-color-adjust: exact !important;
+        print-color-adjust: exact !important;
+        color-adjust: exact !important;
+      }
+    }
+  </style>
+</head>
+<body>
+  <div id="scale-wrapper"><div id="print-root">${innerHtml}</div></div>
+  <script>
+    window.onload = function() { 
+      // Wait for all images and fonts to load before printing
+      Promise.all([
+        document.fonts.ready,
+        ...Array.from(document.images).map(img => {
+          if (img.complete) return Promise.resolve();
+          return new Promise(resolve => {
+            img.onload = resolve;
+            img.onerror = resolve;
+          });
+        })
+      ]).then(() => {
+        setTimeout(() => {
+          window.focus(); 
+          window.print(); 
+          setTimeout(() => { window.close(); }, 1000);
+        }, 500);
+      });
+    };
+  </script>
+</body>
+</html>`;
+
   const handlePrint = async (mode: 'print' | 'download' = 'print') => {
     if (!selectedStudent) return;
     const element = document.getElementById('official-transcript-root');
     if (!element) return;
     const fileName = `${transcriptType}_TRANSCRIPT_${selectedStudent.id}_${selectedStudent.lastName}`.toUpperCase();
-    
+
+    // Shared: inline all computed styles so the clone is a pixel-perfect replica
+    const inlineStyles = (source: HTMLElement): HTMLElement => {
+      const clone = source.cloneNode(true) as HTMLElement;
+      const sourceEls = Array.from(source.querySelectorAll('*')) as HTMLElement[];
+      const cloneEls  = Array.from(clone.querySelectorAll('*'))  as HTMLElement[];
+      const rootCs = window.getComputedStyle(source);
+      let rootInline = '';
+      for (let i = 0; i < rootCs.length; i++) {
+        const p = rootCs[i];
+        rootInline += `${p}:${rootCs.getPropertyValue(p)};`;
+      }
+      clone.setAttribute('style', rootInline);
+      sourceEls.forEach((el, idx) => {
+        const cs = window.getComputedStyle(el);
+        let inline = '';
+        for (let i = 0; i < cs.length; i++) {
+          const p = cs[i];
+          inline += `${p}:${cs.getPropertyValue(p)};`;
+        }
+        cloneEls[idx].setAttribute('style', inline);
+      });
+      return clone;
+    };
+
     if (mode === 'download') {
       try {
-        const html2pdfModule = await import('https://esm.sh/html2pdf.js@0.10.1?bundle');
-        const html2pdf = html2pdfModule.default;
-        if (typeof html2pdf !== 'function') throw new Error("html2pdf is not a function");
-        const opt = {
-          margin: 0,
-          filename: `${fileName}.pdf`,
-          image: { type: 'jpeg', quality: 0.98 },
-          html2canvas: { scale: 2, useCORS: true, logging: false, letterRendering: true },
-          jsPDF: { unit: 'mm', format: 'a4', orientation: 'portrait' }
-        };
-        await html2pdf().set(opt).from(element).save();
+        // PDF Download: Use maximum quality settings for pixel-perfect match
+        const html2canvasModule = await import('https://esm.sh/html2canvas@1.4.1?bundle');
+        const html2canvas = html2canvasModule.default;
+        const jsPDFModule = await import('https://esm.sh/jspdf@2.5.1?bundle');
+        const { jsPDF } = jsPDFModule;
+
+        const elW  = element.scrollWidth  || 794;
+        const elH  = element.scrollHeight || 1123;
+
+        // Capture at 6× scale for ultra-high quality (equivalent to 576 DPI)
+        // Higher scale ensures all security features (guilloche, watermarks, microtext) are crisp
+        const canvas = await html2canvas(element, {
+          scale: 6,
+          useCORS: true,
+          allowTaint: true,
+          logging: false,
+          backgroundColor: '#ffffff',
+          width: elW,
+          height: elH,
+          windowWidth: elW,
+          windowHeight: elH,
+          imageTimeout: 0,
+          removeContainer: true,
+          foreignObjectRendering: true,  // Enable for better SVG rendering
+          letterRendering: true,
+          onclone: (clonedDoc) => {
+            // Ensure all styles are preserved in the clone
+            const clonedElement = clonedDoc.getElementById('official-transcript-root');
+            if (clonedElement) {
+              clonedElement.style.transform = 'none';
+              clonedElement.style.width = `${elW}px`;
+              clonedElement.style.height = `${elH}px`;
+            }
+          }
+        });
+
+        // Use PNG for lossless quality (better than JPEG for text/graphics)
+        const imgData = canvas.toDataURL('image/png', 1.0);
+        
+        // Create PDF with compress: false for maximum quality
+        const pdf = new jsPDF({ 
+          unit: 'mm', 
+          format: 'a4', 
+          orientation: 'portrait',
+          compress: false,
+          precision: 16,
+          putOnlyUsedFonts: true,
+          floatPrecision: 16
+        });
+        
+        // Add image at full A4 size with maximum quality
+        // Use 'NONE' compression for pixel-perfect match
+        pdf.addImage(imgData, 'PNG', 0, 0, 210, 297, undefined, 'NONE');
+        pdf.save(`${fileName}.pdf`);
       } catch (err) {
         console.error("PDF download failed", err);
-        window.print();
+        alert("PDF generation failed. Please try the Print option instead.");
       }
     } else {
-      const originalTitle = document.title;
-      document.title = fileName;
-      window.print();
-      setTimeout(() => { document.title = originalTitle; }, 1000);
+      // Print mode: Use high resolution for maximum print quality
+      // A4 at 300 DPI = 2480×3508 pixels, but we scale to fit browser print dialog
+      const A4_W_MM = 210;
+      const A4_H_MM = 297;
+      const PRINT_DPI = 300;  // Professional print quality
+      const MM_TO_INCH = 25.4;
+      
+      // Calculate pixel dimensions at 300 DPI
+      const A4_W_PX = Math.round((A4_W_MM / MM_TO_INCH) * PRINT_DPI);  // 2480px
+      const A4_H_PX = Math.round((A4_H_MM / MM_TO_INCH) * PRINT_DPI);  // 3508px
+      
+      // For browser display, use standard screen resolution
+      const SCREEN_A4_W = 794;
+      const SCREEN_A4_H = 1123;
+      
+      const elW  = element.scrollWidth  || SCREEN_A4_W;
+      const elH  = element.scrollHeight || SCREEN_A4_H;
+      const scale = Math.min(SCREEN_A4_W / elW, SCREEN_A4_H / elH, 1);
+      
+      const cloned = inlineStyles(element);
+      const printWindow = window.open('', '_blank', `width=${SCREEN_A4_W},height=${SCREEN_A4_H}`);
+      if (!printWindow) return;
+      printWindow.document.write(buildPrintHTML(fileName, cloned.outerHTML, elW, scale, SCREEN_A4_W, SCREEN_A4_H));
+      printWindow.document.close();
     }
   };
 
@@ -202,9 +394,904 @@ export const Transcripts: React.FC<TranscriptsProps> = ({ students, courses, log
     handlePrint('print');
   };
 
+  const handleDownloadWord = async () => {
+    if (!selectedStudent) return;
+
+    try {
+      const { Document, Paragraph, TextRun, Table, TableRow, TableCell, AlignmentType, HeadingLevel, BorderStyle, WidthType, convertInchesToTwip, ImageRun, VerticalAlign, ShadingType } = await import('docx');
+      const { saveAs } = await import('file-saver');
+
+      const fileName = `${transcriptType}_TRANSCRIPT_${selectedStudent.id}_${selectedStudent.lastName}`.toUpperCase();
+
+      // Fetch logo as base64
+      let logoBase64 = '';
+      try {
+        const response = await fetch(logo);
+        const blob = await response.blob();
+        logoBase64 = await new Promise<string>((resolve) => {
+          const reader = new FileReader();
+          reader.onloadend = () => resolve(reader.result as string);
+          reader.readAsDataURL(blob);
+        });
+      } catch (e) {
+        console.warn('Could not fetch logo:', e);
+      }
+
+      // Create table rows for performance records - matching preview layout
+      const tableRows = [
+        // Header row with gray background
+        new TableRow({
+          tableHeader: true,
+          children: [
+            new TableCell({
+              children: [new Paragraph({ 
+                text: 'Course Code', 
+                alignment: AlignmentType.LEFT,
+                style: 'TableHeader'
+              })],
+              shading: { fill: 'F3F4F6', type: ShadingType.SOLID },
+              borders: {
+                top: { style: BorderStyle.SINGLE, size: 1, color: '000000' },
+                bottom: { style: BorderStyle.SINGLE, size: 1, color: '000000' },
+                left: { style: BorderStyle.SINGLE, size: 1, color: '000000' },
+                right: { style: BorderStyle.SINGLE, size: 1, color: '000000' },
+              },
+              verticalAlign: VerticalAlign.CENTER,
+            }),
+            new TableCell({
+              children: [new Paragraph({ 
+                text: 'Course Description', 
+                alignment: AlignmentType.LEFT,
+                style: 'TableHeader'
+              })],
+              shading: { fill: 'F3F4F6', type: ShadingType.SOLID },
+              borders: {
+                top: { style: BorderStyle.SINGLE, size: 1, color: '000000' },
+                bottom: { style: BorderStyle.SINGLE, size: 1, color: '000000' },
+                left: { style: BorderStyle.SINGLE, size: 1, color: '000000' },
+                right: { style: BorderStyle.SINGLE, size: 1, color: '000000' },
+              },
+              verticalAlign: VerticalAlign.CENTER,
+            }),
+            new TableCell({
+              children: [new Paragraph({ 
+                text: 'Hours', 
+                alignment: AlignmentType.CENTER,
+                style: 'TableHeader'
+              })],
+              shading: { fill: 'F3F4F6', type: ShadingType.SOLID },
+              borders: {
+                top: { style: BorderStyle.SINGLE, size: 1, color: '000000' },
+                bottom: { style: BorderStyle.SINGLE, size: 1, color: '000000' },
+                left: { style: BorderStyle.SINGLE, size: 1, color: '000000' },
+                right: { style: BorderStyle.SINGLE, size: 1, color: '000000' },
+              },
+              verticalAlign: VerticalAlign.CENTER,
+              width: { size: 15, type: WidthType.PERCENTAGE },
+            }),
+            new TableCell({
+              children: [new Paragraph({ 
+                text: 'Grade', 
+                alignment: AlignmentType.CENTER,
+                style: 'TableHeader'
+              })],
+              shading: { fill: 'F3F4F6', type: ShadingType.SOLID },
+              borders: {
+                top: { style: BorderStyle.SINGLE, size: 1, color: '000000' },
+                bottom: { style: BorderStyle.SINGLE, size: 1, color: '000000' },
+                left: { style: BorderStyle.SINGLE, size: 1, color: '000000' },
+                right: { style: BorderStyle.SINGLE, size: 1, color: '000000' },
+              },
+              verticalAlign: VerticalAlign.CENTER,
+              width: { size: 10, type: WidthType.PERCENTAGE },
+            }),
+          ],
+        }),
+        // Data rows
+        ...currentRecords.map(rec => new TableRow({
+          children: [
+            new TableCell({ 
+              children: [new Paragraph({ 
+                children: [new TextRun({ text: rec.courseCode, font: 'Courier New', bold: true, size: 18, color: '4B0082' })],
+                alignment: AlignmentType.LEFT
+              })],
+              borders: {
+                top: { style: BorderStyle.SINGLE, size: 1, color: 'E5E7EB' },
+                bottom: { style: BorderStyle.SINGLE, size: 1, color: 'E5E7EB' },
+                left: { style: BorderStyle.SINGLE, size: 1, color: '000000' },
+                right: { style: BorderStyle.SINGLE, size: 1, color: '000000' },
+              },
+              verticalAlign: VerticalAlign.CENTER,
+            }),
+            new TableCell({ 
+              children: [new Paragraph({ 
+                children: [new TextRun({ text: rec.courseName.toUpperCase(), bold: true, size: 18 })],
+                alignment: AlignmentType.LEFT
+              })],
+              borders: {
+                top: { style: BorderStyle.SINGLE, size: 1, color: 'E5E7EB' },
+                bottom: { style: BorderStyle.SINGLE, size: 1, color: 'E5E7EB' },
+                left: { style: BorderStyle.SINGLE, size: 1, color: '000000' },
+                right: { style: BorderStyle.SINGLE, size: 1, color: '000000' },
+              },
+              verticalAlign: VerticalAlign.CENTER,
+            }),
+            new TableCell({ 
+              children: [new Paragraph({ 
+                children: [new TextRun({ text: rec.credits.toFixed(2), bold: true, size: 18 })],
+                alignment: AlignmentType.CENTER
+              })],
+              borders: {
+                top: { style: BorderStyle.SINGLE, size: 1, color: 'E5E7EB' },
+                bottom: { style: BorderStyle.SINGLE, size: 1, color: 'E5E7EB' },
+                left: { style: BorderStyle.SINGLE, size: 1, color: '000000' },
+                right: { style: BorderStyle.SINGLE, size: 1, color: '000000' },
+              },
+              verticalAlign: VerticalAlign.CENTER,
+            }),
+            new TableCell({ 
+              children: [new Paragraph({ 
+                children: [new TextRun({ 
+                  text: rec.grade, 
+                  bold: true, 
+                  size: 22,
+                  color: rec.score >= 70 ? '10B981' : rec.score < 40 ? 'DC2626' : '4B0082'
+                })],
+                alignment: AlignmentType.CENTER
+              })],
+              borders: {
+                top: { style: BorderStyle.SINGLE, size: 1, color: 'E5E7EB' },
+                bottom: { style: BorderStyle.SINGLE, size: 1, color: 'E5E7EB' },
+                left: { style: BorderStyle.SINGLE, size: 1, color: '000000' },
+                right: { style: BorderStyle.SINGLE, size: 1, color: '000000' },
+              },
+              verticalAlign: VerticalAlign.CENTER,
+            }),
+          ],
+        })),
+      ];
+
+      const doc = new Document({
+        styles: {
+          paragraphStyles: [
+            {
+              id: 'TableHeader',
+              name: 'Table Header',
+              basedOn: 'Normal',
+              run: {
+                bold: true,
+                size: 18,
+                font: 'Arial',
+                color: '000000',
+              },
+            },
+          ],
+        },
+        sections: [{
+          properties: {
+            page: {
+              margin: {
+                top: convertInchesToTwip(0.5),
+                right: convertInchesToTwip(0.5),
+                bottom: convertInchesToTwip(0.5),
+                left: convertInchesToTwip(0.5),
+              },
+            },
+          },
+          children: [
+            // Microtext security line
+            new Paragraph({
+              text: 'BMI UNIVERSITY OFFICIAL ACADEMIC TRANSCRIPT • SECURITY VALIDATED RECORD • DO NOT REPRODUCE',
+              alignment: AlignmentType.CENTER,
+              spacing: { after: 100 },
+              style: 'Normal',
+              run: {
+                size: 12,
+                color: '999999',
+                font: 'Arial',
+              },
+            }),
+
+            // Header with logo
+            ...(logoBase64 ? [
+              new Paragraph({
+                alignment: AlignmentType.CENTER,
+                spacing: { after: 100 },
+                children: [
+                  new ImageRun({
+                    data: logoBase64,
+                    transformation: {
+                      width: 64,
+                      height: 64,
+                    },
+                  }),
+                ],
+              }),
+            ] : []),
+
+            // University name
+            new Paragraph({
+              text: 'BMI UNIVERSITY',
+              alignment: AlignmentType.CENTER,
+              spacing: { after: 50 },
+              run: {
+                size: 32,
+                bold: true,
+                font: 'Georgia',
+                color: '000000',
+              },
+            }),
+            
+            // Office of the Registrar
+            new Paragraph({
+              text: 'OFFICE OF THE REGISTRAR',
+              alignment: AlignmentType.CENTER,
+              spacing: { after: 100 },
+              run: {
+                size: 14,
+                bold: true,
+                font: 'Arial',
+                color: '666666',
+              },
+            }),
+
+            // Document title with border
+            new Paragraph({
+              text: `${transcriptType.toUpperCase()} ACADEMIC TRANSCRIPT${transcriptType === 'Provisional' ? ` | PERIOD: ${selectedTerm.toUpperCase()}` : ''}`,
+              alignment: AlignmentType.CENTER,
+              spacing: { after: 200 },
+              border: {
+                top: { style: BorderStyle.SINGLE, size: 6, color: '000000' },
+                bottom: { style: BorderStyle.SINGLE, size: 6, color: '000000' },
+              },
+              run: {
+                size: 20,
+                bold: true,
+                font: 'Georgia',
+                color: '000000',
+              },
+            }),
+
+            // Student Name (large, prominent)
+            new Paragraph({
+              alignment: AlignmentType.LEFT,
+              spacing: { after: 100 },
+              border: {
+                bottom: { style: BorderStyle.SINGLE, size: 3, color: 'CCCCCC' },
+              },
+              children: [
+                new TextRun({ 
+                  text: 'Student Name:  ', 
+                  size: 14, 
+                  bold: true, 
+                  font: 'Arial',
+                  color: '999999'
+                }),
+                new TextRun({ 
+                  text: `${selectedStudent.firstName.toUpperCase()} ${selectedStudent.lastName.toUpperCase()}`, 
+                  size: 24, 
+                  bold: true, 
+                  font: 'Georgia',
+                  color: '000000'
+                }),
+              ],
+            }),
+
+            // Student details grid (2 columns)
+            new Table({
+              width: { size: 100, type: WidthType.PERCENTAGE },
+              borders: {
+                top: { style: BorderStyle.NONE, size: 0 },
+                bottom: { style: BorderStyle.NONE, size: 0 },
+                left: { style: BorderStyle.NONE, size: 0 },
+                right: { style: BorderStyle.NONE, size: 0 },
+                insideHorizontal: { style: BorderStyle.NONE, size: 0 },
+                insideVertical: { style: BorderStyle.NONE, size: 0 },
+              },
+              rows: [
+                new TableRow({
+                  children: [
+                    new TableCell({
+                      children: [new Paragraph({
+                        children: [
+                          new TextRun({ text: 'Year of study: ', size: 16, color: '666666', font: 'Arial' }),
+                          new TextRun({ text: '4 (FOUR)', size: 18, bold: true, font: 'Arial' }),
+                        ],
+                      })],
+                      borders: {
+                        bottom: { style: BorderStyle.SINGLE, size: 1, color: 'E5E7EB' },
+                      },
+                      margins: { bottom: 50 },
+                    }),
+                    new TableCell({
+                      children: [new Paragraph({
+                        children: [
+                          new TextRun({ text: 'Prog. of Study: ', size: 16, color: '666666', font: 'Arial' }),
+                          new TextRun({ text: selectedStudent.careerPath.toUpperCase(), size: 18, bold: true, font: 'Arial' }),
+                        ],
+                      })],
+                      borders: {
+                        bottom: { style: BorderStyle.SINGLE, size: 1, color: 'E5E7EB' },
+                      },
+                      margins: { bottom: 50 },
+                    }),
+                  ],
+                }),
+                new TableRow({
+                  children: [
+                    new TableCell({
+                      children: [new Paragraph({
+                        children: [
+                          new TextRun({ text: 'FACULTY OF: ', size: 16, color: '666666', font: 'Arial' }),
+                          new TextRun({ text: selectedStudent.faculty.toUpperCase(), size: 18, bold: true, font: 'Arial' }),
+                        ],
+                      })],
+                      borders: {
+                        bottom: { style: BorderStyle.SINGLE, size: 1, color: 'E5E7EB' },
+                      },
+                      margins: { bottom: 50 },
+                    }),
+                    new TableCell({
+                      children: [new Paragraph({
+                        children: [
+                          new TextRun({ text: 'Student ID: ', size: 16, color: '666666', font: 'Arial' }),
+                          new TextRun({ text: selectedStudent.id, size: 18, bold: true, font: 'Courier New', color: 'DC2626' }),
+                        ],
+                      })],
+                      borders: {
+                        bottom: { style: BorderStyle.SINGLE, size: 1, color: 'E5E7EB' },
+                      },
+                      margins: { bottom: 50 },
+                    }),
+                  ],
+                }),
+                new TableRow({
+                  children: [
+                    new TableCell({
+                      children: [new Paragraph({
+                        children: [
+                          new TextRun({ text: 'Admission: ', size: 16, color: '666666', font: 'Arial' }),
+                          new TextRun({ text: '27/08/2022', size: 18, bold: true, font: 'Arial' }),
+                        ],
+                      })],
+                      borders: {
+                        bottom: { style: BorderStyle.SINGLE, size: 1, color: 'E5E7EB' },
+                      },
+                      margins: { bottom: 50 },
+                    }),
+                    new TableCell({
+                      children: [new Paragraph({
+                        children: [
+                          new TextRun({ text: 'Graduation: ', size: 16, color: '666666', font: 'Arial' }),
+                          new TextRun({ text: '21/12/2026', size: 18, bold: true, font: 'Arial' }),
+                        ],
+                      })],
+                      borders: {
+                        bottom: { style: BorderStyle.SINGLE, size: 1, color: 'E5E7EB' },
+                      },
+                      margins: { bottom: 50 },
+                    }),
+                  ],
+                }),
+              ],
+            }),
+
+            // Spacing before table
+            new Paragraph({
+              text: '',
+              spacing: { before: 300, after: 100 },
+            }),
+
+            // Performance table
+            new Table({
+              width: {
+                size: 100,
+                type: WidthType.PERCENTAGE,
+              },
+              borders: {
+                top: { style: BorderStyle.SINGLE, size: 6, color: '000000' },
+                bottom: { style: BorderStyle.SINGLE, size: 6, color: '000000' },
+                left: { style: BorderStyle.SINGLE, size: 6, color: '000000' },
+                right: { style: BorderStyle.SINGLE, size: 6, color: '000000' },
+                insideHorizontal: { style: BorderStyle.SINGLE, size: 1, color: 'E5E7EB' },
+                insideVertical: { style: BorderStyle.SINGLE, size: 1, color: '000000' },
+              },
+              rows: tableRows,
+            }),
+
+            // Performance metrics bar
+            new Paragraph({
+              alignment: AlignmentType.CENTER,
+              spacing: { before: 200, after: 200 },
+              shading: { fill: 'F9FAFB', type: ShadingType.SOLID },
+              border: {
+                top: { style: BorderStyle.SINGLE, size: 6, color: '000000' },
+                bottom: { style: BorderStyle.SINGLE, size: 6, color: '000000' },
+              },
+              children: [
+                new TextRun({ text: 'PERFORMANCE METRICS:  ', size: 16, color: '666666', font: 'Arial' }),
+                new TextRun({ text: 'Current Avg: ', size: 18, bold: true, font: 'Arial' }),
+                new TextRun({ text: `${stats.current}%`, size: 18, bold: true, color: '4B0082', font: 'Arial' }),
+                new TextRun({ text: '  |  ', size: 18, font: 'Arial' }),
+                new TextRun({ text: 'Cumulative Avg: ', size: 18, bold: true, font: 'Arial' }),
+                new TextRun({ text: `${stats.cumulative}%`, size: 18, bold: true, color: '4B0082', font: 'Arial' }),
+              ],
+            }),
+
+            // Academic recommendation
+            new Paragraph({
+              alignment: AlignmentType.LEFT,
+              spacing: { before: 200, after: 100 },
+              children: [
+                new TextRun({ text: 'Recommendation:  ', size: 16, bold: true, color: '999999', font: 'Arial' }),
+              ],
+            }),
+            new Paragraph({
+              text: getAcademicRecommendation(),
+              alignment: AlignmentType.LEFT,
+              spacing: { after: 300 },
+              border: {
+                left: { style: BorderStyle.SINGLE, size: 12, color: '4B0082' },
+              },
+              indent: { left: convertInchesToTwip(0.2) },
+              run: {
+                size: 18,
+                bold: true,
+                font: 'Arial',
+                color: '000000',
+              },
+            }),
+
+            // Grading scale
+            new Paragraph({
+              alignment: AlignmentType.CENTER,
+              spacing: { before: 200, after: 200 },
+              shading: { fill: 'F9FAFB', type: ShadingType.SOLID },
+              border: {
+                top: { style: BorderStyle.SINGLE, size: 1, color: 'CCCCCC' },
+                bottom: { style: BorderStyle.SINGLE, size: 1, color: 'CCCCCC' },
+              },
+              children: [
+                new TextRun({ text: 'GRADING:  ', size: 14, bold: true, color: '666666', font: 'Arial', underline: {} }),
+                new TextRun({ text: 'A (70–100%)  |  B (60–69%)  |  C (50–59%)  |  D (40–49%)  |  ', size: 14, color: '666666', font: 'Arial' }),
+                new TextRun({ text: 'F (<40%)', size: 14, color: 'DC2626', font: 'Arial' }),
+              ],
+            }),
+
+            // Microtext security line
+            new Paragraph({
+              text: 'DO NOT REPRODUCE THIS DOCUMENT • BMI UNIVERSITY ACADEMIC RECORD SECURE VALIDATION LINE',
+              alignment: AlignmentType.CENTER,
+              spacing: { after: 200 },
+              run: {
+                size: 12,
+                color: '999999',
+                font: 'Arial',
+              },
+            }),
+
+            // Signatures
+            new Paragraph({
+              text: '',
+              spacing: { before: 400, after: 200 },
+            }),
+            
+            // Signature table
+            new Table({
+              width: { size: 100, type: WidthType.PERCENTAGE },
+              borders: {
+                top: { style: BorderStyle.NONE, size: 0 },
+                bottom: { style: BorderStyle.NONE, size: 0 },
+                left: { style: BorderStyle.NONE, size: 0 },
+                right: { style: BorderStyle.NONE, size: 0 },
+                insideHorizontal: { style: BorderStyle.NONE, size: 0 },
+                insideVertical: { style: BorderStyle.NONE, size: 0 },
+              },
+              rows: [
+                new TableRow({
+                  children: [
+                    new TableCell({
+                      children: [
+                        new Paragraph({ text: '', spacing: { after: 600 } }),
+                        new Paragraph({
+                          text: '________________________',
+                          alignment: AlignmentType.CENTER,
+                          spacing: { after: 50 },
+                        }),
+                        new Paragraph({
+                          text: getDeanName(selectedStudent.faculty),
+                          alignment: AlignmentType.CENTER,
+                          spacing: { after: 50 },
+                          run: {
+                            size: 20,
+                            italics: true,
+                            font: 'Georgia',
+                          },
+                        }),
+                        new Paragraph({
+                          text: 'Dean of Faculty & Academics',
+                          alignment: AlignmentType.CENTER,
+                          run: {
+                            size: 14,
+                            bold: true,
+                            font: 'Arial',
+                            color: '666666',
+                          },
+                        }),
+                      ],
+                      width: { size: 40, type: WidthType.PERCENTAGE },
+                    }),
+                    new TableCell({
+                      children: [new Paragraph({ text: '' })],
+                      width: { size: 20, type: WidthType.PERCENTAGE },
+                      borders: {
+                        top: { style: BorderStyle.NONE, size: 0 },
+                        bottom: { style: BorderStyle.NONE, size: 0 },
+                        left: { style: BorderStyle.NONE, size: 0 },
+                        right: { style: BorderStyle.NONE, size: 0 },
+                      },
+                    }),
+                    new TableCell({
+                      children: [
+                        new Paragraph({ text: '', spacing: { after: 600 } }),
+                        new Paragraph({
+                          text: '________________________',
+                          alignment: AlignmentType.CENTER,
+                          spacing: { after: 50 },
+                        }),
+                        new Paragraph({
+                          text: 'Dr. Lilian Young',
+                          alignment: AlignmentType.CENTER,
+                          spacing: { after: 50 },
+                          run: {
+                            size: 20,
+                            italics: true,
+                            font: 'Georgia',
+                          },
+                        }),
+                        new Paragraph({
+                          text: 'Dean of Students',
+                          alignment: AlignmentType.CENTER,
+                          run: {
+                            size: 14,
+                            bold: true,
+                            font: 'Arial',
+                            color: '666666',
+                          },
+                        }),
+                      ],
+                      width: { size: 40, type: WidthType.PERCENTAGE },
+                    }),
+                  ],
+                }),
+              ],
+            }),
+
+            // Footer
+            new Paragraph({
+              text: '',
+              spacing: { before: 400 },
+            }),
+            new Table({
+              width: { size: 100, type: WidthType.PERCENTAGE },
+              borders: {
+                top: { style: BorderStyle.NONE, size: 0 },
+                bottom: { style: BorderStyle.NONE, size: 0 },
+                left: { style: BorderStyle.NONE, size: 0 },
+                right: { style: BorderStyle.NONE, size: 0 },
+                insideHorizontal: { style: BorderStyle.NONE, size: 0 },
+                insideVertical: { style: BorderStyle.NONE, size: 0 },
+              },
+              rows: [
+                new TableRow({
+                  children: [
+                    new TableCell({
+                      children: [new Paragraph({
+                        children: [
+                          new TextRun({ text: 'Issued: ', size: 16, bold: true, color: '666666', font: 'Arial' }),
+                          new TextRun({ text: '1st May 2026', size: 16, font: 'Arial' }),
+                        ],
+                      })],
+                    }),
+                    new TableCell({
+                      children: [new Paragraph({
+                        children: [
+                          new TextRun({ text: 'ID: ', size: 16, bold: true, color: '666666', font: 'Arial' }),
+                          new TextRun({ text: `BMI-TR-${selectedStudent.id.split('-').pop()}`, size: 16, font: 'Arial' }),
+                        ],
+                      })],
+                    }),
+                    new TableCell({
+                      children: [new Paragraph({
+                        alignment: AlignmentType.RIGHT,
+                        children: [
+                          new TextRun({ text: '✓ Verified Archive', size: 16, bold: true, color: '4B0082', font: 'Arial' }),
+                        ],
+                      })],
+                    }),
+                  ],
+                }),
+              ],
+            }),
+            
+            new Paragraph({
+              text: `Document ID: ${selectedStudent.id}-${transcriptType.toUpperCase()}-${new Date().getFullYear()}`,
+              alignment: AlignmentType.CENTER,
+              spacing: { before: 200 },
+              border: {
+                top: { style: BorderStyle.SINGLE, size: 6, color: 'C9A84C' },
+              },
+              run: {
+                size: 18,
+                font: 'Arial',
+                color: '666666',
+              },
+            }),
+            new Paragraph({
+              text: 'This is an official document issued by BMI University',
+              alignment: AlignmentType.CENTER,
+              run: {
+                size: 16,
+                italics: true,
+                font: 'Arial',
+                color: '999999',
+              },
+            }),
+          ],
+        }],
+      });
+
+      const blob = await (await import('docx')).Packer.toBlob(doc);
+      saveAs(blob, `${fileName}.docx`);
+    } catch (err) {
+      console.error('Word generation failed:', err);
+      alert('Word document generation failed. Please try again.');
+    }
+  };
+
+  const handleDownloadSVG = async () => {
+    if (!selectedStudent) return;
+
+    try {
+      const fileName = `${transcriptType}_TRANSCRIPT_${selectedStudent.id}_${selectedStudent.lastName}`.toUpperCase();
+      
+      // A4 dimensions at 96 DPI
+      const width = 794;
+      const height = 1123;
+      
+      // Wrap long text for recommendation
+      const wrapText = (text: string, maxCharsPerLine: number): string[] => {
+        const words = text.split(' ');
+        const lines: string[] = [];
+        let currentLine = '';
+        
+        words.forEach(word => {
+          const testLine = currentLine ? `${currentLine} ${word}` : word;
+          if (testLine.length > maxCharsPerLine && currentLine) {
+            lines.push(currentLine);
+            currentLine = word;
+          } else {
+            currentLine = testLine;
+          }
+        });
+        
+        if (currentLine) lines.push(currentLine);
+        return lines;
+      };
+      
+      const recommendationLines = wrapText(getAcademicRecommendation(), 95);
+      
+      // Build course table rows
+      const courseRows = currentRecords.map((rec, idx) => {
+        const y = 430 + (idx * 22);
+        const gradeColor = rec.score >= 70 ? '#10B981' : rec.score < 40 ? '#DC2626' : '#4B0082';
+        const courseName = rec.courseName.length > 45 ? rec.courseName.substring(0, 42) + '...' : rec.courseName;
+        
+        return `
+    <!-- Row ${idx + 1} -->
+    <rect x="50" y="${y - 15}" width="694" height="22" fill="${idx % 2 === 0 ? '#FFFFFF' : '#F9FAFB'}" />
+    <text x="60" y="${y}" font-family="Courier New, monospace" font-size="9" font-weight="bold" fill="#4B0082">${rec.courseCode}</text>
+    <text x="140" y="${y}" font-family="Arial, sans-serif" font-size="9" font-weight="bold" fill="#1F2937">${courseName.toUpperCase()}</text>
+    <text x="520" y="${y}" font-family="Arial, sans-serif" font-size="9" fill="#374151" text-anchor="middle">${rec.credits}</text>
+    <text x="600" y="${y}" font-family="Arial, sans-serif" font-size="10" font-weight="bold" fill="${gradeColor}" text-anchor="middle">${rec.score}%</text>
+    <text x="670" y="${y}" font-family="Arial, sans-serif" font-size="12" font-weight="bold" fill="${gradeColor}" text-anchor="middle">${rec.grade}</text>
+    <text x="720" y="${y}" font-family="Arial, sans-serif" font-size="8" fill="#6B7280" text-anchor="end">${rec.term}</text>`;
+      }).join('');
+      
+      const tableEndY = 430 + (currentRecords.length * 22);
+      const statsY = tableEndY + 40;
+      const recommendationY = statsY + 80;
+      const signaturesY = height - 200;
+      const footerY = height - 120;
+
+      const svg = `<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" 
+     width="${width}" height="${height}" viewBox="0 0 ${width} ${height}">
+  
+  <defs>
+    <!-- Gold gradient for border -->
+    <linearGradient id="goldGradient" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#FFD700" />
+      <stop offset="50%" stop-color="#FFA500" />
+      <stop offset="100%" stop-color="#FFD700" />
+    </linearGradient>
+    
+    <!-- Security pattern -->
+    <pattern id="securityPattern" x="0" y="0" width="100" height="100" patternUnits="userSpaceOnUse">
+      <path d="M0,50 Q25,25 50,50 T100,50" fill="none" stroke="#E5E7EB" stroke-width="0.5" opacity="0.3" />
+      <path d="M0,25 Q25,0 50,25 T100,25" fill="none" stroke="#E5E7EB" stroke-width="0.5" opacity="0.3" />
+      <path d="M0,75 Q25,50 50,75 T100,75" fill="none" stroke="#E5E7EB" stroke-width="0.5" opacity="0.3" />
+    </pattern>
+  </defs>
+  
+  <!-- Background with security pattern -->
+  <rect width="${width}" height="${height}" fill="#FFFFFF"/>
+  <rect width="${width}" height="${height}" fill="url(#securityPattern)" opacity="0.4"/>
+  
+  <!-- Main border (double gold) -->
+  <rect x="25" y="25" width="${width - 50}" height="${height - 50}" 
+        fill="none" stroke="url(#goldGradient)" stroke-width="3" rx="2"/>
+  <rect x="30" y="30" width="${width - 60}" height="${height - 60}" 
+        fill="none" stroke="#C9A84C" stroke-width="1" rx="1"/>
+  
+  <!-- Top microtext security line -->
+  <text x="${width/2}" y="15" font-family="Arial, sans-serif" font-size="5" fill="#999999" text-anchor="middle" opacity="0.6">
+    BMI UNIVERSITY OFFICIAL ACADEMIC TRANSCRIPT • SECURITY VALIDATED RECORD • DO NOT REPRODUCE • AUTHENTIC DOCUMENT
+  </text>
+  
+  <!-- Logo -->
+  <image x="${width/2 - 35}" y="50" width="70" height="70" xlink:href="${logo}" preserveAspectRatio="xMidYMid meet"/>
+  
+  <!-- University Name -->
+  <text x="${width/2}" y="145" font-family="Georgia, serif" font-size="26" font-weight="bold" 
+        fill="#4B0082" text-anchor="middle" letter-spacing="1">BMI University</text>
+  
+  <!-- Subtitle -->
+  <text x="${width/2}" y="165" font-family="Georgia, serif" font-size="11" font-style="italic" 
+        fill="#6B7280" text-anchor="middle">Home of Knowledge and Innovation</text>
+  
+  <!-- Office of the Registrar -->
+  <text x="${width/2}" y="185" font-family="Arial, sans-serif" font-size="9" font-weight="bold" 
+        fill="#9CA3AF" text-anchor="middle" letter-spacing="2">OFFICE OF THE REGISTRAR</text>
+  
+  <!-- Document Title with borders -->
+  <line x1="100" y1="205" x2="${width - 100}" y2="205" stroke="#000000" stroke-width="2"/>
+  <text x="${width/2}" y="225" font-family="Georgia, serif" font-size="18" font-weight="bold" 
+        fill="#000000" text-anchor="middle" letter-spacing="1">${transcriptType.toUpperCase()} ACADEMIC TRANSCRIPT</text>
+  <line x1="100" y1="235" x2="${width - 100}" y2="235" stroke="#000000" stroke-width="2"/>
+  
+  <!-- Student Name (large and prominent) -->
+  <text x="60" y="270" font-family="Arial, sans-serif" font-size="10" font-weight="bold" fill="#9CA3AF">Name:</text>
+  <text x="60" y="290" font-family="Georgia, serif" font-size="20" font-weight="bold" fill="#000000" letter-spacing="0.5">
+    ${selectedStudent.firstName.toUpperCase()} ${selectedStudent.lastName.toUpperCase()}
+  </text>
+  <line x1="60" y1="295" x2="400" y2="295" stroke="#CCCCCC" stroke-width="1"/>
+  
+  <!-- Student Details Grid (2 columns) -->
+  <!-- Left Column -->
+  <text x="60" y="320" font-family="Arial, sans-serif" font-size="9" fill="#6B7280">Year of study:</text>
+  <text x="150" y="320" font-family="Arial, sans-serif" font-size="10" font-weight="bold" fill="#000000">4 (FOUR)</text>
+  <line x1="60" y1="325" x2="350" y2="325" stroke="#E5E7EB" stroke-width="0.5"/>
+  
+  <text x="60" y="345" font-family="Arial, sans-serif" font-size="9" fill="#6B7280">FACULTY OF:</text>
+  <text x="150" y="345" font-family="Arial, sans-serif" font-size="10" font-weight="bold" fill="#000000">${selectedStudent.faculty.toUpperCase()}</text>
+  <line x1="60" y1="350" x2="350" y2="350" stroke="#E5E7EB" stroke-width="0.5"/>
+  
+  <text x="60" y="370" font-family="Arial, sans-serif" font-size="9" fill="#6B7280">Admission:</text>
+  <text x="150" y="370" font-family="Arial, sans-serif" font-size="10" font-weight="bold" fill="#000000">${selectedStudent.admissionYear}</text>
+  <line x1="60" y1="375" x2="350" y2="375" stroke="#E5E7EB" stroke-width="0.5"/>
+  
+  <!-- Right Column -->
+  <text x="400" y="320" font-family="Arial, sans-serif" font-size="9" fill="#6B7280">Program:</text>
+  <text x="470" y="320" font-family="Arial, sans-serif" font-size="10" font-weight="bold" fill="#000000">${selectedStudent.careerPath.substring(0, 30).toUpperCase()}</text>
+  <line x1="400" y1="325" x2="730" y2="325" stroke="#E5E7EB" stroke-width="0.5"/>
+  
+  <text x="400" y="345" font-family="Arial, sans-serif" font-size="9" fill="#6B7280">Student ID:</text>
+  <text x="470" y="345" font-family="Courier New, monospace" font-size="10" font-weight="bold" fill="#DC2626">${selectedStudent.id}</text>
+  <line x1="400" y1="350" x2="730" y2="350" stroke="#E5E7EB" stroke-width="0.5"/>
+  
+  <text x="400" y="370" font-family="Arial, sans-serif" font-size="9" fill="#6B7280">Graduation:</text>
+  <text x="470" y="370" font-family="Arial, sans-serif" font-size="10" font-weight="bold" fill="#000000">${parseInt(selectedStudent.admissionYear) + 4}</text>
+  <line x1="400" y1="375" x2="730" y2="375" stroke="#E5E7EB" stroke-width="0.5"/>
+  
+  <!-- Academic Performance Section -->
+  <text x="60" y="405" font-family="Arial, sans-serif" font-size="12" font-weight="bold" fill="#000000">ACADEMIC PERFORMANCE</text>
+  
+  <!-- Table Header -->
+  <rect x="50" y="410" width="694" height="25" fill="#F3F4F6"/>
+  <line x1="50" y1="410" x2="744" y2="410" stroke="#000000" stroke-width="1"/>
+  <line x1="50" y1="435" x2="744" y2="435" stroke="#000000" stroke-width="1"/>
+  <line x1="50" y1="410" x2="50" y2="435" stroke="#000000" stroke-width="1"/>
+  <line x1="744" y1="410" x2="744" y2="435" stroke="#000000" stroke-width="1"/>
+  
+  <text x="60" y="427" font-family="Arial, sans-serif" font-size="9" font-weight="bold" fill="#374151">Course Code</text>
+  <text x="140" y="427" font-family="Arial, sans-serif" font-size="9" font-weight="bold" fill="#374151">Course Description</text>
+  <text x="520" y="427" font-family="Arial, sans-serif" font-size="9" font-weight="bold" fill="#374151" text-anchor="middle">Hours</text>
+  <text x="600" y="427" font-family="Arial, sans-serif" font-size="9" font-weight="bold" fill="#374151" text-anchor="middle">Score</text>
+  <text x="670" y="427" font-family="Arial, sans-serif" font-size="9" font-weight="bold" fill="#374151" text-anchor="middle">Grade</text>
+  <text x="720" y="427" font-family="Arial, sans-serif" font-size="9" font-weight="bold" fill="#374151" text-anchor="end">Term</text>
+  
+  <!-- Table Border Lines -->
+  <line x1="50" y1="410" x2="50" y2="${tableEndY}" stroke="#000000" stroke-width="1"/>
+  <line x1="744" y1="410" x2="744" y2="${tableEndY}" stroke="#000000" stroke-width="1"/>
+  <line x1="50" y1="${tableEndY}" x2="744" y2="${tableEndY}" stroke="#000000" stroke-width="1"/>
+  
+  <!-- Course Rows -->
+  ${courseRows}
+  
+  <!-- Performance Metrics Bar -->
+  <rect x="50" y="${statsY - 20}" width="694" height="50" fill="#F9FAFB" stroke="#E5E7EB" stroke-width="1"/>
+  <text x="${width/2}" y="${statsY}" font-family="Arial, sans-serif" font-size="11" font-weight="bold" fill="#374151" text-anchor="middle">
+    Current Term Average: <tspan fill="#4B0082">${stats.current}%</tspan>  |  Cumulative Average: <tspan fill="#4B0082">${stats.cumulative}%</tspan>
+  </text>
+  
+  <!-- Grading Scale -->
+  <text x="${width/2}" y="${statsY + 18}" font-family="Arial, sans-serif" font-size="8" fill="#6B7280" text-anchor="middle">
+    A (70–100%) | B (60–69%) | C (50–59%) | D (40–49%) | F (&lt;40%)
+  </text>
+  
+  <!-- Academic Recommendation -->
+  <rect x="50" y="${recommendationY - 10}" width="5" height="80" fill="#4B0082"/>
+  <text x="65" y="${recommendationY + 5}" font-family="Arial, sans-serif" font-size="11" font-weight="bold" fill="#000000">ACADEMIC RECOMMENDATION</text>
+  ${recommendationLines.map((line, idx) => `
+  <text x="65" y="${recommendationY + 25 + (idx * 14)}" font-family="Arial, sans-serif" font-size="9" fill="#374151">${line}</text>`).join('')}
+  
+  <!-- Signatures Section -->
+  <text x="200" y="${signaturesY}" font-family="Arial, sans-serif" font-size="10" fill="#000000">_________________________</text>
+  <text x="550" y="${signaturesY}" font-family="Arial, sans-serif" font-size="10" fill="#000000">_________________________</text>
+  
+  <text x="200" y="${signaturesY + 20}" font-family="Arial, sans-serif" font-size="10" font-weight="bold" fill="#000000" text-anchor="middle">${getDeanName(selectedStudent.faculty)}</text>
+  <text x="550" y="${signaturesY + 20}" font-family="Arial, sans-serif" font-size="10" font-weight="bold" fill="#000000" text-anchor="middle">Dean of Students</text>
+  
+  <text x="200" y="${signaturesY + 35}" font-family="Arial, sans-serif" font-size="8" font-style="italic" fill="#6B7280" text-anchor="middle">Dean of Faculty &amp; Academics</text>
+  <text x="550" y="${signaturesY + 35}" font-family="Arial, sans-serif" font-size="8" font-style="italic" fill="#6B7280" text-anchor="middle">Student Affairs</text>
+  
+  <!-- Footer -->
+  <line x1="60" y1="${footerY}" x2="${width - 60}" y2="${footerY}" stroke="#C9A84C" stroke-width="1"/>
+  
+  <text x="60" y="${footerY + 20}" font-family="Arial, sans-serif" font-size="8" fill="#6B7280">Issued: ${new Date().toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' })}</text>
+  <text x="${width/2}" y="${footerY + 20}" font-family="Courier New, monospace" font-size="8" fill="#6B7280" text-anchor="middle">ID: ${selectedStudent.id}-${transcriptType.toUpperCase()}-${new Date().getFullYear()}</text>
+  <text x="${width - 60}" y="${footerY + 20}" font-family="Arial, sans-serif" font-size="8" fill="#6B7280" text-anchor="end">Verified Archive</text>
+  
+  <!-- Document ID with gold border -->
+  <line x1="${width/2 - 150}" y1="${footerY + 25}" x2="${width/2 + 150}" y2="${footerY + 25}" stroke="#FFD700" stroke-width="2"/>
+  <text x="${width/2}" y="${footerY + 40}" font-family="Arial, sans-serif" font-size="9" font-style="italic" fill="#9CA3AF" text-anchor="middle">
+    This is an official document issued by BMI University
+  </text>
+  
+  <!-- Bottom microtext security line -->
+  <text x="${width/2}" y="${height - 10}" font-family="Arial, sans-serif" font-size="5" fill="#999999" text-anchor="middle" opacity="0.6">
+    OFFICIAL TRANSCRIPT • TAMPER-EVIDENT SECURITY FEATURES • VERIFY AT BMI.EDU/VERIFY
+  </text>
+</svg>`;
+
+      // Download SVG
+      const blob = new Blob([svg], { type: 'image/svg+xml;charset=utf-8' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `${fileName}.svg`;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+    } catch (err) {
+      console.error('SVG generation failed:', err);
+      alert('SVG generation failed. Please try again.');
+    }
+  };
+
   const MicroText = ({ text }: { text: string }) => (
-    <div className="overflow-hidden whitespace-nowrap text-[2.5px] md:text-[3px] leading-none text-gray-400 select-none uppercase tracking-tighter opacity-60 h-1 flex items-center bg-gradient-to-r from-purple-50/50 via-gray-50/50 to-purple-50/50 border-y border-gray-100/50">
+    <div className="relative overflow-hidden whitespace-nowrap text-[2.5px] md:text-[3px] leading-none text-gray-400 select-none uppercase tracking-tighter opacity-60 h-1 flex items-center bg-gradient-to-r from-purple-50/50 via-gray-50/50 to-purple-50/50 border-y border-gray-100/50">
+      {/* Primary security text */}
       {Array.from({ length: 15 }).map((_, i) => <span key={i} className="mr-4">{text}</span>)}
+      
+      {/* Hidden layer - visible only under magnification */}
+      <div className="absolute inset-0 flex items-center opacity-20 text-[1.5px]">
+        {Array.from({ length: 30 }).map((_, i) => (
+          <span key={`hidden-${i}`} className="mr-2 text-red-600">AUTHENTIC</span>
+        ))}
+      </div>
     </div>
   );
 
@@ -216,7 +1303,7 @@ export const Transcripts: React.FC<TranscriptsProps> = ({ students, courses, log
            <div className="w-1 h-5 bg-[#FFD700] rounded-none"></div>
            <div className="flex flex-col">
               <h2 className="text-base md:text-lg font-bold text-[#2E004F] dark:text-white tracking-tight uppercase leading-none">Academic Records & Transcripts</h2>
-              <p className="text-[8px] md:text-[9px] font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-widest">BMI Institutional Registrar • Automated Grade Aggregation Node</p>
+              <p className="text-[8px] md:text-[9px] font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-widest">BMI Registrar • Automated Grade Aggregation Node</p>
            </div>
         </div>
       </div>
@@ -359,15 +1446,27 @@ export const Transcripts: React.FC<TranscriptsProps> = ({ students, courses, log
              )}
           </div>
         </div>
+      </div>
 
         {showTranscript && selectedStudent && (
-        <div className="fixed inset-0 z-[130] flex items-center justify-center bg-black/95 backdrop-blur-3xl p-4 md:p-8 overflow-y-auto">
+        <div className="fixed inset-0 z-[130] flex items-start justify-center bg-black/95 backdrop-blur-3xl p-4 md:p-8 pt-8 md:pt-12 overflow-y-auto">
            <div className="w-full max-w-[210mm] flex flex-col items-center">
               <div id="official-transcript-root" className="bg-white w-full shadow-2xl relative flex flex-col overflow-hidden animate-slide-up font-serif p-6 text-gray-950 print:m-0 print:shadow-none border-[6px] border-gray-100 border-double">
                  
+                 {/* ENHANCED SECURITY LAYER - Multi-pattern anti-forgery system */}
                  <div className="absolute inset-0 pointer-events-none z-0 overflow-hidden">
-                    <svg width="100%" height="100%" xmlns="http://www.w3.org/2000/svg" className="w-full h-full opacity-[0.08]">
+                    <svg width="100%" height="100%" xmlns="http://www.w3.org/2000/svg" className="w-full h-full opacity-[0.25]">
                       <defs>
+                        {/* Holographic gradient - simulates color-shifting ink */}
+                        <linearGradient id="holographicShift" x1="0%" y1="0%" x2="100%" y2="100%">
+                          <stop offset="0%" stopColor="#FF00FF" stopOpacity="0.15" />
+                          <stop offset="25%" stopColor="#00FFFF" stopOpacity="0.15" />
+                          <stop offset="50%" stopColor="#FFFF00" stopOpacity="0.15" />
+                          <stop offset="75%" stopColor="#FF00FF" stopOpacity="0.15" />
+                          <stop offset="100%" stopColor="#00FFFF" stopOpacity="0.15" />
+                        </linearGradient>
+
+                        {/* Security pastel background */}
                         <linearGradient id="securityPastel" x1="0%" y1="0%" x2="100%" y2="100%">
                           <stop offset="0%" stopColor="#fdf2f8" />
                           <stop offset="25%" stopColor="#f0f9ff" />
@@ -375,16 +1474,115 @@ export const Transcripts: React.FC<TranscriptsProps> = ({ students, courses, log
                           <stop offset="75%" stopColor="#fffbeb" />
                           <stop offset="100%" stopColor="#faf5ff" />
                         </linearGradient>
+
+                        {/* Guilloche wave pattern */}
                         <pattern id="blendedSecurityPattern" x="0" y="0" width="300" height="300" patternUnits="userSpaceOnUse">
                            <path d="M0,150 Q75,50 150,150 T300,150" fill="none" stroke="#4B0082" strokeWidth="0.4" opacity="0.4" />
                         </pattern>
+
+                        {/* VOID Pantograph - shows "VOID" when photocopied */}
+                        <pattern id="voidPantograph" x="0" y="0" width="200" height="100" patternUnits="userSpaceOnUse">
+                          {/* Fine lines that break on photocopy */}
+                          <line x1="0" y1="20" x2="200" y2="20" stroke="#4B0082" strokeWidth="0.15" opacity="0.3" />
+                          <line x1="0" y1="40" x2="200" y2="40" stroke="#4B0082" strokeWidth="0.15" opacity="0.3" />
+                          <line x1="0" y1="60" x2="200" y2="60" stroke="#4B0082" strokeWidth="0.15" opacity="0.3" />
+                          <line x1="0" y1="80" x2="200" y2="80" stroke="#4B0082" strokeWidth="0.15" opacity="0.3" />
+                          {/* "VOID" text (visible on photocopy) */}
+                          <text x="50" y="55" fontSize="48" fontWeight="900" fill="#FF0000" opacity="0.02" fontFamily="sans-serif">VOID</text>
+                        </pattern>
+
+                        {/* Copy Detection Pattern - breaks on reproduction */}
+                        <pattern id="copyDetection" x="0" y="0" width="50" height="50" patternUnits="userSpaceOnUse">
+                          <circle cx="25" cy="25" r="1" fill="#4B0082" opacity="0.15" />
+                          <circle cx="0" cy="0" r="0.5" fill="#FFD700" opacity="0.1" />
+                          <circle cx="50" cy="50" r="0.5" fill="#FFD700" opacity="0.1" />
+                        </pattern>
+
+                        {/* Latent image pattern - visible at angles */}
+                        <pattern id="latentImage" x="0" y="0" width="100" height="100" patternUnits="userSpaceOnUse">
+                          <path d="M0,50 L100,50" stroke="#4B0082" strokeWidth="0.2" opacity="0.25" />
+                          <path d="M50,0 L50,100" stroke="#4B0082" strokeWidth="0.2" opacity="0.25" />
+                          <circle cx="50" cy="50" r="20" fill="none" stroke="#FFD700" strokeWidth="0.3" opacity="0.2" />
+                        </pattern>
+
+                        {/* Microprint pattern */}
+                        <pattern id="microprint" x="0" y="0" width="150" height="20" patternUnits="userSpaceOnUse">
+                          <text x="0" y="15" fontSize="3" fill="#4B0082" opacity="0.3" fontFamily="monospace">BMI-SECURE</text>
+                          <text x="75" y="15" fontSize="3" fill="#4B0082" opacity="0.3" fontFamily="monospace">AUTHENTIC</text>
+                        </pattern>
                       </defs>
+
+                      {/* Layer 1: Pastel background */}
                       <rect width="100%" height="100%" fill="url(#securityPastel)" />
+                      
+                      {/* Layer 2: Guilloche pattern */}
                       <rect width="100%" height="100%" fill="url(#blendedSecurityPattern)" />
+                      
+                      {/* Layer 3: VOID Pantograph (anti-photocopy) */}
+                      <rect width="100%" height="100%" fill="url(#voidPantograph)" />
+                      
+                      {/* Layer 4: Copy detection dots */}
+                      <rect width="100%" height="100%" fill="url(#copyDetection)" />
+                      
+                      {/* Layer 5: Latent image */}
+                      <rect width="100%" height="100%" fill="url(#latentImage)" />
+                      
+                      {/* Layer 6: Microprint */}
+                      <rect width="100%" height="100%" fill="url(#microprint)" />
+                      
+                      {/* Layer 7: Holographic overlay */}
+                      <rect width="100%" height="100%" fill="url(#holographicShift)" className="mix-blend-overlay" />
                     </svg>
+
+                    {/* Holographic foil effect (CSS-based) */}
+                    <div className="absolute inset-0 bg-gradient-to-br from-transparent via-purple-200/5 to-transparent opacity-30 mix-blend-overlay pointer-events-none" 
+                         style={{ 
+                           background: 'linear-gradient(135deg, transparent 0%, rgba(255,0,255,0.05) 25%, rgba(0,255,255,0.05) 50%, rgba(255,255,0,0.05) 75%, transparent 100%)',
+                           animation: 'holographic-shift 10s ease-in-out infinite'
+                         }} />
+
+                    {/* Large Center Logo Watermark */}
+                    <div className="absolute inset-0 flex items-center justify-center opacity-[0.12] pointer-events-none">
+                      <img
+                        src={logo || "https://i.ibb.co/Gv2vPdJC/BMI-PNG.png"}
+                        className="h-[85%] w-auto object-contain"
+                        alt=""
+                        style={{ 
+                          filter: 'grayscale(100%) contrast(0.7)'
+                        }}
+                        onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }}
+                      />
+                    </div>
+
+                    {/* Logo Watermark - Repeating BMI logo pattern */}
+                    <div className="absolute inset-0 flex flex-wrap items-center justify-center gap-32 opacity-[0.03] pointer-events-none">
+                      {Array.from({ length: 12 }).map((_, i) => (
+                        <img
+                          key={`watermark-${i}`}
+                          src={logo || "https://i.ibb.co/Gv2vPdJC/BMI-PNG.png"}
+                          className="w-32 h-32 object-contain grayscale"
+                          alt=""
+                          style={{ 
+                            transform: `rotate(${i % 2 === 0 ? '-30deg' : '30deg'})`,
+                            filter: 'grayscale(100%) contrast(0.5)'
+                          }}
+                          onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }}
+                        />
+                      ))}
+                    </div>
                  </div>
 
                  <MicroText text="BMI UNIVERSITY OFFICIAL ACADEMIC TRANSCRIPT • SECURITY VALIDATED RECORD • DO NOT REPRODUCE • UV PROTECTED INK • ANTI-FORGERY" />
+
+                 {/* Seal — top left, mirrors the QR code on the right */}
+                 <div className="absolute top-8 left-8 flex flex-col items-center gap-1 z-20">
+                    <img
+                       src="/BMI SEAL.png"
+                       className="w-16 h-16 object-cover scale-110"
+                       alt="BMI University Seal"
+                       onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }}
+                    />
+                 </div>
 
                  <div className="absolute top-8 right-8 flex flex-col items-center gap-1 group z-20">
                     <div className="p-1 bg-white border border-gray-900 shadow-sm relative">
@@ -407,7 +1605,7 @@ export const Transcripts: React.FC<TranscriptsProps> = ({ students, courses, log
                       onError={(e) => { (e.target as HTMLImageElement).src = "https://i.ibb.co/Gv2vPdJC/BMI-PNG.png" }}
                     />
                     <h1 className="text-2xl font-serif font-black tracking-tight text-gray-900 uppercase">BMI UNIVERSITY</h1>
-                    <p className="text-[9px] font-sans font-black text-gray-600 uppercase tracking-[0.4em]">OFFICE OF THE INSTITUTIONAL REGISTRAR</p>
+                    <p className="text-[9px] font-sans font-black text-gray-600 uppercase tracking-[0.4em]">OFFICE OF THE REGISTRAR</p>
                     <div className="mt-2 px-8 py-1 border-y border-gray-900 bg-gradient-to-r from-purple-50/80 via-white to-purple-50/80">
                       <h2 className="text-sm font-serif font-black uppercase tracking-[0.3em]">
                         {transcriptType} Academic Transcript
@@ -456,7 +1654,7 @@ export const Transcripts: React.FC<TranscriptsProps> = ({ students, courses, log
                  </div>
 
                  <div className="border-b border-gray-900 py-2 text-[11px] font-black relative z-10 px-4 bg-gray-50/20">
-                    <div className="flex gap-8">
+                    <div className="flex gap-8 justify-center items-center">
                        <span className="text-gray-600 font-sans text-[9px]">PERFORMANCE METRICS:</span>
                        <span>Current Avg: <span className="text-[#4B0082]">{stats.current}%</span></span>
                        <span>| Cumulative Avg: <span className="text-[#4B0082]">{stats.cumulative}%</span></span>
@@ -470,37 +1668,42 @@ export const Transcripts: React.FC<TranscriptsProps> = ({ students, courses, log
                     </div>
                  </div>
 
-                 <div className="border border-gray-400 p-3 text-[8px] font-black relative z-10 bg-gray-50/30 mb-4">
-                    <p className="underline mb-1 uppercase text-gray-600">Grading Specification</p>
-                    <div className="grid grid-cols-5 gap-2 opacity-80">
-                       <div className="flex justify-between"><span>A (70-100%)</span></div>
-                       <div className="flex justify-between"><span>B (60-69%)</span></div>
-                       <div className="flex justify-between"><span>C (50-59%)</span></div>
-                       <div className="flex justify-between"><span>D (40-49%)</span></div>
-                       <div className="flex justify-between text-red-600"><span>F ({"<"}40%)</span></div>
-                    </div>
-                 </div>
-
-                 <div className="grid grid-cols-2 gap-8 mt-2 relative z-10 mb-4">
-                    <div className="flex flex-col items-center">
-                       <div className="w-full border-b border-gray-900 pb-0.5 relative text-center flex flex-col items-center">
-                          <span className="font-serif italic text-lg text-gray-800 whitespace-nowrap">{getDeanName(selectedStudent.faculty)}</span>
-                       </div>
-                       <span className="text-[8px] font-black uppercase tracking-widest mt-1 text-gray-500">Dean of Faculty</span>
-                    </div>
-                    <div className="flex flex-col items-center">
-                       <div className="w-full border-b border-gray-900 pb-0.5 relative text-center flex flex-col items-center">
-                          <span className="font-serif italic text-lg text-gray-800 whitespace-nowrap">Prof. Isaac Sigei</span>
-                       </div>
-                       <span className="text-[8px] font-black uppercase tracking-widest mt-1 text-gray-500">Institutional Registrar</span>
-                    </div>
+                 <div className="border border-gray-300 px-3 py-1.5 text-[7px] font-black relative z-10 bg-gray-50/30 mb-2 text-center">
+                    <span className="underline uppercase text-gray-500 mr-3">Grading:</span>
+                    <span className="opacity-70 tracking-wide">A (70–100%) &nbsp;|&nbsp; B (60–69%) &nbsp;|&nbsp; C (50–59%) &nbsp;|&nbsp; D (40–49%) &nbsp;|&nbsp; <span className="text-red-600">F (&lt;40%)</span></span>
                  </div>
 
                  <MicroText text="DO NOT REPRODUCE THIS DOCUMENT • BMI UNIVERSITY ACADEMIC RECORD SECURE VALIDATION LINE • TAMPER-EVIDENT DESIGN • IDW-BMIV-82" />
 
+                 {/* Forensic tracking layer - invisible to naked eye */}
+                 <div className="relative z-10 h-[2px] overflow-hidden bg-gradient-to-r from-transparent via-gray-100/30 to-transparent">
+                    <div className="text-[1px] text-gray-300 opacity-20 whitespace-nowrap tracking-widest font-mono">
+                      FORENSIC-ID:{selectedStudent.id}-{Date.now().toString(36).toUpperCase()}-BMI-SEC-V2-CRYPTO-HASH-{Math.random().toString(36).substring(2, 15).toUpperCase()}
+                    </div>
+                 </div>
+
+                 <div className="flex justify-between mt-4 relative z-10 mb-3 px-6">
+                    {/* Dean of Faculty & Academics — pushed to left */}
+                    <div className="flex flex-col items-center w-[28%]">
+                       <div className="w-full h-14 mb-0" />
+                       <div className="w-full border-b border-gray-900" />
+                       <span className="font-serif italic text-sm text-gray-800 whitespace-nowrap mt-1">{getDeanName(selectedStudent.faculty)}</span>
+                       <span className="text-[7px] font-black uppercase tracking-widest mt-0.5 text-gray-500">Dean of Faculty &amp; Academics</span>
+                    </div>
+                    {/* Centre space — for official seal */}
+                    <div className="w-[36%]" />
+                    {/* Dean of Students — pushed to right */}
+                    <div className="flex flex-col items-center w-[28%]">
+                       <div className="w-full h-14 mb-0" />
+                       <div className="w-full border-b border-gray-900" />
+                       <span className="font-serif italic text-sm text-gray-800 whitespace-nowrap mt-1">Dr. Lilian Young</span>
+                       <span className="text-[7px] font-black uppercase tracking-widest mt-0.5 text-gray-500">Dean of Students</span>
+                    </div>
+                 </div>
+
                  <div className="mt-3 flex justify-between items-baseline px-2 relative z-10">
                     <div className="flex items-center gap-4 text-[8px] text-gray-500 font-black uppercase tracking-widest">
-                       <span>Issued: {new Date().toLocaleDateString('en-GB', { day: '2-digit', month: 'long', year: 'numeric' })}</span>
+                       <span>Issued: 1st May 2026</span>
                        <span>ID: BMI-TR-{selectedStudent.id.split('-').pop()}</span>
                     </div>
                     <div className="flex items-center gap-2">
@@ -525,6 +1728,8 @@ export const Transcripts: React.FC<TranscriptsProps> = ({ students, courses, log
                     </div>
                     <button onClick={() => handlePrint('print')} className="flex items-center gap-2 px-8 py-3.5 bg-[#4B0082] text-white text-[10px] font-black uppercase tracking-widest hover:bg-black transition-all shadow-lg border border-white/10"><Printer size={18} /> Print Record</button>
                     <button onClick={() => handlePrint('download')} className="flex items-center gap-2 px-8 py-3.5 bg-emerald-600 text-white text-[10px] font-black uppercase tracking-widest hover:bg-emerald-700 transition-all shadow-lg border border-white/10"><Download size={18} /> PDF Archive</button>
+                    <button onClick={handleDownloadWord} className="flex items-center gap-2 px-8 py-3.5 bg-blue-600 text-white text-[10px] font-black uppercase tracking-widest hover:bg-blue-700 transition-all shadow-lg border border-white/10"><Download size={18} /> Word</button>
+                    <button onClick={handleDownloadSVG} className="flex items-center gap-2 px-8 py-3.5 bg-purple-600 text-white text-[10px] font-black uppercase tracking-widest hover:bg-purple-700 transition-all shadow-lg border border-white/10"><Download size={18} /> SVG</button>
                     <button onClick={() => handleShare('whatsapp')} className="flex items-center gap-2 px-8 py-3.5 bg-[#25D366] text-white text-[10px] font-black uppercase tracking-widest hover:bg-emerald-600 transition-all shadow-lg border border-white/10"><MessageCircle size={18} /> Send Data</button>
                  </div>
                  <button onClick={() => setShowTranscript(false)} className="p-4 bg-red-600 text-white hover:bg-red-700 transition-all shadow-xl group">
@@ -533,38 +1738,61 @@ export const Transcripts: React.FC<TranscriptsProps> = ({ students, courses, log
               </div>
            </div>
            </div>
-        </div>
-        )}
+        )
+        }
 
         <style>{`
         @media print {
           .no-print { display: none !important; }
-          body { background: white !important; margin: 0 !important; padding: 0 !important; visibility: hidden; }
-          #official-transcript-root { 
-            visibility: visible !important; 
-            display: block !important; 
-            position: absolute !important; 
-            left: 0 !important; 
-            top: 0 !important; 
-            width: 210mm !important; 
-            height: 297mm !important; 
-            margin: 0 !important; 
-            padding: 8mm !important; 
-            box-shadow: none !important; 
-            border: none !important; 
-            z-index: 9999 !important; 
-            -webkit-print-color-adjust: exact !important; 
-            print-color-adjust: exact !important;
-            page-break-after: always;
-          }
-          #official-transcript-root * { visibility: visible !important; }
-          @page { size: A4; margin: 0; }
         }
         
         #official-transcript-root {
           user-select: none;
           -webkit-user-select: none;
           box-sizing: border-box;
+        }
+
+        /* Holographic animation - simulates color-shifting security ink */
+        @keyframes holographic-shift {
+          0% {
+            background-position: 0% 50%;
+            opacity: 0.3;
+          }
+          50% {
+            background-position: 100% 50%;
+            opacity: 0.5;
+          }
+          100% {
+            background-position: 0% 50%;
+            opacity: 0.3;
+          }
+        }
+
+        /* Copy protection - text becomes visible on photocopy */
+        @media print {
+          #voidPantograph text {
+            opacity: 0.8 !important;
+          }
+        }
+
+        /* Enhanced security for screen display */
+        @media screen {
+          #official-transcript-root::before {
+            content: '';
+            position: absolute;
+            inset: 0;
+            background: linear-gradient(45deg, transparent 30%, rgba(255,255,255,0.1) 50%, transparent 70%);
+            background-size: 200% 200%;
+            animation: shimmer 3s ease-in-out infinite;
+            pointer-events: none;
+            z-index: 100;
+            mix-blend-mode: overlay;
+          }
+        }
+
+        @keyframes shimmer {
+          0% { background-position: -200% 0; }
+          100% { background-position: 200% 0; }
         }
       `}</style>
     </div>

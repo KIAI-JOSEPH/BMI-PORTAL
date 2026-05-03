@@ -49,14 +49,15 @@ libraryRouter.get('/', async (c) => {
     const type = c.req.query('type');
     const status = c.req.query('status');
     const search = c.req.query('search');
-    
-    // Build filter
+
+    const safe = (v: string) => v.replace(/["'\\]/g, '').substring(0, 100);
     const filters: string[] = [];
-    if (category) filters.push(`category = "${category}"`);
-    if (type) filters.push(`type = "${type}"`);
-    if (status) filters.push(`status = "${status}"`);
+    if (category) filters.push(`category = "${safe(category)}"`);
+    if (type) filters.push(`type = "${safe(type)}"`);
+    if (status) filters.push(`status = "${safe(status)}"`);
     if (search) {
-      filters.push(`(title ~ "${search}" || author ~ "${search}" || isbn ~ "${search}")`);
+      const s = safe(search);
+      filters.push(`(title ~ "${s}" || author ~ "${s}" || isbn ~ "${s}")`);
     }
     
     const filterString = filters.join(' && ') || undefined;

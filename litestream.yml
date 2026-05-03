@@ -1,0 +1,41 @@
+# Litestream Configuration — Continuous SQLite Replication
+# Open source (Apache 2.0): https://github.com/benbjohnson/litestream
+#
+# This streams every WAL change from PocketBase's SQLite files to
+# an S3-compatible bucket in near real-time (typically < 1 second lag).
+#
+# SETUP:
+#   1. Set LITESTREAM_ACCESS_KEY_ID and LITESTREAM_SECRET_ACCESS_KEY in .env
+#   2. Change the bucket name below to your bucket
+#   3. For local-only backup (no cloud), use the 'file' replica type instead
+#
+# RESTORE after server failure:
+#   docker run --rm -v ./data/pb_data:/pb_data \
+#     -e LITESTREAM_ACCESS_KEY_ID=... \
+#     -e LITESTREAM_SECRET_ACCESS_KEY=... \
+#     litestream/litestream restore \
+#     -replica s3 /pb_data/data.db
+
+dbs:
+  # Main PocketBase database
+  - path: /pb_data/data.db
+    replicas:
+      # Option A: S3-compatible cloud storage (MinIO, Backblaze B2, AWS S3, etc.)
+      # Uncomment and configure when ready for cloud backup
+      # - type: s3
+      #   bucket: bmi-ums-backup
+      #   path: pocketbase/data.db
+      #   region: us-east-1
+      #   access-key-id: ${LITESTREAM_ACCESS_KEY_ID}
+      #   secret-access-key: ${LITESTREAM_SECRET_ACCESS_KEY}
+
+      # Option B: Local file replica (always active — backup to local disk)
+      # Good for development and as a secondary replica
+      - type: file
+        path: /pb_data/replicas/data.db
+
+  # Auxiliary PocketBase database
+  - path: /pb_data/auxiliary.db
+    replicas:
+      - type: file
+        path: /pb_data/replicas/auxiliary.db

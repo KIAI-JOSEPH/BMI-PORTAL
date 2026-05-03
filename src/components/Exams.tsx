@@ -22,6 +22,17 @@ import {
   Layout,
   ClipboardList
 } from 'lucide-react';
+import { Student, Course } from '../types';
+import ImportModal from './ImportModal';
+import AddGradeModal, { GradeData } from './AddGradeModal';
+import { ExamImportRow } from '../services/importService';
+
+interface ExamsProps {
+  students?: Student[];
+  courses?: Course[];
+  setStudents?: React.Dispatch<React.SetStateAction<Student[]>>;
+  setCourses?: React.Dispatch<React.SetStateAction<Course[]>>;
+}
 
 interface ExamRecord {
   id: string;
@@ -49,12 +60,72 @@ interface GradeRecord {
   level: 'Diploma' | 'Degree' | 'Masters' | 'PhD';
 }
 
-const Exams: React.FC = () => {
+const Exams: React.FC<ExamsProps> = ({ students = [], courses = [], setStudents, setCourses }) => {
   const [activeTab, setActiveTab] = useState<'schedule' | 'grading'>('schedule');
   const [searchTerm, setSearchTerm] = useState('');
   const [academicLevelFilter, setAcademicLevelFilter] = useState('All Levels');
   const [selectedProgram, setSelectedProgram] = useState('All Programs');
   const [selectedSubject, setSelectedSubject] = useState('All Subjects');
+  const [isImportOpen, setIsImportOpen] = useState(false);
+  const [isAddGradeOpen, setIsAddGradeOpen] = useState(false);
+  const [editingGrade, setEditingGrade] = useState<GradeRecord | null>(null);
+  const [importedExams, setImportedExams] = useState<ExamImportRow[]>([]);
+
+  const handleImportExams = (
+    exams: ExamImportRow[],
+    newStudents: Partial<Student>[],
+    newCourses: Partial<Course>[],
+    _dynamicFields: string[],
+    _collectionName: string
+  ) => {
+    setImportedExams(prev => [...exams, ...prev]);
+    if (setStudents && newStudents.length > 0) {
+      setStudents(prev => [...(newStudents as Student[]), ...prev]);
+    }
+    if (setCourses && newCourses.length > 0) {
+      setCourses(prev => [...(newCourses as Course[]), ...prev]);
+    }
+  };
+
+  const handleSaveGrade = (gradeData: GradeData) => {
+    if (editingGrade) {
+      // Update existing grade
+      const updatedExam: ExamImportRow = {
+        studentId: gradeData.admissionNo,
+        studentName: gradeData.studentName,
+        course: gradeData.courseName,
+        courseCode: gradeData.courseCode,
+        midterm: String(gradeData.grade),
+        final: String(gradeData.grade)
+      };
+      setImportedExams(prev => prev.map(e => 
+        e.studentId === editingGrade.studentId && e.course === editingGrade.course 
+          ? updatedExam 
+          : e
+      ));
+    } else {
+      // Add new grade
+      const newExam: ExamImportRow = {
+        studentId: gradeData.admissionNo,
+        studentName: gradeData.studentName,
+        course: gradeData.courseName,
+        courseCode: gradeData.courseCode,
+        midterm: String(gradeData.grade),
+        final: String(gradeData.grade)
+      };
+      setImportedExams(prev => [newExam, ...prev]);
+    }
+    setEditingGrade(null);
+  };
+
+  const openAddGradeModal = (grade?: GradeRecord) => {
+    if (grade) {
+      setEditingGrade(grade);
+    } else {
+      setEditingGrade(null);
+    }
+    setIsAddGradeOpen(true);
+  };
 
   const upcomingExams: ExamRecord[] = [
     { id: 'EX-901', course: 'Systematic Theology I', code: 'THEO101', date: '2024-06-12', time: '09:00 AM', venue: 'Main Hall', proctor: 'Dr. Kiptoo', status: 'Scheduled', level: 'Degree' },
@@ -86,19 +157,32 @@ const Exams: React.FC = () => {
     return { total, grade, gpa };
   };
 
-  const gradeReviewData: GradeRecord[] = useMemo(() => {
-    return rawGradeData.map(item => {
+  // Merge imported exams into grade data
+  const allGradeData: GradeRecord[] = useMemo(() => {
+    const base = rawGradeData.map(item => {
       const { total, grade, gpa } = calculateGradeDetails(item.midterm, item.final);
+      return { ...item, total, grade, gpa, status: item.status as GradeRecord['status'], level: item.level as GradeRecord['level'] };
+    });
+    const fromImport: GradeRecord[] = importedExams.map((row, i) => {
+      const mid = Number(row.midterm) || 0;
+      const fin = Number(row.final) || 0;
+      const { total, grade, gpa } = calculateGradeDetails(mid, fin);
       return {
-        ...item,
-        total,
-        grade,
-        gpa,
-        status: item.status as GradeRecord['status'],
-        level: item.level as GradeRecord['level']
+        id: `IMP-${i}`,
+        student: row.studentName || row.studentId,
+        studentId: row.studentId,
+        course: row.course,
+        midterm: mid,
+        final: fin,
+        total, grade, gpa,
+        status: 'Pending Review' as GradeRecord['status'],
+        level: 'Degree' as GradeRecord['level'],
       };
     });
-  }, []);
+    return [...base, ...fromImport];
+  }, [importedExams]);
+
+  const gradeReviewData: GradeRecord[] = allGradeData;
 
   const filteredExams = upcomingExams.filter(ex => {
     const matchesSearch = ex.course.toLowerCase().includes(searchTerm.toLowerCase()) || ex.code.toLowerCase().includes(searchTerm.toLowerCase());
@@ -178,7 +262,16 @@ const Exams: React.FC = () => {
            </div>
         </div>
         <div className="flex items-center gap-4 pl-14 md:pl-0 w-full md:w-auto justify-end">
-           <button className="flex items-center gap-2 px-6 py-2 bg-[#4B0082] text-white rounded-none shadow-xl hover:bg-black transition-all font-black text-[9px] uppercase tracking-widest border border-[#FFD700]/30 hover:scale-105 active:scale-95">
+           <button
+             onClick={() => setIsImportOpen(true)}
+             className="hidden md:flex items-center gap-2 px-3 py-1.5 bg-emerald-600 text-white rounded-none font-bold text-[9px] uppercase tracking-widest hover:bg-emerald-700 transition-all shadow-sm"
+           >
+             <FileSpreadsheet size={12} /> Import Excel
+           </button>
+           <button 
+             onClick={() => openAddGradeModal()}
+             className="flex items-center gap-2 px-6 py-2 bg-[#4B0082] text-white rounded-none shadow-xl hover:bg-black transition-all font-black text-[9px] uppercase tracking-widest border border-[#FFD700]/30 hover:scale-105 active:scale-95"
+           >
             <Plus size={12} className="text-[#FFD700]" /> {activeTab === 'schedule' ? 'Schedule Exam' : 'Enter Grades'}
           </button>
         </div>
@@ -458,6 +551,42 @@ const Exams: React.FC = () => {
           </div>
         </div>
       </div>
+      
+      <ImportModal
+        isOpen={isImportOpen}
+        onClose={() => setIsImportOpen(false)}
+        type="exams"
+        existingStudents={students}
+        existingCourses={courses}
+        onImportExams={handleImportExams}
+      />
+
+      <AddGradeModal
+        isOpen={isAddGradeOpen}
+        onClose={() => {
+          setIsAddGradeOpen(false);
+          setEditingGrade(null);
+        }}
+        onSave={handleSaveGrade}
+        students={students.map(s => ({
+          id: s.id,
+          name: s.name,
+          admissionNo: s.admissionNo
+        }))}
+        courses={courses.map(c => ({
+          code: c.code,
+          name: c.name,
+          fullName: c.name
+        }))}
+        editData={editingGrade ? {
+          studentId: editingGrade.studentId,
+          studentName: editingGrade.student,
+          admissionNo: editingGrade.studentId,
+          courseCode: editingGrade.course.split(' ').map(w => w[0]).join(''),
+          courseName: editingGrade.course,
+          grade: editingGrade.total
+        } : null}
+      />
     </div>
   );
 };

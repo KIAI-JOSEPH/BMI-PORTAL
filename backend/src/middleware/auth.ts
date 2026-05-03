@@ -4,6 +4,7 @@ import type { Context, Next } from 'hono';
 import { jwtVerify } from 'jose';
 import { CONFIG } from '../config/index.js';
 import { logger } from '../utils/logger.js';
+import { isTokenRevoked } from '../services/tokenBlacklist.js';
 
 const SECRET = new TextEncoder().encode(CONFIG.JWT_SECRET);
 
@@ -37,6 +38,15 @@ export async function authMiddleware(c: Context, next: Next) {
   }
 
   const token = authHeader.substring(7);
+
+  // Check blacklist before verifying signature (fast path)
+  if (isTokenRevoked(token)) {
+    return c.json({
+      success: false,
+      error: 'Token has been revoked',
+    }, 401);
+  }
+
   const payload = await verifyToken(token);
 
   if (!payload) {
@@ -48,6 +58,7 @@ export async function authMiddleware(c: Context, next: Next) {
 
   // Store user info
   userContext.set(c, payload);
+  c.set('user', payload); // also set on context for audit middleware compatibility
   
   await next();
 }

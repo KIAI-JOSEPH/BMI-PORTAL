@@ -2,16 +2,69 @@
 import { Hono } from 'hono';
 import { zValidator } from '@hono/zod-validator';
 import { z } from 'zod';
+import { randomBytes } from 'crypto';
 import QRCode from 'qrcode';
+import { rateLimiter } from 'hono-rate-limiter';
 import { getPocketBase } from '../services/pocketbase.js';
+import {
+  buildSigningPayload,
+  signCertificate,
+  verifyCertificateSignature,
+  generateOfflineJWT,
+  buildVerificationUrl,
+  buildOfflineQRPayload,
+  verifyOfflineJWT,
+  generateIssuanceNonce,
+  generateHiddenToken,
+  verifyHiddenToken,
+} from '../services/certificateSigning.js';
 import { authMiddleware, requireRole, optionalAuthMiddleware } from '../middleware/auth.js';
 import { auditMiddleware, logAction } from '../middleware/audit.js';
 import { logger } from '../utils/logger.js';
-import { parsePagination, generateContentHash, generateCertificateSerial, isValidCertificateSerial } from '../utils/helpers.js';
-import { CONFIG } from '../config/index.js';
+import { parsePagination, generateContentHash, isValidCertificateSerial } from '../utils/helpers.js';
 import type { ApiResponse, Certificate, CertificateVerificationResult } from '../types/index.js';
 
 const certificatesRouter = new Hono();
+
+// ─── Helper ───────────────────────────────────────────────────────────────────
+function getGraduationClass(gpa: number): string {
+  if (gpa >= 3.7) return 'First Class Honours';
+  if (gpa >= 3.3) return 'Second Class Honours (Upper Division)';
+  if (gpa >= 3.0) return 'Second Class Honours (Lower Division)';
+  if (gpa >= 2.0) return 'Pass';
+  return 'Fail';
+}
+
+async function logVerificationAttempt(
+  serial: string,
+  result: 'valid' | 'invalid' | 'revoked' | 'tampered' | 'not_found',
+  method: string,
+  ip: string,
+  userAgent: string
+): Promise<void> {
+  try {
+    const pb = getPocketBase();
+    await pb.collection('verification_logs').create({
+      certificate_serial: serial,
+      result,
+      method,
+      ip_address: ip,
+      user_agent: userAgent,
+      timestamp: new Date().toISOString(),
+    });
+  } catch {
+    // Non-critical — don't fail verification if logging fails
+  }
+}
+
+// Rate limiter for public verify endpoint — prevent serial enumeration
+const verifyRateLimiter = rateLimiter({
+  windowMs: 15 * 60 * 1000,
+  limit: 30,
+  standardHeaders: true,
+  keyGenerator: (c) => c.req.header('x-forwarded-for') || c.req.header('x-real-ip') || 'unknown',
+  message: { valid: false, error: 'Too many verification attempts. Please try again later.', code: 'RATE_LIMITED' },
+});
 
 // Apply auth middleware to all except verification endpoints
 certificatesRouter.use('*', optionalAuthMiddleware);
@@ -24,11 +77,6 @@ const generateCertificateSchema = z.object({
   graduationClass: z.string().optional(),
   graduationDate: z.string().min(1),
   gpa: z.number().min(0).max(4),
-});
-
-const verifyCertificateSchema = z.object({
-  serial: z.string().min(1),
-  hash: z.string().optional(),
 });
 
 /**
@@ -118,32 +166,63 @@ certificatesRouter.post(
       // Get student details
       const student = await pb.collection('students').getOne(data.studentId);
       
-      // Generate unique serial number
+      // Generate collision-safe serial number using crypto random (no race condition)
       const year = new Date().getFullYear();
-      const existingCerts = await pb.collection('certificates').getFullList({
-        filter: `serial_number ~ "BMI-${year}-"`,
-      });
-      
-      const maxSequence = existingCerts.length;
-      const serialNumber = generateCertificateSerial(year, maxSequence + 1);
-      
-      // Generate content hash
+      const randomSuffix = parseInt(randomBytes(3).toString('hex'), 16) % 900000 + 100000;
+      const serialNumber = `BMI-${year}-${randomSuffix.toString().padStart(6, '0')}`;
+
+      // Generate content hash (SHA-256 — tamper detection)
       const issueDate = new Date().toISOString().split('T')[0];
-      const contentHash = generateContentHash({
+      const contentHash = await generateContentHash({
         serial: serialNumber,
         studentId: data.studentId,
         name: student.firstName + ' ' + student.lastName,
         degree: data.degree,
         issueDate,
       });
-      
-      // Create certificate
+
+      // Generate HMAC signature (proves BMI issued this certificate)
+      const graduationClass = data.graduationClass || getGraduationClass(data.gpa);
+      const signingPayload = buildSigningPayload({
+        serial: serialNumber,
+        studentId: data.studentId,
+        studentName: student.firstName + ' ' + student.lastName,
+        degree: data.degree,
+        faculty: student.faculty,
+        issueDate,
+        gpa: data.gpa,
+      });
+      const signature = signCertificate(signingPayload);
+
+      // Generate issuance nonce — random secret stored ONLY in DB, never printed
+      const issuanceNonce = generateIssuanceNonce();
+
+      // Generate hidden QR token — requires nonce + SECRET_KEY to compute
+      // This is what makes the QR unforgeable even if someone copies the serial
+      const hiddenToken = generateHiddenToken({
+        serial: serialNumber,
+        studentId: data.studentId,
+        issueDate,
+        nonce: issuanceNonce,
+      });
+
+      // Generate offline JWT (self-contained, verifiable without internet)
+      const offlineJWT = await generateOfflineJWT({
+        serial: serialNumber,
+        studentName: student.firstName + ' ' + student.lastName,
+        degree: data.degree,
+        faculty: student.faculty,
+        issueDate,
+        graduationClass,
+      });
+
+      // Create certificate record — nonce stored in DB, never returned to client
       const certificate = await pb.collection('certificates').create({
         serial_number: serialNumber,
         student_id: data.studentId,
         student_name: student.firstName + ' ' + student.lastName,
         degree: data.degree,
-        graduation_class: data.graduationClass,
+        graduation_class: graduationClass,
         faculty: student.faculty,
         department: student.department,
         issue_date: issueDate,
@@ -151,6 +230,10 @@ certificatesRouter.post(
         gpa: data.gpa,
         status: 'ISSUED',
         content_hash: contentHash,
+        signature,
+        issuance_nonce: issuanceNonce,  // SECRET — never sent to frontend
+        hidden_token: hiddenToken,       // stored for fast verification lookup
+        offline_jwt: offlineJWT,
         verification_count: 0,
       });
       
@@ -179,13 +262,57 @@ certificatesRouter.post(
 
 /**
  * POST /api/v1/certificates/verify
- * Verify a certificate (public endpoint)
+ * Verify a certificate (public endpoint — rate limited)
+ * Supports: serial+signature (online), serial only (online), offline JWT
  */
-certificatesRouter.post('/verify', async (c) => {
+certificatesRouter.post('/verify', verifyRateLimiter, async (c) => {
+  const ip = c.req.header('x-forwarded-for') || c.req.header('x-real-ip') || 'unknown';
+  const userAgent = c.req.header('user-agent') || 'unknown';
+
   try {
     const body = await c.req.json();
-    const { serial, hash } = body;
-    
+    const { serial, sig, hash, offline_jwt, method = 'online' } = body;
+    // 't' is the new hidden token param; 'sig' is legacy
+    const incomingToken: string | undefined = body.t || sig || undefined;
+
+    // ── Offline JWT verification (no database needed) ──────────────────────
+    if (offline_jwt) {
+      const payload = await verifyOfflineJWT(offline_jwt);
+      if (!payload) {
+        await logVerificationAttempt(serial || 'unknown', 'tampered', 'offline', ip, userAgent);
+        return c.json<CertificateVerificationResult>({
+          valid: false,
+          error: 'Offline certificate token is invalid or has been tampered with',
+          code: 'OFFLINE_JWT_INVALID',
+        });
+      }
+
+      // Offline verification succeeded — still do online check if possible
+      await logVerificationAttempt(payload.serial, 'valid', 'offline', ip, userAgent);
+      return c.json<CertificateVerificationResult>({
+        valid: true,
+        certificate: {
+          serial_number: payload.serial,
+          student_name: payload.studentName,
+          degree_title: payload.degree,
+          graduation_class: payload.graduationClass,
+          faculty: payload.faculty,
+          department: '',
+          issue_date: payload.issueDate,
+          graduation_date: payload.issueDate,
+          gpa: 0,
+          status: 'active',
+        },
+        verification: {
+          timestamp: new Date().toISOString(),
+          method: 'offline',
+          hash_verified: true,
+          verification_count: 0,
+        },
+      });
+    }
+
+    // ── Online verification ────────────────────────────────────────────────
     if (!serial || !isValidCertificateSerial(serial)) {
       return c.json<CertificateVerificationResult>({
         valid: false,
@@ -193,29 +320,35 @@ certificatesRouter.post('/verify', async (c) => {
         code: 'INVALID_FORMAT',
       });
     }
-    
+
     const pb = getPocketBase();
-    
-    // Find certificate
-    const certificates = await pb.collection('certificates').getFullList({
-      filter: `serial_number = "${serial}"`,
+    const safe = (v: string) => v.replace(/["'\\]/g, '');
+    const certificates = await pb.collection('certificates').getList(1, 1, {
+      filter: `serial_number = "${safe(serial)}"`,
     });
-    
-    if (certificates.length === 0) {
+
+    if (certificates.totalItems === 0) {
+      await logVerificationAttempt(serial, 'not_found', method, ip, userAgent);
       return c.json<CertificateVerificationResult>({
         valid: false,
         error: 'Certificate not found in registry',
         code: 'CERT_NOT_FOUND',
       });
     }
-    
-    const cert = certificates[0] as unknown as Certificate;
-    
-    // Check status
+
+    const cert = certificates.items[0] as unknown as Certificate & {
+      signature?: string;
+      student_id?: string;
+      hidden_token?: string;
+      issuance_nonce?: string;
+    };
+
+    // Check revocation status
     if (cert.status === 'REVOKED') {
+      await logVerificationAttempt(serial, 'revoked', method, ip, userAgent);
       return c.json<CertificateVerificationResult>({
         valid: false,
-        error: 'Certificate has been revoked',
+        error: 'This certificate has been revoked by BMI University',
         code: 'CERT_REVOKED',
         certificate: {
           serial_number: cert.serial_number,
@@ -231,34 +364,76 @@ certificatesRouter.post('/verify', async (c) => {
         },
       });
     }
-    
+
     if (cert.status === 'SUSPENDED') {
+      await logVerificationAttempt(serial, 'invalid', method, ip, userAgent);
       return c.json<CertificateVerificationResult>({
         valid: false,
-        error: 'Certificate is temporarily suspended',
+        error: 'This certificate is temporarily suspended pending review',
         code: 'CERT_SUSPENDED',
       });
     }
-    
-    // Verify hash
-    const hashVerified = !hash || hash === cert.content_hash;
-    
-    if (hash && !hashVerified) {
-      return c.json<CertificateVerificationResult>({
-        valid: false,
-        error: 'Certificate content has been tampered with',
-        code: 'CERT_TAMPERED',
+
+    // ── Token verification ─────────────────────────────────────────────────
+    // Priority: hidden token (new) > legacy sig > hash > serial-only
+    let signatureVerified = false;
+
+    if (incomingToken && cert.issuance_nonce && cert.student_id) {
+      // NEW: verify using hidden token + secret nonce
+      // The nonce is stored only in DB — attacker cannot compute this
+      signatureVerified = verifyHiddenToken(incomingToken, {
+        serial: cert.serial_number,
+        studentId: cert.student_id,
+        issueDate: cert.issue_date,
+        nonce: cert.issuance_nonce,
       });
+
+      if (!signatureVerified) {
+        // Also try legacy HMAC signature for backward compatibility
+        if (cert.signature) {
+          const signingPayload = buildSigningPayload({
+            serial: cert.serial_number,
+            studentId: cert.student_id || '',
+            studentName: cert.student_name,
+            degree: cert.degree,
+            faculty: cert.faculty,
+            issueDate: cert.issue_date,
+            gpa: cert.gpa,
+          });
+          signatureVerified = verifyCertificateSignature(signingPayload, incomingToken);
+        }
+
+        if (!signatureVerified) {
+          await logVerificationAttempt(serial, 'tampered', method, ip, userAgent);
+          return c.json<CertificateVerificationResult>({
+            valid: false,
+            error: 'QR code token is invalid. This certificate may have been forged.',
+            code: 'CERT_TAMPERED',
+          });
+        }
+      }
+    } else if (hash) {
+      // Legacy hash verification
+      signatureVerified = hash === cert.content_hash;
+      if (!signatureVerified) {
+        await logVerificationAttempt(serial, 'tampered', method, ip, userAgent);
+        return c.json<CertificateVerificationResult>({
+          valid: false,
+          error: 'Certificate content hash mismatch. Document may be altered.',
+          code: 'CERT_TAMPERED',
+        });
+      }
     }
-    
+    // else: serial-only — valid but unverified (no token provided)
+
     // Increment verification count
     await pb.collection('certificates').update(cert.id, {
       verification_count: (cert.verification_count || 0) + 1,
     });
-    
-    // Log verification
-    logger.info('Certificate verified', { serialNumber: serial, hashVerified });
-    
+
+    await logVerificationAttempt(serial, 'valid', method, ip, userAgent);
+    logger.info('Certificate verified', { serial, signatureVerified, method });
+
     return c.json<CertificateVerificationResult>({
       valid: true,
       certificate: {
@@ -275,17 +450,17 @@ certificatesRouter.post('/verify', async (c) => {
       },
       verification: {
         timestamp: new Date().toISOString(),
-        method: 'online',
-        hash_verified: hashVerified,
+        method: method as 'online' | 'offline' | 'qr_scan',
+        hash_verified: signatureVerified,
         verification_count: (cert.verification_count || 0) + 1,
       },
     });
-    
+
   } catch (error) {
     logger.error('Verify certificate error:', error);
     return c.json<CertificateVerificationResult>({
       valid: false,
-      error: 'Verification service temporarily unavailable',
+      error: 'Verification service temporarily unavailable. Please try again.',
       code: 'SERVICE_ERROR',
     }, 500);
   }
@@ -293,43 +468,49 @@ certificatesRouter.post('/verify', async (c) => {
 
 /**
  * GET /api/v1/certificates/:id/qr
- * Generate QR code for certificate
+ * Generate QR code for certificate — uses HMAC signature, not hash in URL
  */
-certificatesRouter.get('/:id/qr', async (c) => {
+certificatesRouter.get('/:id/qr', authMiddleware, async (c) => {
   try {
     const id = c.req.param('id');
+    const mode = c.req.query('mode') || 'online'; // 'online' | 'offline'
     const pb = getPocketBase();
-    
-    const certificate = await pb.collection('certificates').getOne(id) as unknown as Certificate;
-    
-    // Generate verification URL
-    const baseUrl = process.env.VITE_APP_URL || 'http://localhost:3000';
-    const verificationUrl = `${baseUrl}/verify?id=${certificate.serial_number}&hash=${certificate.content_hash}`;
-    
-    // Generate QR code
-    const qrCodeDataUrl = await QRCode.toDataURL(verificationUrl, {
-      width: 256,
+
+    const certificate = await pb.collection('certificates').getOne(id) as unknown as Certificate & {
+      signature?: string;
+      offline_jwt?: string;
+      student_id?: string;
+      hidden_token?: string;
+      issuance_nonce?: string;
+    };
+
+    let qrContent: string;
+    let verificationUrl: string;
+
+    if (mode === 'offline' && certificate.offline_jwt) {
+      qrContent = buildOfflineQRPayload(certificate.serial_number, certificate.offline_jwt ?? '');
+      verificationUrl = qrContent;
+    } else {
+      const token = certificate.hidden_token || certificate.signature || '';
+      verificationUrl = buildVerificationUrl(certificate.serial_number, token);
+      qrContent = verificationUrl;
+    }
+
+    const qrCodeDataUrl = await QRCode.toDataURL(qrContent, {
+      width: 300,
       margin: 2,
-      color: {
-        dark: '#4B0082',
-        light: '#FFFFFF',
-      },
+      errorCorrectionLevel: 'H', // High error correction — survives printing damage
+      color: { dark: '#4B0082', light: '#FFFFFF' },
     });
-    
-    return c.json<ApiResponse<{ qrCode: string; url: string }>>({
+
+    return c.json<ApiResponse<{ qrCode: string; url: string; mode: string }>>({
       success: true,
-      data: {
-        qrCode: qrCodeDataUrl,
-        url: verificationUrl,
-      },
+      data: { qrCode: qrCodeDataUrl, url: verificationUrl, mode },
     });
-    
+
   } catch (error) {
     logger.error('Generate QR error:', error);
-    return c.json<ApiResponse<never>>({
-      success: false,
-      error: 'Failed to generate QR code',
-    }, 500);
+    return c.json<ApiResponse<never>>({ success: false, error: 'Failed to generate QR code' }, 500);
   }
 });
 
@@ -367,5 +548,74 @@ certificatesRouter.patch(
     }
   }
 );
+
+/**
+ * GET /api/v1/certificates/verification/logs
+ * Get verification audit logs (admin only)
+ */
+certificatesRouter.get('/verification/logs', requireRole('admin', 'registrar'), async (c) => {
+  try {
+    const pb = getPocketBase();
+    const { page, perPage } = parsePagination(
+      c.req.query('page'),
+      c.req.query('perPage'),
+      { page: 1, perPage: 50, maxPerPage: 200 }
+    );
+
+    const result = await pb.collection('verification_logs').getList(page, perPage, {
+      sort: '-timestamp',
+    });
+
+    return c.json<ApiResponse<any[]>>({
+      success: true,
+      data: result.items,
+      meta: { page: result.page, perPage: result.perPage, total: result.totalItems },
+    });
+  } catch (error) {
+    logger.error('Get verification logs error:', error);
+    return c.json<ApiResponse<never>>({ success: false, error: 'Failed to fetch logs' }, 500);
+  }
+});
+
+/**
+ * GET /api/v1/certificates/verification/stats
+ * Get verification statistics for the dashboard
+ */
+certificatesRouter.get('/verification/stats', requireRole('admin', 'registrar'), async (c) => {
+  try {
+    const pb = getPocketBase();
+
+    const [total, today, valid, invalid, revoked] = await Promise.all([
+      pb.collection('verification_logs').getList(1, 1),
+      pb.collection('verification_logs').getList(1, 1, {
+        filter: `timestamp >= "${new Date().toISOString().split('T')[0]}"`,
+      }),
+      pb.collection('verification_logs').getList(1, 1, { filter: 'result = "valid"' }),
+      pb.collection('verification_logs').getList(1, 1, { filter: 'result = "invalid"' }),
+      pb.collection('verification_logs').getList(1, 1, { filter: 'result = "revoked"' }),
+    ]);
+
+    const successRate = total.totalItems > 0
+      ? ((valid.totalItems / total.totalItems) * 100).toFixed(1)
+      : '0.0';
+
+    return c.json<ApiResponse<object>>({
+      success: true,
+      data: {
+        total_verifications: total.totalItems,
+        today: today.totalItems,
+        success_rate: parseFloat(successRate),
+        by_result: {
+          valid: valid.totalItems,
+          invalid: invalid.totalItems,
+          revoked: revoked.totalItems,
+        },
+      },
+    });
+  } catch (error) {
+    logger.error('Get verification stats error:', error);
+    return c.json<ApiResponse<never>>({ success: false, error: 'Failed to fetch stats' }, 500);
+  }
+});
 
 export default certificatesRouter;

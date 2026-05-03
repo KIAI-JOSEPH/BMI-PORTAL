@@ -1,8 +1,0 @@
-2026/04/27 17:01:01 Server started at http://127.0.0.1:8090
-├─ REST API:  http://127.0.0.1:8090/api/
-└─ Dashboard: http://127.0.0.1:8090/_/
-
-(!) Launch the URL below in the browser if it hasn't been open already to create your first superuser account:
-http://127.0.0.1:8090/_/#/pbinstall/eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJjb2xsZWN0aW9uSWQiOiJwYmNfMzE0MjYzNTgyMyIsImV4cCI6MTc3NzMwMDI2MSwiaWQiOiJmdDBzbGJzOXFxZmp4ZGYiLCJyZWZyZXNoYWJsZSI6ZmFsc2UsInR5cGUiOiJhdXRoIn0.pwG_hvWt5nDq6OKXsBYpm7J0NifwucABqNxiJMq9UxI
-(you can also create your first superuser by running: /home/nissi/bmi-ums/bin/pocketbase superuser upsert EMAIL PASS)
-

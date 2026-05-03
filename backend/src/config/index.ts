@@ -11,7 +11,8 @@ export const CONFIG = {
   
   // Security
   JWT_SECRET: process.env.JWT_SECRET || 'your-super-secret-jwt-key-change-in-production',
-  JWT_EXPIRES_IN: process.env.JWT_EXPIRES_IN || '24h',
+  JWT_ACCESS_EXPIRES_IN: process.env.JWT_ACCESS_EXPIRES_IN || '8h',
+  JWT_REFRESH_EXPIRES_IN: process.env.JWT_REFRESH_EXPIRES_IN || '30d',
   BCRYPT_ROUNDS: 12,
   
   // Encryption (for data at rest)
@@ -30,6 +31,9 @@ export const CONFIG = {
   RATE_LIMIT_WINDOW_MS: 15 * 60 * 1000, // 15 minutes
   RATE_LIMIT_MAX_REQUESTS: 100, // per window
   
+  // Frontend URL (for redirects/links)
+  FRONTEND_URL: process.env.FRONTEND_URL || 'http://localhost:5173',
+  
   // CORS
   CORS_ORIGIN: process.env.CORS_ORIGIN || '*',
   
@@ -44,12 +48,54 @@ export const CONFIG = {
 
 // Validation
 export function validateConfig(): void {
+  const missing: string[] = [];
+
+  // Always block known-insecure defaults regardless of environment
+  if (
+    CONFIG.JWT_SECRET === 'your-super-secret-jwt-key-change-in-production' ||
+    CONFIG.JWT_SECRET.length < 32
+  ) {
+    missing.push('JWT_SECRET (must be at least 32 random characters)');
+  }
+
+  if (
+    CONFIG.ENCRYPTION_KEY === 'your-32-char-encryption-key!' ||
+    CONFIG.ENCRYPTION_KEY.length < 32
+  ) {
+    missing.push('ENCRYPTION_KEY (must be exactly 32 random characters)');
+  }
+
+  if (
+    CONFIG.POCKETBASE_ADMIN_PASSWORD === 'admin123456' ||
+    CONFIG.POCKETBASE_ADMIN_PASSWORD === 'change-this-secure-password' ||
+    CONFIG.POCKETBASE_ADMIN_PASSWORD.length < 12
+  ) {
+    missing.push('POCKETBASE_ADMIN_PASSWORD (must be at least 12 characters)');
+  }
+
+  if (missing.length > 0) {
+    const msg = [
+      '',
+      '╔══════════════════════════════════════════════════════════╗',
+      '║  FATAL SECURITY ERROR — Server will not start            ║',
+      '║  Insecure default secrets detected in configuration:     ║',
+      ...missing.map(m => `║  ✗ ${m.padEnd(54)}║`),
+      '║                                                          ║',
+      '║  Set proper values in backend/.env                       ║',
+      '║  Run: node -e "console.log(require(\'crypto\').randomBytes(32).toString(\'hex\'))"  ║',
+      '╚══════════════════════════════════════════════════════════╝',
+      '',
+    ].join('\n');
+    console.error(msg);
+    process.exit(1);
+  }
+
   if (CONFIG.NODE_ENV === 'production') {
-    if (CONFIG.JWT_SECRET === 'your-super-secret-jwt-key-change-in-production') {
-      console.warn('⚠️ WARNING: Using default JWT secret in production!');
+    if (CONFIG.CORS_ORIGIN === '*') {
+      console.warn('⚠️  WARNING: CORS_ORIGIN is set to "*" in production. Set it to your frontend domain.');
     }
-    if (CONFIG.ENCRYPTION_KEY === 'your-32-char-encryption-key!') {
-      console.warn('⚠️ WARNING: Using default encryption key in production!');
+    if (!CONFIG.POCKETBASE_URL.startsWith('https://')) {
+      console.warn('⚠️  WARNING: POCKETBASE_URL should use HTTPS in production.');
     }
   }
 }

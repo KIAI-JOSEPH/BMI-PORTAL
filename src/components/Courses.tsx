@@ -53,22 +53,90 @@ const Courses: React.FC<CoursesProps> = ({ theme, courses, setCourses }) => {
     });
   }, [courses, searchTerm, facultyFilter, activeLevel]);
 
-  const handleSave = (courseData: Partial<Course>) => {
+  const handleSave = async (courseData: Partial<Course>) => {
     if (editingCourse) {
-      setCourses(prev => prev.map(c => c.id === editingCourse.id ? { ...c, ...courseData } as Course : c));
+      // Update existing course
+      try {
+        const response = await fetch(`http://localhost:3001/api/v1/courses/${editingCourse.id}`, {
+          method: 'PATCH',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${localStorage.getItem('token')}`
+          },
+          body: JSON.stringify(courseData)
+        });
+
+        if (response.ok) {
+          setCourses(prev => prev.map(c => c.id === editingCourse.id ? { ...c, ...courseData } as Course : c));
+          alert('Course updated successfully!');
+        } else {
+          console.warn('Backend update failed, updating local state only');
+          setCourses(prev => prev.map(c => c.id === editingCourse.id ? { ...c, ...courseData } as Course : c));
+          alert('Course updated in local state (not saved to database). Backend may be offline.');
+        }
+      } catch (error) {
+        console.error('Error updating course:', error);
+        setCourses(prev => prev.map(c => c.id === editingCourse.id ? { ...c, ...courseData } as Course : c));
+        alert('Course updated in local state (not saved to database). Backend may be offline.');
+      }
     } else {
+      // Add new course
       const newCourse: Course = {
         ...courseData as Course,
         id: `CRS-${Math.floor(Math.random() * 9000) + 1000}`,
       };
-      setCourses(prev => [newCourse, ...prev]);
+
+      try {
+        const response = await fetch('http://localhost:3001/api/v1/courses', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${localStorage.getItem('token')}`
+          },
+          body: JSON.stringify(newCourse)
+        });
+
+        if (response.ok) {
+          const result = await response.json();
+          setCourses(prev => [result.data || newCourse, ...prev]);
+          alert('Course added successfully!');
+        } else {
+          console.warn('Backend save failed, adding to local state only');
+          setCourses(prev => [newCourse, ...prev]);
+          alert('Course added to local state (not saved to database). Backend may be offline.');
+        }
+      } catch (error) {
+        console.error('Error saving course:', error);
+        setCourses(prev => [newCourse, ...prev]);
+        alert('Course added to local state (not saved to database). Backend may be offline.');
+      }
     }
     setEditingCourse(null);
   };
 
-  const deleteCourse = (id: string) => {
+  const deleteCourse = async (id: string) => {
     if (window.confirm('Are you sure you want to delete this course?')) {
-      setCourses(prev => prev.filter(c => c.id !== id));
+      try {
+        const response = await fetch(`http://localhost:3001/api/v1/courses/${id}`, {
+          method: 'DELETE',
+          headers: {
+            'Authorization': `Bearer ${localStorage.getItem('token')}`
+          }
+        });
+
+        if (response.ok) {
+          setCourses(prev => prev.filter(c => c.id !== id));
+          alert('Course deleted successfully!');
+        } else {
+          console.warn('Backend delete failed, removing from local state only');
+          setCourses(prev => prev.filter(c => c.id !== id));
+          alert('Course removed from local state (not deleted from database). Backend may be offline.');
+        }
+      } catch (error) {
+        console.error('Error deleting course:', error);
+        setCourses(prev => prev.filter(c => c.id !== id));
+        alert('Course removed from local state (not deleted from database). Backend may be offline.');
+      }
     }
   };
 

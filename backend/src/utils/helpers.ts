@@ -18,25 +18,20 @@ export function isValidCertificateSerial(serial: string): boolean {
 
 /**
  * Generate content hash for certificate verification
- * Uses SHA-256 equivalent (via crypto-js in production)
+ * Uses SHA-256 via the Web Crypto API (available in Node 18+ and all browsers)
  */
-export function generateContentHash(data: {
+export async function generateContentHash(data: {
   serial: string;
   studentId: string;
   name: string;
   degree: string;
   issueDate: string;
-}): string {
+}): Promise<string> {
   const input = `${data.serial}|${data.studentId}|${data.name}|${data.degree}|BMI University|${data.issueDate}`;
   
-  // Simple hash for now - replace with crypto-js SHA256 in production
-  let hash = 0;
-  for (let i = 0; i < input.length; i++) {
-    const char = input.charCodeAt(i);
-    hash = ((hash << 5) - hash) + char;
-    hash = hash & hash;
-  }
-  return Math.abs(hash).toString(16).padStart(16, '0');
+  // Use Node.js built-in crypto for SHA-256 (no external dependency needed)
+  const { createHash } = await import('crypto');
+  return createHash('sha256').update(input, 'utf8').digest('hex');
 }
 
 /**

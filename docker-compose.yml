@@ -1,18 +1,18 @@
 version: '3.8'
 
 services:
-  # PocketBase - Database & Auth
+  # PocketBase - Database & Auth (internal only — access via Caddy reverse proxy)
   pocketbase:
     image: ghcr.io/muchobien/pocketbase:latest
     container_name: bmi-pocketbase
     restart: unless-stopped
-    ports:
-      - "8090:8090"
+    expose:
+      - "8090"
     volumes:
       - ./data/pb_data:/pb_data
       - ./data/pb_public:/pb_public
     environment:
-      - PB_ENCRYPTION_KEY=${PB_ENCRYPTION_KEY:-your-encryption-key}
+      - PB_ENCRYPTION_KEY=${PB_ENCRYPTION_KEY}
     healthcheck:
       test: ["CMD", "wget", "-q", "--spider", "http://localhost:8090/api/health"]
       interval: 30s
@@ -22,17 +22,39 @@ services:
     networks:
       - bmi-network
 
-  # Ollama - Local LLM
+  # Litestream - Continuous SQLite replication (Apache 2.0 open source)
+  # Streams PocketBase WAL changes to S3-compatible storage in near real-time.
+  # If the server dies, restore with: litestream restore -replica s3 /pb_data/data.db
+  # Docs: https://litestream.io
+  litestream:
+    image: litestream/litestream:latest
+    container_name: bmi-litestream
+    restart: unless-stopped
+    command: replicate
+    volumes:
+      - ./data/pb_data:/pb_data:ro          # read-only access to SQLite files
+      - ./litestream.yml:/etc/litestream.yml:ro
+    environment:
+      - LITESTREAM_ACCESS_KEY_ID=${LITESTREAM_ACCESS_KEY_ID:-}
+      - LITESTREAM_SECRET_ACCESS_KEY=${LITESTREAM_SECRET_ACCESS_KEY:-}
+    depends_on:
+      pocketbase:
+        condition: service_healthy
+    networks:
+      - bmi-network
+
+  # Ollama - Local LLM (internal only — no public access)
   ollama:
     image: ollama/ollama:latest
     container_name: bmi-ollama
     restart: unless-stopped
-    ports:
-      - "11434:11434"
+    # No public ports — only accessible within Docker network
+    expose:
+      - "11434"
     volumes:
       - ollama_data:/root/.ollama
     environment:
-      - OLLAMA_ORIGINS=*
+      - OLLAMA_ORIGINS=http://api:3001
       - OLLAMA_HOST=0.0.0.0
     # GPU support (optional - uncomment if you have NVIDIA GPU)
     # deploy:
@@ -51,26 +73,27 @@ services:
     networks:
       - bmi-network
 
-  # BMI UMS Backend API
+  # BMI UMS Backend API (internal — exposed through Caddy only)
   api:
     build:
       context: ./backend
       dockerfile: Dockerfile
     container_name: bmi-api
     restart: unless-stopped
-    ports:
-      - "3001:3001"
+    # No direct public port — traffic flows through Caddy reverse proxy
+    expose:
+      - "3001"
     environment:
       - NODE_ENV=production
       - PORT=3001
-      - JWT_SECRET=${JWT_SECRET:-your-super-secret-jwt-key-change-in-production}
-      - ENCRYPTION_KEY=${ENCRYPTION_KEY:-your-32-char-encryption-key!}
+      - JWT_SECRET=${JWT_SECRET}
+      - ENCRYPTION_KEY=${ENCRYPTION_KEY}
       - POCKETBASE_URL=http://pocketbase:8090
-      - POCKETBASE_ADMIN_EMAIL=${POCKETBASE_ADMIN_EMAIL:-admin@bmi.edu}
-      - POCKETBASE_ADMIN_PASSWORD=${POCKETBASE_ADMIN_PASSWORD:-admin123456}
+      - POCKETBASE_ADMIN_EMAIL=${POCKETBASE_ADMIN_EMAIL}
+      - POCKETBASE_ADMIN_PASSWORD=${POCKETBASE_ADMIN_PASSWORD}
       - OLLAMA_URL=http://ollama:11434
       - OLLAMA_MODEL=${OLLAMA_MODEL:-llama3.2}
-      - CORS_ORIGIN=${CORS_ORIGIN:-*}
+      - CORS_ORIGIN=${CORS_ORIGIN}
     volumes:
       - ./logs:/app/logs
       - ./backend:/app

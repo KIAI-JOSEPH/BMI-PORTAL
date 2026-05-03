@@ -9,80 +9,83 @@ import type { ApiResponse } from '../types/index.js';
 
 const aiRouter = new Hono();
 
-// Validation schema
+// Validation schemas
 const chatSchema = z.object({
   prompt: z.string().min(1).max(10000),
-  context: z.string().optional(),
+  context: z.string().max(500).optional(),
   stream: z.boolean().default(false),
 });
 
 const openAIChatSchema = z.object({
   messages: z.array(z.object({
     role: z.enum(['system', 'user', 'assistant']),
-    content: z.string(),
-  })).min(1),
+    content: z.string().max(10000),
+  })).min(1).max(50), // cap message history
   temperature: z.number().min(0).max(2).optional(),
-  max_tokens: z.number().positive().optional(),
+  max_tokens: z.number().positive().max(4096).optional(),
+});
+
+// Metadata extraction schema with strict size limits
+const metadataSchema = z.object({
+  fileName: z.string().min(1).max(255),
+  fileType: z.string().min(1).max(50),
+  base64Data: z.string().max(500_000), // ~375KB decoded — enough for text extraction
 });
 
 /**
+ * Strip prompt injection attempts from user input
+ */
+function sanitizePrompt(input: string): string {
+  return input
+    .replace(/ignore\s+(all\s+)?(previous|prior|above)\s+instructions?/gi, '[filtered]')
+    .replace(/system\s*prompt/gi, '[filtered]')
+    .replace(/you\s+are\s+now/gi, '[filtered]')
+    .replace(/act\s+as\s+(a\s+)?(?!BMI)/gi, '[filtered]')
+    .trim();
+}
+
+/**
  * POST /api/v1/ai/chat
- * Send a message to the local AI assistant
  */
 aiRouter.post('/chat', authMiddleware, zValidator('json', chatSchema), async (c) => {
   try {
     const { prompt, context } = c.req.valid('json');
-    const user = c.get('user') as { email: string } | undefined;
-    
-    logger.info('AI chat request', { user: user?.email, promptLength: prompt.length });
-    
-    const response = await generateAIResponse(prompt, context);
-    
-    return c.json<ApiResponse<{ response: string }>>({
-      success: true,
-      data: { response },
-    });
-    
+    const user = (c as any).get('user') as { email: string } | undefined;
+
+    const safePrompt = sanitizePrompt(prompt);
+    logger.info('AI chat request', { user: user?.email, promptLength: safePrompt.length });
+
+    const response = await generateAIResponse(safePrompt, context);
+
+    return c.json<ApiResponse<{ response: string }>>({ success: true, data: { response } });
   } catch (error) {
     logger.error('AI chat error:', error);
-    return c.json<ApiResponse<never>>({
-      success: false,
-      error: 'AI service temporarily unavailable',
-    }, 503);
+    return c.json<ApiResponse<never>>({ success: false, error: 'AI service temporarily unavailable' }, 503);
   }
 });
 
 /**
  * POST /api/v1/ai/completions
- * OpenAI-compatible chat completions endpoint
  */
 aiRouter.post('/completions', authMiddleware, zValidator('json', openAIChatSchema), async (c) => {
   try {
     const body = c.req.valid('json');
-    
-    const response = await chatCompletions(body.messages, {
+    const response = await chatCompletions(body.messages as any, {
       temperature: body.temperature,
       max_tokens: body.max_tokens,
     });
-    
     return c.json(response);
-    
   } catch (error) {
     logger.error('AI completions error:', error);
-    return c.json<ApiResponse<never>>({
-      success: false,
-      error: 'AI service temporarily unavailable',
-    }, 503);
+    return c.json<ApiResponse<never>>({ success: false, error: 'AI service temporarily unavailable' }, 503);
   }
 });
 
 /**
  * GET /api/v1/ai/health
- * Check Ollama service health
  */
 aiRouter.get('/health', async (c) => {
   const health = await checkOllamaHealth();
-  
   return c.json<ApiResponse<typeof health>>({
     success: health.running && health.modelAvailable,
     data: health,
@@ -91,15 +94,15 @@ aiRouter.get('/health', async (c) => {
 
 /**
  * POST /api/v1/ai/extract-metadata
- * Extract metadata from uploaded documents using AI
+ * Extract metadata from uploaded documents — strict size limits
  */
-aiRouter.post('/extract-metadata', authMiddleware, async (c) => {
+aiRouter.post('/extract-metadata', authMiddleware, zValidator('json', metadataSchema), async (c) => {
   try {
-    const body = await c.req.json<{ fileName: string; fileType: string; base64Data: string }>();
-    
-    const prompt = `Analyze this document and extract metadata:
-File: ${body.fileName}
-Type: ${body.fileType}
+    const { fileName, fileType } = c.req.valid('json');
+
+    const prompt = `Analyze this document and extract metadata.
+File: ${sanitizePrompt(fileName)}
+Type: ${sanitizePrompt(fileType)}
 
 Provide a JSON response with:
 - title: Document title
@@ -108,39 +111,28 @@ Provide a JSON response with:
 - category: One of [Theology, ICT, Business, Education, General]
 - description: Brief 20-word description
 
-Return ONLY valid JSON.`;
-    
+Return ONLY valid JSON, no markdown.`;
+
     const response = await generateAIResponse(prompt);
-    
-    // Parse JSON from response
+
     let metadata;
     try {
-      // Try to extract JSON from markdown code blocks or raw response
-      const jsonMatch = response.match(/```json\n?([\s\S]*?)\n?```/) || 
-                        response.match(/\{[\s\S]*\}/);
-      const jsonStr = jsonMatch ? jsonMatch[1] || jsonMatch[0] : response;
-      metadata = JSON.parse(jsonStr);
+      const jsonMatch = response.match(/\{[\s\S]*\}/);
+      metadata = JSON.parse(jsonMatch ? jsonMatch[0] : response);
     } catch {
       metadata = {
-        title: body.fileName,
+        title: fileName,
         author: 'Unknown',
         year: new Date().getFullYear().toString(),
         category: 'General',
         description: 'Document uploaded to BMI University system',
       };
     }
-    
-    return c.json<ApiResponse<typeof metadata>>({
-      success: true,
-      data: metadata,
-    });
-    
+
+    return c.json<ApiResponse<typeof metadata>>({ success: true, data: metadata });
   } catch (error) {
     logger.error('Metadata extraction error:', error);
-    return c.json<ApiResponse<never>>({
-      success: false,
-      error: 'Failed to extract metadata',
-    }, 500);
+    return c.json<ApiResponse<never>>({ success: false, error: 'Failed to extract metadata' }, 500);
   }
 });
 

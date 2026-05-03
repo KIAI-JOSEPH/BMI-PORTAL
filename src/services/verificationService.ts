@@ -1,9 +1,14 @@
 /**
  * BMI UMS - Certificate Verification Service
- * Connects to the backend API for certificate verification
+ * Supports:
+ * - Online verification (serial + HMAC signature)
+ * - Offline verification (self-contained signed JWT in QR)
+ * - Legacy hash verification (backward compatibility)
+ * - QR code parsing (URL format and offline BMI-VERIFY:: format)
  */
 
-const API_URL = 'http://localhost:3001/api/v1';
+// Use relative path — Vite proxy handles dev, same-origin handles production
+const API_URL = '/api/v1';
 
 export interface CertificateData {
   valid: boolean;
@@ -29,123 +34,140 @@ export interface CertificateData {
   code?: string;
 }
 
+export interface VerifyRequest {
+  serial?: string;
+  t?: string;         // hidden token from QR (new — unforgeable)
+  sig?: string;       // legacy HMAC signature (backward compat)
+  hash?: string;      // legacy hash (backward compat)
+  offline_jwt?: string;
+  method?: 'online' | 'offline' | 'qr_scan';
+}
+
 /**
- * Verify a certificate by serial number
+ * Parse a QR code payload into a verify request.
+ * Handles three formats:
+ * 1. Online URL: https://...verify?id=BMI-2024-123456&sig=abc123
+ * 2. Offline JWT: BMI-VERIFY::BMI-2024-123456::eyJ...
+ * 3. Plain serial: BMI-2024-123456
+ * 4. Legacy URL: https://...verify?id=BMI-2024-123456&hash=abc123
  */
-export async function verifyCertificate(
-  serialNumber: string,
-  options?: { qrScan?: boolean }
-): Promise<CertificateData> {
+export function parseQRCode(qrContent: string): VerifyRequest | null {
   try {
+    // Offline format: BMI-VERIFY::{serial}::{jwt}
+    if (qrContent.startsWith('BMI-VERIFY::')) {
+      const parts = qrContent.split('::');
+      if (parts.length === 3) {
+        return { serial: parts[1], offline_jwt: parts[2], method: 'offline' };
+      }
+    }
+
+    // URL format — ?t= is new hidden token, ?sig= is legacy
+    if (qrContent.includes('/verify?') || qrContent.includes('?id=')) {
+      const url = new URL(qrContent.startsWith('http') ? qrContent : `https://x.com${qrContent}`);
+      const id = url.searchParams.get('id');
+      const t = url.searchParams.get('t');
+      const sig = url.searchParams.get('sig'); // legacy
+      const hash = url.searchParams.get('hash'); // legacy
+      if (id) {
+        return { serial: id, t: t || undefined, sig: sig || undefined, hash: hash || undefined, method: 'qr_scan' };
+      }
+    }
+
+    // Plain serial number
+    if (/^BMI-\d{4}-\d{6}$/.test(qrContent.trim())) {
+      return { serial: qrContent.trim(), method: 'qr_scan' };
+    }
+
+    return null;
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Verify a certificate against the backend.
+ */
+export async function verifyCertificate(req: VerifyRequest): Promise<CertificateData> {
+  try {
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 10000);
+
     const response = await fetch(`${API_URL}/certificates/verify`, {
       method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({
-        serial_number: serialNumber,
-        method: options?.qrScan ? 'qr_scan' : 'online',
-      }),
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(req),
+      signal: controller.signal,
     });
+    clearTimeout(timeoutId);
 
     const data = await response.json();
 
-    if (!data.success) {
-      return {
-        valid: false,
-        error: data.error || 'Verification failed',
-        code: data.code || 'VERIFICATION_FAILED',
-      };
+    // The verify endpoint returns CertificateVerificationResult directly (not wrapped in ApiResponse)
+    return {
+      valid: data.valid,
+      certificate: data.certificate,
+      verification: data.verification,
+      error: data.error,
+      code: data.code,
+    };
+  } catch (error: any) {
+    if (error?.name === 'AbortError') {
+      return { valid: false, error: 'Verification timed out. Please try again.', code: 'TIMEOUT' };
     }
-
-    return {
-      valid: data.data.valid,
-      certificate: data.data.certificate,
-      verification: data.data.verification,
-    };
-  } catch (error) {
-    console.error('Certificate verification error:', error);
-    return {
-      valid: false,
-      error: 'Network error. Please check your connection.',
-      code: 'NETWORK_ERROR',
-    };
+    return { valid: false, error: 'Network error. Please check your connection.', code: 'NETWORK_ERROR' };
   }
 }
 
 /**
- * Get certificate by ID
+ * Verify a QR code scan — parses the QR content then calls verifyCertificate.
  */
-export async function getCertificate(id: string): Promise<CertificateData> {
-  try {
-    const response = await fetch(`${API_URL}/certificates/${id}`);
-    const data = await response.json();
-
-    if (!data.success) {
-      return {
-        valid: false,
-        error: data.error || 'Certificate not found',
-        code: 'NOT_FOUND',
-      };
-    }
-
-    return {
-      valid: data.data.status === 'ISSUED',
-      certificate: {
-        serial_number: data.data.serial_number,
-        student_name: data.data.student_name,
-        degree_title: data.data.degree,
-        graduation_class: data.data.graduation_class,
-        faculty: data.data.faculty,
-        department: data.data.department,
-        issue_date: data.data.issue_date,
-        graduation_date: data.data.graduation_date,
-        gpa: data.data.gpa,
-        status: data.data.status.toLowerCase() as 'active' | 'revoked' | 'suspended',
-      },
-      verification: {
-        timestamp: new Date().toISOString(),
-        method: 'online',
-        hash_verified: true,
-        verification_count: data.data.verification_count,
-      },
-    };
-  } catch (error) {
-    console.error('Get certificate error:', error);
+export async function verifyQRCode(qrContent: string): Promise<CertificateData> {
+  const req = parseQRCode(qrContent);
+  if (!req) {
     return {
       valid: false,
-      error: 'Network error',
-      code: 'NETWORK_ERROR',
+      error: 'Invalid QR code format. This does not appear to be a BMI University certificate.',
+      code: 'INVALID_QR',
     };
   }
+  return verifyCertificate({ ...req, method: 'qr_scan' });
 }
 
 /**
- * Generate QR code URL for certificate
+ * Get verification statistics (admin use)
  */
-export function getQRCodeUrl(serialNumber: string): string {
-  return `${API_URL}/certificates/qr/${serialNumber}`;
-}
-
-/**
- * Check if backend is available
- */
-export async function isBackendAvailable(): Promise<boolean> {
+export async function getVerificationStats(token: string): Promise<object | null> {
   try {
-    const response = await fetch(`${API_URL.replace('/api/v1', '')}/health`, {
-      method: 'GET',
-      signal: AbortSignal.timeout(5000),
+    const response = await fetch(`${API_URL}/certificates/verification/stats`, {
+      headers: { Authorization: `Bearer ${token}` },
     });
-    return response.ok;
+    const data = await response.json();
+    return data.success ? data.data : null;
   } catch {
-    return false;
+    return null;
   }
 }
 
-// Legacy export for compatibility
+/**
+ * Get verification logs (admin use)
+ */
+export async function getVerificationLogs(token: string, page = 1): Promise<any> {
+  try {
+    const response = await fetch(`${API_URL}/certificates/verification/logs?page=${page}`, {
+      headers: { Authorization: `Bearer ${token}` },
+    });
+    const data = await response.json();
+    return data.success ? data : null;
+  } catch {
+    return null;
+  }
+}
+
+// Unified service object for component use
 export const verificationService = {
   verifyCertificate,
-  getCertificate,
-  getQRCodeUrl,
-  isBackendAvailable,
+  verifyQRCode,
+  parseQRCode,
+  getVerificationStats,
+  getVerificationLogs,
 };
