@@ -112,8 +112,10 @@ export interface User {
   id: string;
   email: string;
   name: string;
-  role: 'admin' | 'registrar' | 'staff' | 'viewer';
+  role: 'admin' | 'registrar' | 'faculty' | 'student' | 'staff' | 'viewer';
   department?: string;
+  studentId?: string;
+  staffId?: string;
   isActive: boolean;
   lastLogin?: string;
   created: string;
@@ -184,3 +186,4 @@ export interface CertificateVerificationResult {
   error?: string;
   code?: string;
 }
+

@@ -3,7 +3,7 @@ import { Hono } from 'hono';
 import { zValidator } from '@hono/zod-validator';
 import { z } from 'zod';
 import { getPocketBase } from '../services/pocketbase.js';
-import { authMiddleware, requireRole } from '../middleware/auth.js';
+import { authMiddleware, requireRole, getUser } from '../middleware/auth.js';
 import { auditMiddleware, logAction } from '../middleware/audit.js';
 import { logger } from '../utils/logger.js';
 import { parsePagination, formatCurrency } from '../utils/helpers.js';
@@ -20,7 +20,7 @@ const transactionSchema = z.object({
   ref: z.string().min(1).max(50),
   name: z.string().min(1).max(200),
   desc: z.string().min(1).max(500),
-  amt: z.number().positive().max(10_000_000), // max 10 million per transaction
+  amt: z.number().positive().max(10_000_000), // max 10 million per transaction 
   status: z.enum(['Paid', 'Pending', 'Failed']).default('Pending'),
   date: z.string().min(1),
   studentId: z.string().optional(),
@@ -32,34 +32,53 @@ const updateTransactionSchema = transactionSchema.partial();
  * GET /api/v1/finance/transactions
  * List all transactions
  */
-financeRouter.get('/transactions', async (c) => {
+financeRouter.get('/transactions', requireRole('admin', 'registrar', 'student'), async (c) => {
   try {
+    const user = getUser(c);
     const pb = getPocketBase();
-    
+
+    // Students can only see their own transactions
+    if (user?.role === 'student') {
+      const { page, perPage } = parsePagination(c.req.query('page'), c.req.query('perPage'));
+      const result = await pb.collection('transactions').getList(page, perPage, {
+        filter: `studentId = "${user.studentId}"`,
+        sort: '-date',
+      });
+      return c.json<ApiResponse<Transaction[]>>({
+        success: true,
+        data: result.items as unknown as Transaction[],
+        meta: {
+          page: result.page,
+          perPage: result.perPage,
+          total: result.totalItems,
+        },
+      });
+    }
+
     const { page, perPage } = parsePagination(
       c.req.query('page'),
       c.req.query('perPage'),
       { page: 1, perPage: 20, maxPerPage: 100 }
     );
-    
+
     const status = c.req.query('status');
     const search = c.req.query('search');
 
-    const safe = (v: string) => v.replace(/["'\\]/g, '').substring(0, 100);
+    const safe = (v: string) => v.replace(/["'\\]/g, '').substring(0, 100);     
     const filters: string[] = [];
     if (status) filters.push(`status = "${safe(status)}"`);
     if (search) {
       const s = safe(search);
       filters.push(`(name ~ "${s}" || ref ~ "${s}" || desc ~ "${s}")`);
     }
-    
+
     const filterString = filters.join(' && ') || undefined;
-    
-    const result = await pb.collection('transactions').getList(page, perPage, {
+
+    const result = await pb.collection('transactions').getList(page, perPage, { 
       filter: filterString,
       sort: '-date',
     });
-    
+
     return c.json<ApiResponse<Transaction[]>>({
       success: true,
       data: result.items as unknown as Transaction[],
@@ -69,7 +88,7 @@ financeRouter.get('/transactions', async (c) => {
         total: result.totalItems,
       },
     });
-    
+
   } catch (error) {
     logger.error('Get transactions error:', error);
     return c.json<ApiResponse<never>>({
@@ -83,18 +102,24 @@ financeRouter.get('/transactions', async (c) => {
  * GET /api/v1/finance/transactions/:id
  * Get a single transaction
  */
-financeRouter.get('/transactions/:id', async (c) => {
+financeRouter.get('/transactions/:id', requireRole('admin', 'registrar', 'student'), async (c) => {
   try {
     const id = c.req.param('id');
+    const user = getUser(c);
     const pb = getPocketBase();
-    
+
     const transaction = await pb.collection('transactions').getOne(id);
-    
+
+    // Students can only access their own transaction
+    if (user?.role === 'student' && (transaction as any).studentId !== user.studentId) {
+      return c.json({ success: false, error: 'Forbidden' }, 403);
+    }
+
     return c.json<ApiResponse<Transaction>>({
       success: true,
       data: transaction as unknown as Transaction,
     });
-    
+
   } catch (error) {
     logger.error('Get transaction error:', error);
     return c.json<ApiResponse<never>>({
@@ -117,17 +142,17 @@ financeRouter.post(
     try {
       const data = c.req.valid('json');
       const pb = getPocketBase();
-      
-      const newTransaction = await pb.collection('transactions').create(data);
-      
-      logger.info('Transaction created', { transactionId: newTransaction.id });
-      
+
+      const newTransaction = await pb.collection('transactions').create(data);  
+
+      logger.info('Transaction created', { transactionId: newTransaction.id }); 
+
       return c.json<ApiResponse<Transaction>>({
         success: true,
         data: newTransaction as unknown as Transaction,
         message: 'Transaction recorded successfully',
       }, 201);
-      
+
     } catch (error) {
       logger.error('Create transaction error:', error);
       return c.json<ApiResponse<never>>({
@@ -152,17 +177,17 @@ financeRouter.patch(
       const id = c.req.param('id');
       const data = c.req.valid('json');
       const pb = getPocketBase();
-      
-      const updated = await pb.collection('transactions').update(id, data);
-      
+
+      const updated = await pb.collection('transactions').update(id, data);     
+
       logger.info('Transaction updated', { transactionId: id });
-      
+
       return c.json<ApiResponse<Transaction>>({
         success: true,
         data: updated as unknown as Transaction,
         message: 'Transaction updated successfully',
       });
-      
+
     } catch (error) {
       logger.error('Update transaction error:', error);
       return c.json<ApiResponse<never>>({
@@ -185,17 +210,17 @@ financeRouter.delete(
     try {
       const id = c.req.param('id');
       const pb = getPocketBase();
-      
+
       await pb.collection('transactions').delete(id);
-      
+
       logger.info('Transaction deleted', { transactionId: id });
-      
+
       return c.json<ApiResponse<null>>({
         success: true,
         data: null,
         message: 'Transaction deleted successfully',
       });
-      
+
     } catch (error) {
       logger.error('Delete transaction error:', error);
       return c.json<ApiResponse<never>>({
@@ -208,9 +233,9 @@ financeRouter.delete(
 
 /**
  * GET /api/v1/finance/stats
- * Get financial statistics — paginated counts, no full table scan
+ * Get financial statistics
  */
-financeRouter.get('/stats', async (c) => {
+financeRouter.get('/stats', requireRole('admin', 'registrar'), async (c) => {
   try {
     const pb = getPocketBase();
 
@@ -221,8 +246,8 @@ financeRouter.get('/stats', async (c) => {
       pb.collection('transactions').getList(1, 1, { filter: 'status = "Failed"' }),
     ]);
 
-    // Fetch amounts for revenue calculation (last 5000 paid transactions)
-    const paidRecords = await pb.collection('transactions').getList(1, 5000, {
+    // Fetch amounts for revenue calculation (last 5000 paid transactions)      
+    const paidRecords = await pb.collection('transactions').getList(1, 5000, {  
       filter: 'status = "Paid"',
       fields: 'amt',
     });
@@ -252,7 +277,7 @@ financeRouter.get('/stats', async (c) => {
       averageTransaction: paidRecords.items.length > 0 ? (totalRevenue as number) / paidRecords.items.length : 0,
     };
 
-    return c.json<ApiResponse<typeof stats>>({ success: true, data: stats });
+    return c.json<ApiResponse<typeof stats>>({ success: true, data: stats });   
 
   } catch (error) {
     logger.error('Get finance stats error:', error);
@@ -262,16 +287,15 @@ financeRouter.get('/stats', async (c) => {
 
 /**
  * GET /api/v1/finance/reports/monthly
- * Get monthly financial report — scoped to one year only
+ * Get monthly financial report
  */
 financeRouter.get('/reports/monthly', requireRole('admin', 'registrar'), async (c) => {
   try {
-    const rawYear = c.req.query('year') || new Date().getFullYear().toString();
-    // Validate year to prevent injection
+    const rawYear = c.req.query('year') || new Date().getFullYear().toString(); 
     const year = /^\d{4}$/.test(rawYear) ? rawYear : new Date().getFullYear().toString();
     const pb = getPocketBase();
 
-    const transactions = await pb.collection('transactions').getList(1, 5000, {
+    const transactions = await pb.collection('transactions').getList(1, 5000, { 
       filter: `date >= "${year}-01-01" && date <= "${year}-12-31"`,
       fields: 'date,status,amt',
     }) as { items: Transaction[] };

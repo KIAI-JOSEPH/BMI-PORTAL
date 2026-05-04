@@ -41,7 +41,7 @@ const updateStudentSchema = studentSchema.partial();
  * GET /api/v1/students
  * List all students with pagination and filtering
  */
-studentsRouter.get('/', async (c) => {
+studentsRouter.get('/', requireRole('admin', 'registrar', 'faculty', 'staff'), async (c) => {
   try {
     const pb = getPocketBase();
     
@@ -100,8 +100,14 @@ studentsRouter.get('/', async (c) => {
  * Get a single student by ID
  */
 studentsRouter.get('/:id', async (c) => {
-  try {
     const id = c.req.param('id');
+    const user = getUser(c);
+    
+    // Students can only access their own record
+    if (user?.role === 'student' && user.studentId !== id) {
+      return c.json({ success: false, error: 'Forbidden' }, 403);
+    }
+  try {
     const pb = getPocketBase();
     
     const student = await pb.collection('students').getOne(id);
@@ -283,3 +289,5 @@ studentsRouter.get('/stats/overview', async (c) => {
 });
 
 export default studentsRouter;
+
+

@@ -137,8 +137,10 @@ async function createCollection(name: string): Promise<void> {
     users: {
       fields: {
         name: { type: 'text', required: true },
-        role: { type: 'select', required: true, options: { values: ['admin', 'registrar', 'staff', 'viewer'] } },
+        role: { type: 'select', required: true, options: { values: ['admin', 'registrar', 'faculty', 'student', 'staff', 'viewer'] } },
         department: { type: 'text' },
+        studentId: { type: 'text' },
+        staffId: { type: 'text' },
         isActive: { type: 'bool', required: true },
         lastLogin: { type: 'date' },
       }
@@ -152,6 +154,8 @@ async function createCollection(name: string): Promise<void> {
         graduation_class: { type: 'text' },
         faculty: { type: 'text', required: true },
         department: { type: 'text' },
+        studentId: { type: 'text' },
+        staffId: { type: 'text' },
         issue_date: { type: 'text', required: true },
         graduation_date: { type: 'text' },
         gpa: { type: 'number', required: true },
@@ -245,3 +249,5 @@ export async function healthCheck(): Promise<boolean> {
     return false;
   }
 }
+
+

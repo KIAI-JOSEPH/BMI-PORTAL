@@ -93,7 +93,6 @@ staffRouter.get('/', async (c) => {
  */
 staffRouter.get('/:id', async (c) => {
   try {
-    const id = c.req.param('id');
     const pb = getPocketBase();
     
     const staff = await pb.collection('staff').getOne(id);
@@ -293,3 +292,5 @@ staffRouter.get('/meta/departments', async (c) => {
 });
 
 export default staffRouter;
+
+
