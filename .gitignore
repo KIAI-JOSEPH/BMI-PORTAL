@@ -61,14 +61,30 @@ data/pb_data/
 *.docx
 *.pptx
 *:Zone.Identifier
+*Zone.Identifier
 scripts/analysis_output*.txt
 public/certificates.json
 scripts/user.json
-/BMI SEAL.png
+
+# Development/Task tracking files (keep out of repo)
+*_SUMMARY.md
+*_COMPLETE.md
+TASK_*.md
+BACKEND_INTEGRATION_*.md
+STUDENT_ADMISSION_*.md
+TRANSCRIPT_*.md
+FILES_CREATED_*.md
+MANUAL_ENTRY_*.md
+README_EXAM_*.md
 
 # OS / temporary files
 tmp/
 temp/
 .cache/
 
+# Specific files to exclude
+/BMI SEAL.png
 /BMIUniversity (2).jsx
+export-students.html
+test-backend-connection.sh
+COURSE_CODES_VISUAL_MAP.txt
