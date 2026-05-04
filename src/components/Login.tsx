@@ -57,7 +57,7 @@ const Login: React.FC<LoginProps> = ({ onLogin, logo }) => {
         <div className="flex flex-col items-center mb-10">
           <div className="w-28 h-28 mb-4 relative drop-shadow-xl">
             <img
-              src={logo || "https://i.ibb.co/Gv2vPdJC/BMI-PNG.png"}
+              src={logo || "/BMI.svg"}
               alt="BMI University Logo"
               className="w-full h-full object-contain rounded-xl border-2 border-[#FFD700] bg-white"
             />
@@ -164,3 +164,4 @@ const Login: React.FC<LoginProps> = ({ onLogin, logo }) => {
 };
 
 export default Login;
+

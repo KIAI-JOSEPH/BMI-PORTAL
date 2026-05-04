@@ -200,7 +200,7 @@ const VerificationPage: React.FC<VerificationPageProps> = ({ logo }) => {
           <div className="p-8 text-center">
             <div className="flex items-center justify-center gap-4 mb-6">
               <img 
-                src={logo || "https://i.ibb.co/Gv2vPdJC/BMI-PNG.png"} 
+                src={logo || "/BMI.svg"} 
                 alt="BMI University" 
                 className="w-16 h-16 object-contain rounded-xl border-2 border-[#FFD700] bg-white"
               />

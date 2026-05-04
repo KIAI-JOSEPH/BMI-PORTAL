@@ -90,7 +90,7 @@ const Verify: React.FC<VerifyProps> = ({ students }) => {
               
               <div className="p-8 space-y-6">
                   <div className="text-center">
-                      <img src="https://i.ibb.co/Gv2vPdJC/BMI-PNG.png" className="h-20 mx-auto mb-4 object-contain filter drop-shadow-sm" alt="Logo"/>
+                      <img src="/BMI.svg" className="h-20 mx-auto mb-4 object-contain filter drop-shadow-sm" alt="Logo"/>
                       <h1 className="text-xl font-black text-gray-900 uppercase leading-tight">{student?.firstName} {student?.lastName}</h1>
                       <p className="text-xs font-bold text-[#4B0082] uppercase tracking-widest mt-1">{student?.id}</p>
                   </div>
@@ -160,3 +160,4 @@ const getGraduationClass = (student: Student | null) => {
 };
 
 export default Verify;
+

@@ -486,7 +486,7 @@ const Finance: React.FC<FinanceProps> = ({ theme, students, staff, transactions,
                      </div>
                      <div className="flex justify-between items-start relative z-10">
                         <div className="flex items-center gap-6">
-                           <img src="https://i.ibb.co/Gv2vPdJC/BMI-PNG.png" className="w-24 h-24 object-contain bg-white p-2 border border-gray-100 shadow-sm" alt="Logo" />
+                           <img src="/BMI.svg" className="w-24 h-24 object-contain bg-white p-2 border border-gray-100 shadow-sm" alt="Logo" />
                            <div>
                               <h1 className="text-4xl font-black text-gray-900 tracking-tighter uppercase leading-none">BMI UNIVERSITY</h1>
                               <p className="text-[10px] font-bold text-gray-500 uppercase tracking-[0.3em] mt-2">Institutional Finance Division</p>
@@ -756,3 +756,4 @@ const Finance: React.FC<FinanceProps> = ({ theme, students, staff, transactions,
 };
 
 export default Finance;
+

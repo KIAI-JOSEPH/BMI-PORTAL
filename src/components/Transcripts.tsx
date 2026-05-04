@@ -11,7 +11,10 @@ import {
   ShieldCheck, 
   MessageCircle, 
   Scroll,
-  CheckCircle
+  CheckCircle,
+  ZoomIn,
+  ZoomOut,
+  Maximize2
 } from 'lucide-react';
 import { Student, Course } from '../types';
 
@@ -38,9 +41,93 @@ export const Transcripts: React.FC<TranscriptsProps> = ({ students, courses, log
   const [showTranscript, setShowTranscript] = useState(false);
   const [transcriptType, setTranscriptType] = useState<'Official' | 'Provisional'>('Official');
   const [selectedTerm, setSelectedTerm] = useState('Fall 2023');
+  const [zoomLevel, setZoomLevel] = useState(100); // Zoom percentage
 
   const faculties = ['All Faculty', 'Theology', 'ICT', 'Business', 'Education'];
   const terms = ['Fall 2022', 'Spring 2023', 'Fall 2023', 'Spring 2024'];
+
+  const handleZoomIn = () => setZoomLevel(prev => prev + 10);
+  const handleZoomOut = () => setZoomLevel(prev => Math.max(prev - 10, 10));
+  const handleZoomReset = () => setZoomLevel(100);
+
+  // Mouse wheel zoom
+  React.useEffect(() => {
+    if (!showTranscript) return;
+    
+    const handleWheel = (e: WheelEvent) => {
+      if (e.ctrlKey || e.metaKey) {
+        e.preventDefault();
+        if (e.deltaY < 0) {
+          handleZoomIn();
+        } else {
+          handleZoomOut();
+        }
+      }
+    };
+
+    window.addEventListener('wheel', handleWheel, { passive: false });
+    return () => window.removeEventListener('wheel', handleWheel);
+  }, [showTranscript]);
+
+  // Click and hold zoom
+  const zoomIntervalRef = React.useRef<NodeJS.Timeout | null>(null);
+
+  const startZoom = (direction: 'in' | 'out') => {
+    // Immediate zoom on click
+    if (direction === 'in') {
+      handleZoomIn();
+    } else {
+      handleZoomOut();
+    }
+    
+    // Start continuous zoom after 300ms delay
+    const timeoutId = setTimeout(() => {
+      zoomIntervalRef.current = setInterval(() => {
+        if (direction === 'in') {
+          setZoomLevel(prev => prev + 10);
+        } else {
+          setZoomLevel(prev => Math.max(prev - 10, 10));
+        }
+      }, 100); // Zoom every 100ms while holding
+    }, 300);
+
+    return () => clearTimeout(timeoutId);
+  };
+
+  const stopZoom = () => {
+    if (zoomIntervalRef.current) {
+      clearInterval(zoomIntervalRef.current);
+      zoomIntervalRef.current = null;
+    }
+  };
+
+  // Cleanup on unmount
+  React.useEffect(() => {
+    return () => stopZoom();
+  }, []);
+
+  // Keyboard shortcuts for zoom
+  React.useEffect(() => {
+    if (!showTranscript) return;
+    
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.ctrlKey || e.metaKey) {
+        if (e.key === '=' || e.key === '+') {
+          e.preventDefault();
+          handleZoomIn();
+        } else if (e.key === '-' || e.key === '_') {
+          e.preventDefault();
+          handleZoomOut();
+        } else if (e.key === '0') {
+          e.preventDefault();
+          handleZoomReset();
+        }
+      }
+    };
+
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [showTranscript]);
 
   const getDeanName = (faculty: string) => {
     // All faculties now use the unified Dean of Faculty & Academics
@@ -276,91 +363,134 @@ export const Transcripts: React.FC<TranscriptsProps> = ({ students, courses, log
 
     if (mode === 'download') {
       try {
-        // PDF Download: Use maximum quality settings for pixel-perfect match
-        const html2canvasModule = await import('https://esm.sh/html2canvas@1.4.1?bundle');
-        const html2canvas = html2canvasModule.default;
+        // Real PDF Download: Using html2pdf.js for better layout preservation and vector-like quality
+        const html2pdfModule = await import('html2pdf.js');
+        const html2pdf = html2pdfModule.default;
+
+        const opt = {
+          margin: [10, 10, 10, 10], // Top, Right, Bottom, Left margins in mm
+          filename: `${fileName}.pdf`,
+          image: { type: 'jpeg', quality: 1.0 }, // Maximum image quality
+          html2canvas: { 
+            scale: 6, // 576 DPI - ultra high quality for sharp logos and text
+            useCORS: true, 
+            letterRendering: true,
+            logging: false,
+            backgroundColor: '#ffffff',
+            allowTaint: false,
+            imageTimeout: 0,
+            width: 794, // A4 width in pixels at 96 DPI (210mm)
+            windowWidth: 794
+          },
+          jsPDF: { 
+            unit: 'mm', 
+            format: 'a4', 
+            orientation: 'portrait',
+            compress: false, // Don't compress to maintain highest quality
+            precision: 16,
+            hotfixes: ['px_scaling']
+          },
+          pagebreak: { mode: ['avoid-all', 'css', 'legacy'] }
+        };
+
+        // Create a dedicated container for the export to ensure 100% resemblance
+        const worker = html2pdf().set(opt).from(element).toPdf().get('pdf').then((pdf: any) => {
+          // Add metadata to the real PDF
+          pdf.setProperties({
+            title: `Official Transcript - ${selectedStudent.firstName} ${selectedStudent.lastName}`,
+            subject: 'Official Academic Record',
+            author: 'BMI University Systems',
+            keywords: 'transcript, academic, record, BMI',
+            creator: 'BMI UMS'
+          });
+        }).save();
+
+      } catch (err) {
+        console.error('PDF download failed', err);
+        alert('High-quality PDF generation failed. Falling back to basic download...');
+        
+        // Fallback to basic download if html2pdf fails
         const jsPDFModule = await import('https://esm.sh/jspdf@2.5.1?bundle');
         const { jsPDF } = jsPDFModule;
-
-        const elW  = element.scrollWidth  || 794;
-        const elH  = element.scrollHeight || 1123;
-
-        // Capture at 6× scale for ultra-high quality (equivalent to 576 DPI)
-        // Higher scale ensures all security features (guilloche, watermarks, microtext) are crisp
-        const canvas = await html2canvas(element, {
-          scale: 6,
-          useCORS: true,
-          allowTaint: true,
-          logging: false,
-          backgroundColor: '#ffffff',
-          width: elW,
-          height: elH,
-          windowWidth: elW,
-          windowHeight: elH,
-          imageTimeout: 0,
-          removeContainer: true,
-          foreignObjectRendering: true,  // Enable for better SVG rendering
-          letterRendering: true,
-          onclone: (clonedDoc) => {
-            // Ensure all styles are preserved in the clone
-            const clonedElement = clonedDoc.getElementById('official-transcript-root');
-            if (clonedElement) {
-              clonedElement.style.transform = 'none';
-              clonedElement.style.width = `${elW}px`;
-              clonedElement.style.height = `${elH}px`;
-            }
-          }
-        });
-
-        // Use PNG for lossless quality (better than JPEG for text/graphics)
-        const imgData = canvas.toDataURL('image/png', 1.0);
+        const canvasModule = await import('https://esm.sh/html2canvas@1.4.1?bundle');
+        const html2canvas = canvasModule.default;
         
-        // Create PDF with compress: false for maximum quality
-        const pdf = new jsPDF({ 
-          unit: 'mm', 
-          format: 'a4', 
-          orientation: 'portrait',
-          compress: false,
-          precision: 16,
-          putOnlyUsedFonts: true,
-          floatPrecision: 16
-        });
-        
-        // Add image at full A4 size with maximum quality
-        // Use 'NONE' compression for pixel-perfect match
-        pdf.addImage(imgData, 'PNG', 0, 0, 210, 297, undefined, 'NONE');
+        const canvas = await html2canvas(element, { scale: 3 });
+        const imgData = canvas.toDataURL('image/png');
+        const pdf = new jsPDF('p', 'mm', 'a4');
+        pdf.addImage(imgData, 'PNG', 0, 0, 210, 297);
         pdf.save(`${fileName}.pdf`);
-      } catch (err) {
-        console.error("PDF download failed", err);
-        alert("PDF generation failed. Please try the Print option instead.");
       }
     } else {
-      // Print mode: Use high resolution for maximum print quality
-      // A4 at 300 DPI = 2480×3508 pixels, but we scale to fit browser print dialog
-      const A4_W_MM = 210;
-      const A4_H_MM = 297;
-      const PRINT_DPI = 300;  // Professional print quality
-      const MM_TO_INCH = 25.4;
-      
-      // Calculate pixel dimensions at 300 DPI
-      const A4_W_PX = Math.round((A4_W_MM / MM_TO_INCH) * PRINT_DPI);  // 2480px
-      const A4_H_PX = Math.round((A4_H_MM / MM_TO_INCH) * PRINT_DPI);  // 3508px
-      
-      // For browser display, use standard screen resolution
+      // Print mode: Optimized for 'Save as PDF' browser feature to get a REAL vector PDF
       const SCREEN_A4_W = 794;
       const SCREEN_A4_H = 1123;
-      
+
       const elW  = element.scrollWidth  || SCREEN_A4_W;
       const elH  = element.scrollHeight || SCREEN_A4_H;
       const scale = Math.min(SCREEN_A4_W / elW, SCREEN_A4_H / elH, 1);
-      
+
       const cloned = inlineStyles(element);
-      const printWindow = window.open('', '_blank', `width=${SCREEN_A4_W},height=${SCREEN_A4_H}`);
+      
+      // Ensure all dark mode classes are removed for the official print
+      const removeDarkClasses = (el: HTMLElement) => {
+        el.classList.remove('dark');
+        const children = el.querySelectorAll('*');
+        children.forEach(child => child.classList.remove('dark'));
+      };
+      removeDarkClasses(cloned);
+
+      const printWindow = window.open('', '_blank', 'width=800,height=600');
       if (!printWindow) return;
-      printWindow.document.write(buildPrintHTML(fileName, cloned.outerHTML, elW, scale, SCREEN_A4_W, SCREEN_A4_H));
+
+      // Build enhanced print HTML with high-quality rendering hints
+      const printHtml = `
+        <!DOCTYPE html>
+        <html>
+        <head>
+          <title>${fileName}</title>
+          <style>
+            @page { size: A4 portrait; margin: 0; }
+            body { margin: 0; padding: 0; background: white; -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important; }
+            #print-container { 
+              width: 210mm; 
+              height: 297mm; 
+              overflow: hidden; 
+              position: relative; 
+              display: flex;
+              align-items: center;
+              justify-content: center;
+            }
+            #scaled-wrapper {
+              transform: scale(${scale});
+              transform-origin: center center;
+              width: ${elW}px;
+            }
+            * { box-sizing: border-box; }
+            @import url(''https://fonts.googleapis.com/css2?family=Inter:wght@400;700;900&family=JetBrains+Mono:wght@700&display=swap'');
+          </style>
+        </head>
+        <body>
+          <div id='print-container'><div id='scaled-wrapper'>
+            ${cloned.outerHTML}</div>
+          </div>
+          <script>
+            window.onload = () => {
+              setTimeout(() => {
+                window.print();
+                window.close();
+              }, 500);
+            };
+          </script>
+        </body>
+        </html>
+      `;
+
+      printWindow.document.write(printHtml);
       printWindow.document.close();
     }
   };
+
 
   const handleShare = async (platform?: 'whatsapp') => {
     if (!selectedStudent) return;
@@ -1449,9 +1579,85 @@ export const Transcripts: React.FC<TranscriptsProps> = ({ students, courses, log
       </div>
 
         {showTranscript && selectedStudent && (
-        <div className="fixed inset-0 z-[130] flex items-start justify-center bg-black/95 backdrop-blur-3xl p-4 md:p-8 pt-8 md:pt-12 overflow-y-auto">
-           <div className="w-full max-w-[210mm] flex flex-col items-center">
-              <div id="official-transcript-root" className="bg-white w-full shadow-2xl relative flex flex-col overflow-hidden animate-slide-up font-serif p-6 text-gray-950 print:m-0 print:shadow-none border-[6px] border-gray-100 border-double">
+        <div className="fixed inset-0 z-[130] flex flex-col items-center bg-black/95 backdrop-blur-3xl overflow-y-auto">
+           {/* Action Buttons - Fixed at top, not zoomed */}
+           <div className="sticky top-0 z-50 w-full flex flex-wrap gap-4 items-center justify-between no-print p-6 bg-gray-900/95 backdrop-blur-xl border-b border-white/10 shadow-2xl">
+                 <div className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-[#4B0082] via-[#FFD700] to-[#4B0082]"></div>
+                 <div className="flex flex-wrap gap-4 items-center">
+                    <div className="flex bg-gray-800 p-1 border border-white/10 rounded-none mr-2">
+                       <button 
+                         onClick={() => setTranscriptType('Official')}
+                         className={`px-5 py-2.5 text-[10px] font-black uppercase tracking-widest transition-all ${transcriptType === 'Official' ? 'bg-[#FFD700] text-[#4B0082]' : 'text-gray-400 hover:text-white'}`}
+                       >Complete Registry</button>
+                       <button 
+                         onClick={() => setTranscriptType('Provisional')}
+                         className={`px-5 py-2.5 text-[10px] font-black uppercase tracking-widest transition-all ${transcriptType === 'Provisional' ? 'bg-[#FFD700] text-[#4B0082]' : 'text-gray-400 hover:text-white'}`}
+                       >Term Provisional</button>
+                    </div>
+                    
+                    {/* Zoom Controls */}
+                    <div className="flex items-center gap-2 bg-gray-800 px-4 py-2 rounded-lg border border-white/10">
+                      <button 
+                        onMouseDown={() => startZoom('out')}
+                        onMouseUp={stopZoom}
+                        onMouseLeave={stopZoom}
+                        onTouchStart={() => startZoom('out')}
+                        onTouchEnd={stopZoom}
+                        disabled={zoomLevel <= 10}
+                        className="p-2 bg-gray-700 text-white hover:bg-gray-600 transition-all disabled:opacity-30 disabled:cursor-not-allowed rounded select-none"
+                        title="Zoom Out (Ctrl+- or Ctrl+Scroll)"
+                      >
+                        <ZoomOut size={16} />
+                      </button>
+                      <button 
+                        onClick={handleZoomReset}
+                        className="px-3 py-2 bg-gray-700 text-white hover:bg-gray-600 transition-all text-[10px] font-bold rounded min-w-[60px] select-none"
+                        title="Reset Zoom (Ctrl+0)"
+                      >
+                        {zoomLevel}%
+                      </button>
+                      <button 
+                        onMouseDown={() => startZoom('in')}
+                        onMouseUp={stopZoom}
+                        onMouseLeave={stopZoom}
+                        onTouchStart={() => startZoom('in')}
+                        onTouchEnd={stopZoom}
+                        className="p-2 bg-gray-700 text-white hover:bg-gray-600 transition-all rounded select-none"
+                        title="Zoom In (Ctrl++ or Ctrl+Scroll)"
+                      >
+                        <ZoomIn size={16} />
+                      </button>
+                    </div>
+                    
+                    <button onClick={() => handlePrint('print')} className="flex items-center gap-2 px-8 py-3.5 bg-[#4B0082] text-white text-[10px] font-black uppercase tracking-widest hover:bg-black transition-all shadow-lg border border-white/10"><Printer size={18} /> Print Record</button>
+                    <button onClick={() => handlePrint('download')} className="flex items-center gap-2 px-8 py-3.5 bg-emerald-600 text-white text-[10px] font-black uppercase tracking-widest hover:bg-emerald-700 transition-all shadow-lg border border-white/10"><Download size={18} /> PDF Archive</button>
+                    <button onClick={handleDownloadWord} className="flex items-center gap-2 px-8 py-3.5 bg-blue-600 text-white text-[10px] font-black uppercase tracking-widest hover:bg-blue-700 transition-all shadow-lg border border-white/10"><Download size={18} /> Word</button>
+                    <button onClick={handleDownloadSVG} className="flex items-center gap-2 px-8 py-3.5 bg-purple-600 text-white text-[10px] font-black uppercase tracking-widest hover:bg-purple-700 transition-all shadow-lg border border-white/10"><Download size={18} /> SVG</button>
+                    <button onClick={() => handleShare('whatsapp')} className="flex items-center gap-2 px-8 py-3.5 bg-[#25D366] text-white text-[10px] font-black uppercase tracking-widest hover:bg-emerald-600 transition-all shadow-lg border border-white/10"><MessageCircle size={18} /> Send Data</button>
+                 </div>
+                 <button onClick={() => setShowTranscript(false)} className="p-4 bg-red-600 text-white hover:bg-red-700 transition-all shadow-xl group">
+                    <X size={24} className="group-hover:rotate-90 transition-transform" />
+                 </button>
+              </div>
+           
+           {/* Transcript Container - This gets zoomed */}
+           <div className="w-full flex justify-center p-4 md:p-8 pt-8 md:pt-12">
+             <div 
+               className="transcript-zoom-wrapper"
+               style={{ 
+                 transform: `scale(${zoomLevel / 100})`,
+                 transformOrigin: 'top center',
+                 transition: 'transform 0.2s ease-out',
+                 willChange: 'transform'
+               }}
+             >
+              <div 
+                id="official-transcript-root" 
+                className="bg-white shadow-2xl relative flex flex-col font-serif p-6 text-gray-950 print:m-0 print:shadow-none border-[6px] border-gray-100 border-double"
+                style={{ 
+                  width: '210mm'
+                }}
+              >
                  
                  {/* ENHANCED SECURITY LAYER - Multi-pattern anti-forgery system */}
                  <div className="absolute inset-0 pointer-events-none z-0 overflow-hidden">
@@ -1544,7 +1750,7 @@ export const Transcripts: React.FC<TranscriptsProps> = ({ students, courses, log
                     {/* Large Center Logo Watermark */}
                     <div className="absolute inset-0 flex items-center justify-center opacity-[0.12] pointer-events-none">
                       <img
-                        src={logo || "https://i.ibb.co/Gv2vPdJC/BMI-PNG.png"}
+                        src={logo || "/BMI.svg"}
                         className="h-[85%] w-auto object-contain"
                         alt=""
                         style={{ 
@@ -1559,7 +1765,7 @@ export const Transcripts: React.FC<TranscriptsProps> = ({ students, courses, log
                       {Array.from({ length: 12 }).map((_, i) => (
                         <img
                           key={`watermark-${i}`}
-                          src={logo || "https://i.ibb.co/Gv2vPdJC/BMI-PNG.png"}
+                          src={logo || "/BMI.svg"}
                           className="w-32 h-32 object-contain grayscale"
                           alt=""
                           style={{ 
@@ -1599,10 +1805,10 @@ export const Transcripts: React.FC<TranscriptsProps> = ({ students, courses, log
 
                  <div className="flex flex-col items-center border-b-2 border-gray-900 pb-3 mb-4 relative z-10">
                     <img 
-                      src={logo || "https://i.ibb.co/Gv2vPdJC/BMI-PNG.png"} 
+                      src={logo || "/BMI.svg"} 
                       className="h-16 mb-2 object-contain filter contrast-125" 
                       alt="BMI Logo"
-                      onError={(e) => { (e.target as HTMLImageElement).src = "https://i.ibb.co/Gv2vPdJC/BMI-PNG.png" }}
+                      onError={(e) => { (e.target as HTMLImageElement).src = "/BMI.svg" }}
                     />
                     <h1 className="text-2xl font-serif font-black tracking-tight text-gray-900 uppercase">BMI UNIVERSITY</h1>
                     <p className="text-[9px] font-sans font-black text-gray-600 uppercase tracking-[0.4em]">OFFICE OF THE REGISTRAR</p>
@@ -1712,30 +1918,7 @@ export const Transcripts: React.FC<TranscriptsProps> = ({ students, courses, log
                     </div>
                  </div>
               </div>
-
-              <div className="w-full mt-6 flex flex-wrap gap-4 items-center justify-between no-print p-6 bg-gray-900/95 backdrop-blur-xl border border-white/10 shadow-2xl relative overflow-hidden">
-                 <div className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-[#4B0082] via-[#FFD700] to-[#4B0082]"></div>
-                 <div className="flex flex-wrap gap-4 items-center">
-                    <div className="flex bg-gray-800 p-1 border border-white/10 rounded-none mr-2">
-                       <button 
-                         onClick={() => setTranscriptType('Official')}
-                         className={`px-5 py-2.5 text-[10px] font-black uppercase tracking-widest transition-all ${transcriptType === 'Official' ? 'bg-[#FFD700] text-[#4B0082]' : 'text-gray-400 hover:text-white'}`}
-                       >Complete Registry</button>
-                       <button 
-                         onClick={() => setTranscriptType('Provisional')}
-                         className={`px-5 py-2.5 text-[10px] font-black uppercase tracking-widest transition-all ${transcriptType === 'Provisional' ? 'bg-[#FFD700] text-[#4B0082]' : 'text-gray-400 hover:text-white'}`}
-                       >Term Provisional</button>
-                    </div>
-                    <button onClick={() => handlePrint('print')} className="flex items-center gap-2 px-8 py-3.5 bg-[#4B0082] text-white text-[10px] font-black uppercase tracking-widest hover:bg-black transition-all shadow-lg border border-white/10"><Printer size={18} /> Print Record</button>
-                    <button onClick={() => handlePrint('download')} className="flex items-center gap-2 px-8 py-3.5 bg-emerald-600 text-white text-[10px] font-black uppercase tracking-widest hover:bg-emerald-700 transition-all shadow-lg border border-white/10"><Download size={18} /> PDF Archive</button>
-                    <button onClick={handleDownloadWord} className="flex items-center gap-2 px-8 py-3.5 bg-blue-600 text-white text-[10px] font-black uppercase tracking-widest hover:bg-blue-700 transition-all shadow-lg border border-white/10"><Download size={18} /> Word</button>
-                    <button onClick={handleDownloadSVG} className="flex items-center gap-2 px-8 py-3.5 bg-purple-600 text-white text-[10px] font-black uppercase tracking-widest hover:bg-purple-700 transition-all shadow-lg border border-white/10"><Download size={18} /> SVG</button>
-                    <button onClick={() => handleShare('whatsapp')} className="flex items-center gap-2 px-8 py-3.5 bg-[#25D366] text-white text-[10px] font-black uppercase tracking-widest hover:bg-emerald-600 transition-all shadow-lg border border-white/10"><MessageCircle size={18} /> Send Data</button>
-                 </div>
-                 <button onClick={() => setShowTranscript(false)} className="p-4 bg-red-600 text-white hover:bg-red-700 transition-all shadow-xl group">
-                    <X size={24} className="group-hover:rotate-90 transition-transform" />
-                 </button>
-              </div>
+           </div>
            </div>
            </div>
         )
@@ -1798,3 +1981,14 @@ export const Transcripts: React.FC<TranscriptsProps> = ({ students, courses, log
     </div>
   );
 };
+
+
+
+
+
+
+
+
+
+
+

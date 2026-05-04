@@ -76,7 +76,7 @@ function formatDate(iso: string): string {
 }
 
 // ── BMI University Seal (the provided seal image) ────────────────────────────
-const BMI_SEAL = 'https://i.ibb.co/Gv2vPdJC/BMI-PNG.png'; // fallback logo
+const BMI_SEAL = '/BMI.svg'; // fallback logo
 // We'll use the actual seal provided by the user as a CSS-rendered element
 
 // ── Micro-text security border ────────────────────────────────────────────────
@@ -604,3 +604,4 @@ const Certificates: React.FC<CertificatesProps> = ({ students, logo }) => {
 };
 
 export default Certificates;
+

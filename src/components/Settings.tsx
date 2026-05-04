@@ -129,8 +129,8 @@ const Settings: React.FC<SettingsProps> = ({ currentLogo, onUpdateLogo, currentT
           let width = img.width;
           let height = img.height;
           
-          const MAX_WIDTH = 200;
-          const MAX_HEIGHT = 200;
+          const MAX_WIDTH = 800;
+          const MAX_HEIGHT = 800;
 
           if (width > height) {
             if (width > MAX_WIDTH) {
@@ -447,3 +447,4 @@ const Settings: React.FC<SettingsProps> = ({ currentLogo, onUpdateLogo, currentT
 };
 
 export default Settings;
+

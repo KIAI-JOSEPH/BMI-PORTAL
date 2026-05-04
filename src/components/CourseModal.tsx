@@ -60,7 +60,7 @@ const CourseModal: React.FC<CourseModalProps> = ({ isOpen, onClose, onSave, edit
         <div className="bg-gray-900 text-white p-8 md:p-10 flex flex-col md:flex-row justify-between items-center relative border-b-4 border-[#4B0082]">
            <div className="flex items-center gap-6">
               <div className="bg-white p-2 border-2 border-[#FFD700] shadow-xl">
-                 <img src="https://i.ibb.co/Gv2vPdJC/BMI-PNG.png" className="w-16 h-16 object-contain" alt="BMI Logo" />
+                 <img src="/BMI.svg" className="w-16 h-16 object-contain" alt="BMI Logo" />
               </div>
               <div>
                  <h2 className="text-3xl font-black tracking-tighter uppercase leading-none">BMI UNIVERSITY</h2>

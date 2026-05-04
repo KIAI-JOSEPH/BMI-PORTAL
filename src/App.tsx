@@ -111,7 +111,7 @@ function App() {
   const [isAuthenticating, setIsAuthenticating] = useState(true);
   const [currentView, setCurrentView] = useState('dashboard');
   const [theme, setTheme] = useState('light');
-  const [logo, setLogo] = useState("https://i.ibb.co/Gv2vPdJC/BMI-PNG.png");
+  const [logo, setLogo] = useState("/BMI.svg");
   const [isAIModalOpen, setIsAIModalOpen] = useState(false);
   const [showVerificationPage, setShowVerificationPage] = useState(false);
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
@@ -345,3 +345,4 @@ function App() {
 }
 
 export default App;
+
