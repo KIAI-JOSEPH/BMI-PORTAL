@@ -80,24 +80,28 @@ const StudentRegistrationModal: React.FC<StudentRegistrationModalProps> = ({ isO
   };
 
   const handleSubmit = async () => {
-    // Validate required fields
-    if (!formData.firstName || !formData.lastName || !formData.email || !formData.phone) {
-      setError('Please fill in all required fields (First Name, Last Name, Email, Phone)');
+    // Validate required fields (only First Name and Last Name are required)
+    if (!formData.firstName || !formData.lastName) {
+      setError('Please fill in all required fields (First Name, Last Name)');
       return;
     }
 
-    // Validate email format
-    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-    if (!emailRegex.test(formData.email)) {
-      setError('Please enter a valid email address');
-      return;
+    // Validate email format only if provided
+    if (formData.email && formData.email.trim()) {
+      const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+      if (!emailRegex.test(formData.email)) {
+        setError('Please enter a valid email address');
+        return;
+      }
     }
 
-    // Validate phone format (at least 10 digits)
-    const phoneDigits = formData.phone.replace(/\D/g, '');
-    if (phoneDigits.length < 10) {
-      setError('Please enter a valid phone number (at least 10 digits)');
-      return;
+    // Validate phone format only if provided (at least 10 digits)
+    if (formData.phone && formData.phone.trim()) {
+      const phoneDigits = formData.phone.replace(/\D/g, '');
+      if (phoneDigits.length < 10) {
+        setError('Please enter a valid phone number (at least 10 digits)');
+        return;
+      }
     }
 
     setIsSubmitting(true);
@@ -217,21 +221,23 @@ const StudentRegistrationModal: React.FC<StudentRegistrationModalProps> = ({ isO
            {/* Section B: Contact */}
            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
               <div className="space-y-1">
-                 <label className="text-[10px] font-bold uppercase text-gray-500 tracking-widest">Email Address</label>
+                 <label className="text-[10px] font-bold uppercase text-gray-500 tracking-widest">Email Address <span className="text-gray-400">(Optional)</span></label>
                  <input 
                    type="email" 
                    value={formData.email} 
                    onChange={(e) => handleChange('email', e.target.value)}
                    className="w-full p-3 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 outline-none font-medium text-sm focus:border-[#4B0082]"
+                   placeholder="student@example.com"
                  />
               </div>
               <div className="space-y-1">
-                 <label className="text-[10px] font-bold uppercase text-gray-500 tracking-widest">Phone Number</label>
+                 <label className="text-[10px] font-bold uppercase text-gray-500 tracking-widest">Phone Number <span className="text-gray-400">(Optional)</span></label>
                  <input 
                    type="text" 
                    value={formData.phone} 
                    onChange={(e) => handleChange('phone', e.target.value)}
                    className="w-full p-3 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 outline-none font-medium text-sm focus:border-[#4B0082]"
+                   placeholder="+254 700 000 000"
                  />
               </div>
            </div>

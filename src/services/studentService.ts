@@ -39,6 +39,13 @@ export interface StudentFilters {
  */
 export async function getStudents(filters?: StudentFilters): Promise<StudentsListResponse> {
   try {
+    console.log('[StudentService] getStudents called with filters:', filters);
+    
+    // Check if we have a token
+    const { getToken } = await import('./authService');
+    const token = getToken();
+    console.log('[StudentService] Current token:', token ? `${token.substring(0, 20)}...` : 'NULL');
+    
     const params = new URLSearchParams();
     if (filters?.page) params.append('page', filters.page.toString());
     if (filters?.perPage) params.append('perPage', filters.perPage.toString());
@@ -48,11 +55,19 @@ export async function getStudents(filters?: StudentFilters): Promise<StudentsLis
 
     const queryString = params.toString();
     const url = `${API_URL}/students${queryString ? `?${queryString}` : ''}`;
+    
+    console.log('[StudentService] Fetching from URL:', url);
 
     const response = await authFetch(url, {}, 8000);
+    console.log('[StudentService] Response status:', response.status);
+    console.log('[StudentService] Response ok:', response.ok);
+    
     const data: StudentsListResponse = await response.json();
+    console.log('[StudentService] Parsed response data:', data);
+    
     return data;
   } catch (error) {
+    console.error('[StudentService] Error in getStudents:', error);
     return {
       success: false,
       error: error instanceof Error ? error.message : 'Failed to fetch students',

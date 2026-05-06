@@ -12,7 +12,7 @@ async function setupCollections() {
   
   // Authenticate
   console.log('🔐 Authenticating...');
-  const authResponse = await fetch(`${PB_URL}/api/collections/_superusers/auth-with-password`, {
+  const authResponse = await fetch(`${PB_URL}/api/admins/auth-with-password`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({

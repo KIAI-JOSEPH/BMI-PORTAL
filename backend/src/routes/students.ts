@@ -2,8 +2,8 @@
 import { Hono } from 'hono';
 import { zValidator } from '@hono/zod-validator';
 import { z } from 'zod';
-import { getPocketBase } from '../services/pocketbase.js';
-import { authMiddleware, requireRole } from '../middleware/auth.js';
+import { getPocketBase, authenticateAdmin } from '../services/pocketbase.js';
+import { authMiddleware, requireRole, getUser } from '../middleware/auth.js';
 import { auditMiddleware, logAction } from '../middleware/audit.js';
 import { logger } from '../utils/logger.js';
 import { generateAvatarColor, parsePagination } from '../utils/helpers.js';
@@ -21,8 +21,8 @@ const studentSchema = z.object({
   lastName: z.string().min(1),
   middleName: z.string().optional(),
   gender: z.enum(['Male', 'Female']),
-  email: z.string().email(),
-  phone: z.string().min(10),
+  email: z.string().email().optional().or(z.literal('')),
+  phone: z.string().min(10).optional().or(z.literal('')),
   nationality: z.string().optional(),
   faculty: z.string().min(1),
   department: z.string().min(1),
@@ -44,6 +44,12 @@ const updateStudentSchema = studentSchema.partial();
 studentsRouter.get('/', requireRole('admin', 'registrar', 'faculty', 'staff'), async (c) => {
   try {
     const pb = getPocketBase();
+    
+    // Check if PocketBase is authenticated, re-authenticate if needed
+    if (!pb.authStore.isValid) {
+      logger.warn('PocketBase auth expired, re-authenticating...');
+      await authenticateAdmin();
+    }
     
     // Parse query parameters
     const { page, perPage, offset } = parsePagination(
@@ -68,13 +74,15 @@ studentsRouter.get('/', requireRole('admin', 'registrar', 'faculty', 'staff'), a
       filters.push(`(firstName ~ "${s}" || lastName ~ "${s}" || email ~ "${s}")`);
     }
     
-    const filterString = filters.join(' && ') || undefined;
+    const filterString = filters.length > 0 ? filters.join(' && ') : '';
     
-    // Fetch students
-    const result = await pb.collection('students').getList(page, perPage, {
-      filter: filterString,
-      sort: '-created',
-    });
+    // Fetch students - only include filter if we have one
+    const queryOptions: { sort: string; filter?: string } = { sort: '-created' };
+    if (filterString) {
+      queryOptions.filter = filterString;
+    }
+    
+    const result = await pb.collection('students').getList(page, perPage, queryOptions);
     
     return c.json<ApiResponse<Student[]>>({
       success: true,
@@ -140,7 +148,7 @@ studentsRouter.post(
       const data = c.req.valid('json');
       const pb = getPocketBase();
       
-      // Generate student ID
+      // Generate student ID (as a custom field, not the PocketBase ID)
       const year = new Date().getFullYear();
       const randomSuffix = Math.floor(Math.random() * 9000) + 1000;
       const studentId = `BMI-${year}-${randomSuffix}`;
@@ -149,8 +157,8 @@ studentsRouter.post(
       const avatarColor = generateAvatarColor(`${data.firstName} ${data.lastName}`);
       
       const newStudent = await pb.collection('students').create({
-        id: studentId,
         ...data,
+        studentId,  // Store as studentId field, not id
         avatarColor,
         photoZoom: 1,
         photoPosition: { x: 0, y: 0 },

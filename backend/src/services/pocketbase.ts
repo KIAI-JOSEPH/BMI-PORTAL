@@ -19,16 +19,34 @@ export function getPocketBase(): PocketBase {
 }
 
 /**
- * Authenticate as superuser (PocketBase 0.22+ API)
+ * Authenticate as admin (PocketBase 0.22 API)
+ * Using direct HTTP call to avoid SDK version issues
  */
 export async function authenticateAdmin(): Promise<void> {
   const pb = getPocketBase();
   try {
-    // Use _superusers collection (PocketBase 0.22+)
-    await pb.collection('_superusers').authWithPassword(
-      CONFIG.POCKETBASE_ADMIN_EMAIL,
-      CONFIG.POCKETBASE_ADMIN_PASSWORD
-    );
+    // Direct HTTP call to admin auth endpoint
+    const response = await fetch(`${CONFIG.POCKETBASE_URL}/api/admins/auth-with-password`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        identity: CONFIG.POCKETBASE_ADMIN_EMAIL,
+        password: CONFIG.POCKETBASE_ADMIN_PASSWORD,
+      }),
+    });
+
+    if (!response.ok) {
+      const error = await response.json();
+      throw new Error(`Admin auth failed: ${error.message || response.statusText}`);
+    }
+
+    const data = await response.json();
+    
+    // Manually set the auth store
+    pb.authStore.save(data.token, data.admin);
+    
     logger.info('PocketBase admin authenticated');
   } catch (error) {
     logger.error('Failed to authenticate PocketBase admin:', error);
@@ -46,8 +64,22 @@ export function scheduleAdminTokenRefresh(): void {
     try {
       const pb = getPocketBase();
       if (pb.authStore.isValid) {
-        await pb.collection('_superusers').authRefresh();
-        logger.info('PocketBase admin token refreshed');
+        // Direct HTTP call to admin refresh endpoint
+        const response = await fetch(`${CONFIG.POCKETBASE_URL}/api/admins/auth-refresh`, {
+          method: 'POST',
+          headers: {
+            'Authorization': pb.authStore.token,
+          },
+        });
+        
+        if (response.ok) {
+          const data = await response.json();
+          pb.authStore.save(data.token, data.admin);
+          logger.info('PocketBase admin token refreshed');
+        } else {
+          await authenticateAdmin();
+          logger.info('PocketBase admin re-authenticated');
+        }
       } else {
         await authenticateAdmin();
         logger.info('PocketBase admin re-authenticated');
@@ -181,10 +213,25 @@ async function createCollection(name: string): Promise<void> {
   };
   
   try {
+    // Check if collection already exists to avoid 400 error
+    try {
+      await pb.collections.getOne(name);
+      logger.info(`Collection '${name}' already exists, skipping creation`);
+      return;
+    } catch (e) {
+      // Collection doesn't exist, proceed to create
+    }
+
+    const fieldsSchema = schema[name]?.fields || {};
+    const fieldsArray = Object.entries(fieldsSchema).map(([fieldName, config]) => ({
+      name: fieldName,
+      ...config
+    }));
+
     await pb.collections.create({
       name,
       type: 'base',
-      schema: schema[name]?.fields || {},
+      schema: fieldsArray,
       options: {
         allowEmailAuth: name === 'users',
         allowOAuth2Auth: name === 'users',

@@ -290,7 +290,20 @@ const terms = ['Fall 2022', 'Spring 2023', 'Fall 2023', 'Spring 2024'];
 async function addMockStudents() {
   try {
     console.log('🔐 Authenticating as admin...');
-    await pb.admins.authWithPassword(ADMIN_EMAIL, ADMIN_PASSWORD);
+    // Use direct HTTP call for PocketBase 0.22+ admin auth
+    const authResponse = await fetch('http://127.0.0.1:8090/api/admins/auth-with-password', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ identity: ADMIN_EMAIL, password: ADMIN_PASSWORD }),
+    });
+    
+    if (!authResponse.ok) {
+      const err = await authResponse.json();
+      throw new Error(`Admin auth failed: ${err.message || authResponse.statusText}`);
+    }
+    
+    const authData = await authResponse.json();
+    pb.authStore.save(authData.token, authData.admin);
     console.log('✅ Authenticated successfully\n');
 
     for (const student of mockStudents) {

@@ -48,38 +48,8 @@ const initialCourses: Course[] = [
     { id: 'CRS-606', name: 'MA in Christian Leadership', code: 'MACL-600', faculty: 'Theology', department: 'Leadership', level: 'Postgraduate', credits: 60, status: 'Published', description: 'Developing executive leadership skills for ministry.', syllabus: 'Organizational Leadership, Strategic Planning, Conflict Resolution.' },
 ];
 
-const initialStudents: Student[] = Array.from({ length: 50 }, (_, i) => {
-  const fNames = ['James', 'Mary', 'John', 'Patricia', 'Robert', 'Jennifer', 'Michael', 'Linda', 'William', 'Elizabeth', 'David', 'Barbara', 'Richard', 'Susan', 'Joseph', 'Jessica', 'Thomas', 'Sarah', 'Charles', 'Karen', 'Christopher', 'Nancy', 'Daniel', 'Lisa', 'Matthew', 'Betty', 'Anthony', 'Margaret', 'Mark', 'Sandra', 'Paul', 'Ashley', 'Steven', 'Kimberly', 'Andrew', 'Emily', 'Kenneth', 'Donna', 'Joshua', 'Michelle', 'Kevin', 'Carol', 'Brian', 'Amanda', 'George', 'Melissa', 'Edward', 'Deborah', 'Ronald', 'Stephanie'];
-  const lNames = ['Smith', 'Johnson', 'Williams', 'Jones', 'Brown', 'Davis', 'Miller', 'Wilson', 'Moore', 'Taylor', 'Anderson', 'Thomas', 'Jackson', 'White', 'Harris', 'Martin', 'Thompson', 'Garcia', 'Martinez', 'Robinson', 'Clark', 'Rodriguez', 'Lewis', 'Lee', 'Walker', 'Hall', 'Allen', 'Young', 'Hernandez', 'King', 'Wright', 'Lopez', 'Hill', 'Scott', 'Green', 'Adams', 'Baker', 'Gonzalez', 'Nelson', 'Carter', 'Mitchell', 'Perez', 'Roberts', 'Turner', 'Phillips', 'Campbell', 'Parker', 'Evans', 'Edwards', 'Collins'];
-  const faculties = ['Theology', 'ICT', 'Business', 'Education'];
-  const depts = { 'Theology': 'Biblical Studies', 'ICT': 'Computer Science', 'Business': 'Management', 'Education': 'Curriculum Dev' };
-  const levels: Student['academicLevel'][] = ['Diploma', 'Degree', 'Masters', 'PhD'];
-  
-  const fn = fNames[i % fNames.length];
-  const ln = lNames[(i * 3 + 7) % lNames.length];
-  const fac = faculties[i % faculties.length];
-  const lvl = levels[i % levels.length];
-  
-  return {
-    id: `BMI-2023-${(i + 101).toString()}`,
-    firstName: fn,
-    lastName: ln,
-    email: `${fn.toLowerCase()}.${ln.toLowerCase()}@bmi.edu`,
-    phone: `+254 7${Math.floor(Math.random() * 90)} ${Math.floor(Math.random() * 900)} ${Math.floor(Math.random() * 900)}`,
-    gender: i % 2 === 0 ? 'Male' : 'Female',
-    faculty: fac,
-    department: depts[fac as keyof typeof depts],
-    careerPath: `${lvl} in ${fac}`,
-    academicLevel: lvl,
-    admissionYear: (2021 + (i % 3)).toString(),
-    enrollmentTerm: 'Fall 2023',
-    status: i > 45 ? 'Graduated' : 'Active',
-    standing: i % 15 === 0 ? 'Probation' : 'Good',
-    gpa: parseFloat((2.0 + Math.random() * 2.0).toFixed(2)),
-    avatarColor: ['bg-purple-600', 'bg-blue-600', 'bg-emerald-600', 'bg-amber-600', 'bg-rose-600'][i % 5],
-    photoZoom: 1
-  };
-});
+// Initialize with empty array - will be populated from API
+const initialStudents: Student[] = [];
 
 const initialStaff: StaffMember[] = [
     { id: 'STF-001', name: 'Dr. Samuel Kiptoo', role: 'Dean', department: 'School of Theology', email: 's.kiptoo@bmi.edu', phone: '+254 711 000 001', status: 'Full-time', category: 'Academic', specialization: 'Systematic Theology', office: 'Zion Wing 101', officeHours: 'Mon-Wed 10-12', avatarColor: 'bg-purple-700', joinDate: '2015-08-01' },
@@ -173,6 +143,7 @@ function App() {
 
   // Core Data States — students NOT persisted to localStorage (PII protection)
   const [students, setStudents] = useState<Student[]>(initialStudents);
+  const [isLoadingStudents, setIsLoadingStudents] = useState(false);
 
   const [staff, setStaff] = useState<StaffMember[]>(() => {
     const saved = localStorage.getItem('bmi_data_staff');
@@ -201,6 +172,43 @@ function App() {
   useEffect(() => { localStorage.setItem('bmi_data_courses', JSON.stringify(courses)); }, [courses]);
   useEffect(() => { localStorage.setItem('bmi_data_library', JSON.stringify(library)); }, [library]);
 
+  // Fetch students from API after login
+  useEffect(() => {
+    if (isLoggedIn) {
+      const fetchStudents = async () => {
+        setIsLoadingStudents(true);
+        try {
+          console.log('[Dashboard Sync] Fetching students from API...');
+          const { getStudents } = await import('./services/studentService');
+          
+          // Fetch with high perPage to get all students
+          const result = await getStudents({ perPage: 1000 });
+          
+          console.log('[Dashboard Sync] Student fetch result:', result);
+          
+          if (result.success && result.data) {
+            console.log('[Dashboard Sync] Setting students:', result.data.length, 'students');
+            setStudents(result.data);
+          } else {
+            console.error('[Dashboard Sync] Failed to fetch students:', result.error);
+            setStudents([]);
+          }
+        } catch (error) {
+          console.error('[Dashboard Sync] Exception while fetching students:', error);
+          setStudents([]);
+        } finally {
+          setIsLoadingStudents(false);
+        }
+      };
+      
+      fetchStudents();
+    } else {
+      console.log('[Dashboard Sync] Not logged in, skipping student fetch');
+      setStudents([]);
+      setIsLoadingStudents(false);
+    }
+  }, [isLoggedIn]);
+
   // Handle Theme
   useEffect(() => {
     if (theme === 'dark') {
@@ -217,6 +225,15 @@ function App() {
     tuition: transactions.filter(t => t.status === 'Paid').reduce((acc, curr) => acc + curr.amt, 0),
     events: 5 // Mock
   };
+
+  // Debug: Log stats whenever they change
+  useEffect(() => {
+    console.log('[Dashboard Sync] Stats updated:', {
+      studentsCount: students.length,
+      studentsArray: students,
+      statsObject: stats
+    });
+  }, [students, stats]);
 
   const handleAddStudent = (student: Student) => {
     setStudents(prev => [student, ...prev]);

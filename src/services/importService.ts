@@ -318,7 +318,17 @@ export function processExamImport(
 }
 
 // ─── Generate template download ───────────────────────────────────────────────
-export function downloadTemplate(type: 'students' | 'exams') {
+export async function importFromGoogle(type: 'students' | 'exams', payload: Record<string, any> = {}): Promise<any> {
+  const url = `/api/v1/import/${type}/google`;
+  const response = await fetch(url, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(payload),
+  });
+  return response.json();
+}
+
+export function downloadTemplate(type: 'students' | 'exams'): void {
   const wb = XLSX.utils.book_new();
 
   if (type === 'students') {

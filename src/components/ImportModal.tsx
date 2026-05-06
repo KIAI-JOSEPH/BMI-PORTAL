@@ -9,6 +9,7 @@ import {
   downloadTemplate,
   ImportResult,
   ExamImportRow,
+  importFromGoogle,
 } from '../services/importService';
 import { Student, Course } from '../types';
 
@@ -53,6 +54,77 @@ const ImportModal: React.FC<ImportModalProps> = ({
   };
 
   const handleClose = () => { reset(); onClose(); };
+
+/*
+      const handleGoogleImport = async () => {
+      // Simple prompt UI – in a real app you'd use a proper modal/form
+      const sheetId = window.prompt('Enter Google Sheet ID (leave blank to use server‑side default)');
+      const sheetName = window.prompt('Enter sheet/tab name (default "Students" or "Exams")');
+      const payload:any = {};
+      if (sheetId) payload.spreadsheetId = sheetId;
+      if (sheetName) payload.sheetName = sheetName;
+      if (type === 'exams') {
+        const collectionName = window.prompt('Target collection name (optional)');
+        if (collectionName) payload.collectionName = collectionName;
+      }
+      setStep('importing');
+      try {
+        const fetchResult = await importFromGoogle(type, payload);
+        // The server returns data in the same shape as the bulk JSON import
+        if (type === 'students') {
+          const { imported = [], errors = [] } = fetchResult.data || {};
+          setResult({
+            success: true,
+            imported,
+            skipped: 0,
+            errors,
+            newStudents: imported,
+            newCourses: [],
+            newFields: [],
+          });
+        } else {
+          const { imported = [], errors = [], collectionName: coll } = fetchResult.data || {};
+          setResult({
+            success: true,
+            imported,
+            skipped: 0,
+            errors,
+            newStudents: [],
+            newCourses: [],
+            newFields: [],
+            collectionName: coll,
+          } as any);
+        }
+        setStep('preview');
+      } catch (e:any) {
+        setImportErrors([e.message || 'Google import failed']);
+        setStep('upload');
+      }
+*/
+
+/*
+    try {
+      const rows = await parseFile(file);
+      if (rows.length === 0) {
+        setImportErrors(['File is empty or has no data rows.']);
+        return;
+      }
+
+      if (type === 'students') {
+        const { mapped } = mapStudentRows(rows);
+        const res = processStudentImport(mapped, existingStudents);
+        setResult(res);
+      } else {
+        const { mapped, dynamicColumns, isTranscriptFormat } = mapExamRows(rows);
+        const res = processExamImport(mapped, dynamicColumns, existingStudents, existingCourses, isTranscriptFormat);
+        setResult(res);
+      }
+      setStep('preview');
+    } catch (err: any) {
+      setImportErrors([err.message]);
+    }
+  };
+*/
 
   const handleFile = async (file: File) => {
     setFileName(file.name);
@@ -155,7 +227,12 @@ const ImportModal: React.FC<ImportModalProps> = ({
                 </button>
               </div>
 
-              {/* Exam collection name */}
+              <button
+                onClick={handleGoogleImport}
+                className="mt-3 flex items-center gap-2 px-4 py-2 bg-green-600 text-white text-[10px] font-black uppercase tracking-widest hover:bg-green-700 transition-colors"
+              >
+                <Upload size={12} className="text-[#FFD700]" /> Import from Google Sheet
+              </button>
               {type === 'exams' && (
                 <div className="space-y-1">
                   <label className="text-[10px] font-black uppercase text-gray-500 tracking-widest">

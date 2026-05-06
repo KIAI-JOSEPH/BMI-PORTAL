@@ -12,19 +12,28 @@ importRouter.use('*', authMiddleware);
 importRouter.use('*', requireRole('admin', 'registrar'));
 
 // Strict schema for imported student rows
+// ----------- Google Sheet Import Support -----------
+// These routes pull data directly from a Google Sheet using
+// google-spreadsheets-orm (npm: google-spreadsheets-orm).
+// The spreadsheet ID can be supplied in the request body or via
+// environment variables GOOGLE_SHEET_ID_STUDENTS / GOOGLE_SHEET_ID_EXAMS.
+// The sheet name defaults to "Students" or "Exams" respectively if not provided.
+// The data is mapped to the same internal schemas used for file‑based import
+// and then persisted through PocketBase just like the bulk JSON import.
+
 const importStudentSchema = z.object({
-  firstName: z.string().min(1).max(100),
-  lastName: z.string().min(1).max(100),
-  email: z.string().email().max(200),
+  firstName: z.string().min(1).optional().default('Unknown'),
+  lastName: z.string().min(1).optional().default('Student'),
+  email: z.string().email().optional().default('unknown@bmi.edu'),
   phone: z.string().max(30).optional().default('+254 700 000 000'),
   gender: z.enum(['Male', 'Female']).optional().default('Male'),
   faculty: z.string().max(100).optional().default('General'),
   department: z.string().max(100).optional().default('General'),
   academicLevel: z.enum(['Diploma', 'Degree', 'Masters', 'PhD']).optional().default('Degree'),
-  admissionYear: z.string().max(4).optional(),
-  enrollmentTerm: z.string().max(50).optional(),
-  status: z.enum(['Active', 'Applicant', 'On Leave', 'Graduated', 'Suspended']).optional().default('Active'),
-  careerPath: z.string().max(200).optional(),
+  admissionYear: z.string().max(4).optional().default(new Date().getFullYear().toString()),
+  enrollmentTerm: z.string().max(50).optional().default('Fall ' + new Date().getFullYear()),
+  status: z.enum(['Active', 'Applicant', 'On Leave', 'Graduated', 'Suspended']).optional().default('Applicant'),
+  careerPath: z.string().max(200).optional().default('Degree in General'),
   avatarColor: z.string().max(50).optional().default('bg-purple-600'),
   photoZoom: z.number().optional().default(1),
   standing: z.enum(['Honor Roll', 'Good', 'Probation', 'Warning']).optional().default('Good'),
@@ -252,5 +261,160 @@ importRouter.post('/exams', async (c) => {
     }, 500);
   }
 });
+
+/**
+ * POST /api/v1/import/students/google
+ * Pull student data from a Google Sheet and bulk‑create records.
+ */
+importRouter.post('/students/google', async (c) => {
+  try {
+    const body = await c.req.json();
+    const spreadsheetId = body.spreadsheetId || process.env.GOOGLE_SHEET_ID_STUDENTS;
+    const sheetName = body.sheetName || 'Students';
+    if (!spreadsheetId) {
+      return c.json<ApiResponse<never>>({ success: false, error: 'Google Sheet ID not provided' }, 400);
+    }
+    // Google auth – service account credentials via env vars JSON string
+    const auth = new (await import('google-auth-library')).GoogleAuth({
+      scopes: ['https://www.googleapis.com/auth/spreadsheets.readonly'],
+    });
+    const { GoogleSpreadsheetOrm } = await import('google-spreadsheets-orm');
+    const orm = new GoogleSpreadsheetOrm<Record<string, any>>({
+      spreadsheetId,
+      sheet: sheetName,
+      auth,
+    });
+    const rows = await orm.all();
+
+    // Simple mapper – expects column headers that roughly match the importStudentSchema fields.
+    const mapRow = (row: any) => ({
+      firstName: row['First Name'] || row.firstName || row.first_name,
+      lastName: row['Last Name'] || row.lastName || row.last_name,
+      email: row['Email'] || row.email,
+      phone: row['Phone'] || row.phone,
+      gender: row['Gender'] || row.gender,
+      faculty: row['Faculty'] || row.faculty,
+      department: row['Department'] || row.department,
+      academicLevel: row['Academic Level'] || row.academicLevel,
+      admissionYear: row['Admission Year'] || row.admissionYear,
+      enrollmentTerm: row['Enrollment Term'] || row.enrollmentTerm,
+      status: row['Status'] || row.status,
+      careerPath: row['Career Path'] || row.careerPath,
+      standing: row['Standing'] || row.standing,
+      gpa: row['GPA'] !== undefined ? Number(row['GPA']) : undefined,
+      avatarColor: row['Avatar Color'] || undefined,
+      photoZoom: row['Photo Zoom'] !== undefined ? Number(row['Photo Zoom']) : undefined,
+    });
+
+    const mappedRows = rows.map(mapRow);
+    const pb = getPocketBase();
+    const imported: Student[] = [];
+    const errors: string[] = [];
+    for (let i = 0; i < mappedRows.length; i++) {
+      const parsed = importStudentSchema.safeParse(mappedRows[i]);
+      if (!parsed.success) {
+        errors.push(`Row ${i + 1}: ${parsed.error.issues.map(e => e.message).join(', ')}`);
+        continue;
+      }
+      try {
+        const created = await pb.collection('students').create(parsed.data);
+        imported.push(created as unknown as Student);
+      } catch (e: any) {
+        errors.push(`Row ${i + 1}: ${e.message || 'Create failed'}`);
+      }
+    }
+    return c.json<ApiResponse<{ imported: Student[]; errors: string[] }>>({
+      success: true,
+      data: { imported, errors },
+      message: `Imported ${imported.length} students from Google Sheet. ${errors.length} errors.`,
+    });
+  } catch (error) {
+    logger.error('Google Sheet student import error:', error);
+    return c.json<ApiResponse<never>>({ success: false, error: 'Failed to import students from Google Sheet' }, 500);
+  }
+});
+
+/**
+ * POST /api/v1/import/exams/google
+ * Pull exam/grade data from a Google Sheet and bulk‑create records.
+ */
+importRouter.post('/exams/google', async (c) => {
+  try {
+    const body = await c.req.json();
+    const spreadsheetId = body.spreadsheetId || process.env.GOOGLE_SHEET_ID_EXAMS;
+    const sheetName = body.sheetName || 'Exams';
+    if (!spreadsheetId) {
+      return c.json<ApiResponse<never>>({ success: false, error: 'Google Sheet ID not provided' }, 400);
+    }
+    const auth = new (await import('google-auth-library')).GoogleAuth({
+      scopes: ['https://www.googleapis.com/auth/spreadsheets.readonly'],
+    });
+    const { GoogleSpreadsheetOrm } = await import('google-spreadsheets-orm');
+    const orm = new GoogleSpreadsheetOrm<Record<string, any>>({
+      spreadsheetId,
+      sheet: sheetName,
+      auth,
+    });
+    const rows = await orm.all();
+
+    const mapRow = (row: any) => ({
+      studentId: row['Student ID'] || row.studentId || row.student_id,
+      studentName: row['Student Name'] || row.studentName,
+      course: row['Course'] || row.course,
+      courseCode: row['Course Code'] || row.courseCode,
+      midterm: row['Midterm'] !== undefined ? Number(row['Midterm']) : undefined,
+      final: row['Final'] !== undefined ? Number(row['Final']) : undefined,
+      // keep any additional columns as dynamic fields
+      ...Object.fromEntries(Object.entries(row).filter(([k]) => !['Student ID','Student Name','Course','Course Code','Midterm','Final'].includes(k))),
+    });
+    const mappedRows = rows.map(mapRow);
+    const pb = getPocketBase();
+    const imported: any[] = [];
+    const errors: string[] = [];
+    for (let i = 0; i < mappedRows.length; i++) {
+      const parsed = importExamSchema.safeParse(mappedRows[i]);
+      if (!parsed.success) {
+        errors.push(`Row ${i + 1}: ${parsed.error.issues.map(e => e.message).join(', ')}`);
+        continue;
+      }
+      try {
+        // Use the collection name supplied (or default) – client decides collectionName via request
+        const collectionName = body.collectionName || `exams_${new Date().getFullYear()}`;
+        // Ensure collection exists – reuse the same logic from existing /exams import route
+        let collection;
+        try {
+          collection = await pb.collections.getOne(collectionName);
+        } catch {
+          // create collection dynamically
+          const dynamicFields = Object.keys(parsed.data).filter(k => !['studentId','studentName','course','courseCode','midterm','final'].includes(k));
+          const fields = [
+            { name: 'studentId', type: 'text', required: true },
+            { name: 'studentName', type: 'text', required: true },
+            { name: 'course', type: 'text', required: true },
+            { name: 'courseCode', type: 'text', required: false },
+            { name: 'midterm', type: 'number', required: false },
+            { name: 'final', type: 'number', required: false },
+            ...dynamicFields.map(f => ({ name: f.replace(/[^a-zA-Z0-9_]/g, '_'), type: 'number', required: false })),
+          ];
+          collection = await pb.collections.create({ name: collectionName, type: 'base', schema: fields });
+        }
+        const created = await pb.collection(collectionName).create(parsed.data);
+        imported.push(created);
+      } catch (e: any) {
+        errors.push(`Row ${i + 1}: ${e.message || 'Create failed'}`);
+      }
+    }
+    return c.json<ApiResponse<{ imported: any[]; errors: string[]; collectionName: string }>>({
+      success: true,
+      data: { imported, errors, collectionName: body.collectionName || `exams_${new Date().getFullYear()}` },
+      message: `Imported ${imported.length} exam records. ${errors.length} errors.`,
+    });
+  } catch (error) {
+    logger.error('Google Sheet exam import error:', error);
+    return c.json<ApiResponse<never>>({ success: false, error: 'Failed to import exams from Google Sheet' }, 500);
+  }
+});
+
+
 
 export default importRouter;
