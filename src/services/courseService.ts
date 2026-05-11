@@ -1,3 +1,4 @@
+import { API_URL } from './config';
 /**
  * BMI UMS - Course Service
  */
@@ -5,7 +6,16 @@
 import { authFetch } from './authService';
 import { Course } from '../types';
 
-const API_URL = '/api/v1';
+async function parseJsonSafe(response: Response): Promise<any> {
+    const text = await response.text();
+    if (!text) return null;
+    try {
+        return JSON.parse(text);
+    } catch {
+        return null;
+    }
+}
+
 
 export interface CourseResponse {
   success: boolean;
@@ -36,7 +46,7 @@ export async function getCourses(filters?: any): Promise<CourseListResponse> {
     const queryString = params.toString();
     const url = `${API_URL}/courses${queryString ? `?${queryString}` : ''}`;
     const response = await authFetch(url);
-    return await response.json();
+    return await parseJsonSafe(response);
   } catch (error) {
     return { success: false, error: 'Failed to fetch courses' };
   }
@@ -48,7 +58,7 @@ export async function createCourse(data: Partial<Course>): Promise<CourseRespons
       method: 'POST',
       body: JSON.stringify(data),
     });
-    return await response.json();
+    return await parseJsonSafe(response);
   } catch (error) {
     return { success: false, error: 'Failed to create course' };
   }
@@ -60,7 +70,7 @@ export async function updateCourse(id: string, data: Partial<Course>): Promise<C
       method: 'PATCH',
       body: JSON.stringify(data),
     });
-    return await response.json();
+    return await parseJsonSafe(response);
   } catch (error) {
     return { success: false, error: 'Failed to update course' };
   }
@@ -69,7 +79,7 @@ export async function updateCourse(id: string, data: Partial<Course>): Promise<C
 export async function deleteCourse(id: string): Promise<CourseResponse> {
   try {
     const response = await authFetch(`${API_URL}/courses/${id}`, { method: 'DELETE' });
-    return await response.json();
+    return await parseJsonSafe(response);
   } catch (error) {
     return { success: false, error: 'Failed to delete course' };
   }
@@ -78,7 +88,7 @@ export async function deleteCourse(id: string): Promise<CourseResponse> {
 export async function getCourseStats(): Promise<any> {
   try {
     const response = await authFetch(`${API_URL}/courses/stats/overview`);
-    return await response.json();
+    return await parseJsonSafe(response);
   } catch (error) {
     return { success: false, error: 'Failed to fetch course statistics' };
   }

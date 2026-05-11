@@ -1,3 +1,4 @@
+import { sanitizeFilter } from '../utils/helpers';
 // BMI UMS - Finance Routes
 import { Hono } from 'hono';
 import { zValidator } from '@hono/zod-validator';
@@ -69,11 +70,10 @@ financeRouter.get('/transactions', requireRole('admin', 'registrar', 'student'),
     const status = c.req.query('status');
     const search = c.req.query('search');
 
-    const safe = (v: string) => v.replace(/["'\\]/g, '').substring(0, 100);     
     const filters: string[] = [];
-    if (status) filters.push(`status = "${safe(status)}"`);
+    if (status) filters.push(`status = "${sanitizeFilter(status)}"`);
     if (search) {
-      const s = safe(search);
+      const s = sanitizeFilter(search);
       filters.push(`(name ~ "${s}" || ref ~ "${s}" || desc ~ "${s}")`);
     }
 

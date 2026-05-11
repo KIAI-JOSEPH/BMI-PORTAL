@@ -1,5 +1,6 @@
 
 import React, { useState, useEffect } from 'react';
+import { authFetch } from '../services/authService';
 import { Save, Bell, Shield, Globe, Moon, Sun, Smartphone, Mail, Upload, ImageIcon, Check, AlertTriangle, Database } from 'lucide-react';
 
 interface SettingsProps {
@@ -81,30 +82,42 @@ const Settings: React.FC<SettingsProps> = ({ currentLogo, onUpdateLogo, currentT
     }, 1000);
   };
 
-  const handlePasswordUpdate = () => {
-    if (!passwordData.current || !passwordData.newPass || !passwordData.confirm) {
-        alert("Security Protocol: All password fields are mandatory.");
-        return;
-    }
-    if (passwordData.newPass !== passwordData.confirm) {
-        alert("Security Protocol: New password confirmation mismatch.");
-        return;
-    }
-    if (passwordData.newPass.length < 8) {
-        alert("Security Protocol: Password must satisfy minimum length (8 chars).");
-        return;
-    }
-
-    setIsLoading(true);
-    // Simulate API call delay
-    setTimeout(() => {
-        setIsLoading(false);
-        setPasswordData({ current: '', newPass: '', confirm: '' }); // Reset form
-        setToastMessage('Credential Update Authorized');
-        setShowToast(true);
-        setTimeout(() => setShowToast(false), 3000);
-    }, 1500);
-  };
+    const handlePasswordUpdate = async () => {
+        if (!passwordForm.newPassword || !passwordForm.confirmPassword) {
+            setToastMessage('Please fill in all password fields');
+            return;
+        }
+        if (passwordForm.newPassword !== passwordForm.confirmPassword) {
+            setToastMessage('Passwords do not match');
+            return;
+        }
+        if (passwordForm.newPassword.length < 8) {
+            setToastMessage('Password must be at least 8 characters');
+            return;
+        }
+        setIsLoading(true);
+        try {
+            const response = await authFetch('/api/v1/auth/change-password', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    currentPassword: passwordForm.currentPassword,
+                    newPassword: passwordForm.newPassword,
+                }),
+            });
+            const data = await response.json();
+            if (data.success) {
+                setToastMessage('Password updated successfully');
+                setPasswordForm({ currentPassword: '', newPassword: '', confirmPassword: '' });
+            } else {
+                setToastMessage(data.error || 'Failed to update password');
+            }
+        } catch (error) {
+            setToastMessage('Failed to update password. Please try again.');
+        } finally {
+            setIsLoading(false);
+        }
+    };
 
   const handleResetSystem = () => {
     if (window.confirm("CRITICAL SECURITY WARNING:\n\nThis action will PURGE ALL INSTITUTIONAL DATA (Student Registries, Financial Ledgers, Staff Records, etc.) and restore the system to factory defaults.\n\nThis action is irreversible and will log a security event.\n\nAre you sure you want to proceed?")) {
@@ -447,4 +460,3 @@ const Settings: React.FC<SettingsProps> = ({ currentLogo, onUpdateLogo, currentT
 };
 
 export default Settings;
-

@@ -1,3 +1,4 @@
+import { sanitizeFilter } from '../utils/helpers';
 /**
  * BMI UMS - Grades API Routes (New Grading System)
  * Handles comprehensive grade management with weighted assessments
@@ -301,7 +302,7 @@ gradeRouter.post('/', requireRole('admin', 'registrar', 'faculty', 'staff'), asy
 
   } catch (error: any) {
     logger.error('Grade creation error:', error);
-    return c.json({ success: false, error: error.message || 'Failed to create grade' }, 500);
+    return c.json({ success: false, error: 'Failed to create grade' }, 500);
   }
 });
 
@@ -344,7 +345,7 @@ gradeRouter.get('/', requireRole('admin', 'registrar', 'faculty', 'staff', 'stud
 
   } catch (error: any) {
     logger.error('Grade fetch error:', error);
-    return c.json({ success: false, error: error.message || 'Failed to fetch grades' }, 500);
+    return c.json({ success: false, error: 'Failed to fetch grades' }, 500);
   }
 });
 
@@ -377,7 +378,7 @@ gradeRouter.get('/:id', requireRole('admin', 'registrar', 'faculty', 'staff', 's
     logger.error('Grade fetch error:', error);
     return c.json<ApiResponse<never>>({
       success: false,
-      error: error.message || 'Grade not found',
+      error: 'Grade not found',
     }, 404);
   }
 });
@@ -482,7 +483,7 @@ gradeRouter.delete('/:id', requireRole('admin', 'registrar'), async (c) => {
     logger.error('Grade deletion error:', error);
     return c.json<ApiResponse<never>>({
       success: false,
-      error: error.message || 'Failed to delete grade',
+      error: 'Failed to delete grade',
     }, 500);
   }
 });

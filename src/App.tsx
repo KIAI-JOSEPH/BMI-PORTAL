@@ -1,3 +1,4 @@
+import ErrorBoundary from './components/ErrorBoundary';
 
 import React, { useState, useEffect, useCallback } from 'react';
 import { Menu } from 'lucide-react';
@@ -194,7 +195,8 @@ function App() {
 
   // Handle verification page (public access) - ONLY method
   if (showVerificationPage) {
-    return <VerificationPage logo={logo} />;
+    return <VerificationPage logo={logo} />
+        </ErrorBoundary>;
   }
 
   if (isAuthenticating) {
@@ -208,6 +210,7 @@ function App() {
               alt="BMI University"
               className="w-full h-full object-contain"
             />
+        </ErrorBoundary>
           </div>
           {/* Spinner */}
           <div className="w-10 h-10 border-4 border-[#FFD700]/30 border-t-[#FFD700] rounded-full animate-spin"></div>
@@ -222,7 +225,8 @@ function App() {
   }
 
   if (!isLoggedIn) {
-    return <Login onLogin={(_token, _user) => setIsLoggedIn(true)} logo={logo} />;
+    return <Login onLogin={(_token, _user) => setIsLoggedIn(true)} logo={logo} />
+        </ErrorBoundary>;
   }
 
   return (
@@ -235,6 +239,7 @@ function App() {
         aria-label="Open Menu"
       >
         <Menu size={20} />
+        </ErrorBoundary>
       </button>
 
       <Sidebar 
@@ -251,11 +256,13 @@ function App() {
         isOpen={isSidebarOpen}
         onClose={() => setIsSidebarOpen(false)}
       />
+        </ErrorBoundary>
       
       {/* Main Content Area */}
       <div className="flex-1 w-full p-2 md:p-4 lg:p-6 h-full overflow-hidden box-border">
         <main className="h-full rounded-3xl bg-white/50 dark:bg-black/10 border border-white/20 dark:border-gray-800 shadow-sm relative backdrop-blur-sm overflow-y-auto no-scrollbar flex flex-col">
-           <ViewRenderer
+           <ErrorBoundary>
+          <ViewRenderer
               currentView={currentView}
               theme={theme}
               logo={logo}
@@ -277,10 +284,12 @@ function App() {
               onAddStudent={handleAddStudent}
               onAddTransaction={handleAddTransaction}
             />
+        </ErrorBoundary>
         </main>
       </div>
       
       <AIModal isOpen={isAIModalOpen} onClose={() => setIsAIModalOpen(false)} />
+        </ErrorBoundary>
       
       {/* Session Timeout Warning */}
       {isLoggedIn && (
@@ -289,6 +298,7 @@ function App() {
             setIsLoggedIn(false);
           }} 
         />
+        </ErrorBoundary>
       )}
     </div>
   );

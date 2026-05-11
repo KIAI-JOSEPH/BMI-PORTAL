@@ -1,6 +1,16 @@
+import { API_URL } from './config';
 import { authFetch } from './authService';
 
-const API_URL = '/api/v1';
+async function parseJsonSafe(response: Response): Promise<any> {
+    const text = await response.text();
+    if (!text) return null;
+    try {
+        return JSON.parse(text);
+    } catch {
+        return null;
+    }
+}
+
 
 export type BatchResult = {
   success: boolean;

@@ -97,7 +97,7 @@ gradeAppealsRouter.post('/', requireRole('admin', 'registrar', 'faculty', 'stude
     logger.error('Grade appeal submission error:', error);
     return c.json<ApiResponse<never>>({
       success: false,
-      error: error.message || 'Failed to submit grade appeal',
+      error: 'Failed to submit grade appeal',
     }, 500);
   }
 });
@@ -140,7 +140,7 @@ gradeAppealsRouter.get('/', requireRole('admin', 'registrar', 'faculty', 'staff'
     logger.error('Grade appeals fetch error:', error);
     return c.json<ApiResponse<never>>({
       success: false,
-      error: error.message || 'Failed to fetch grade appeals',
+      error: 'Failed to fetch grade appeals',
     }, 500);
   }
 });
@@ -165,7 +165,7 @@ gradeAppealsRouter.get('/:id', requireRole('admin', 'registrar', 'faculty', 'sta
     logger.error('Grade appeal fetch error:', error);
     return c.json<ApiResponse<never>>({
       success: false,
-      error: error.message || 'Grade appeal not found',
+      error: 'Grade appeal not found',
     }, 404);
   }
 });
@@ -219,7 +219,7 @@ gradeAppealsRouter.put('/:id', requireRole('admin', 'registrar', 'faculty'), asy
     logger.error('Grade appeal update error:', error);
     return c.json<ApiResponse<never>>({
       success: false,
-      error: error.message || 'Failed to update grade appeal',
+      error: 'Failed to update grade appeal',
     }, 500);
   }
 });
@@ -251,7 +251,7 @@ gradeAppealsRouter.delete('/:id', requireRole('admin', 'registrar', 'faculty', '
     logger.error('Grade appeal withdrawal error:', error);
     return c.json<ApiResponse<never>>({
       success: false,
-      error: error.message || 'Failed to withdraw grade appeal',
+      error: 'Failed to withdraw grade appeal',
     }, 500);
   }
 });

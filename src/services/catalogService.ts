@@ -1,6 +1,6 @@
+import { API_URL } from './config';
 import { authFetch } from './authService';
 
-const API_URL = '/api/v1';
 
 export interface CatalogRow {
   id: string;
@@ -25,6 +25,16 @@ export async function getDepartments(facultyId?: string) {
 
 export async function getPrograms(deptId?: string) {
   const q = deptId ? `?deptId=${encodeURIComponent(deptId)}` : '';
+
+async function parseJsonSafe(response: Response): Promise<any> {
+    const text = await response.text();
+    if (!text) return null;
+    try {
+        return JSON.parse(text);
+    } catch {
+        return null;
+    }
+}
   const res = await authFetch(`${API_URL}/catalog/programs${q}`);
   return res.json() as Promise<{ success: boolean; data?: CatalogRow[]; error?: string }>;
 }

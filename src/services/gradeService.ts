@@ -1,6 +1,6 @@
-﻿import { authFetch } from './authService';
+import { API_URL } from './config';
+import { authFetch } from './authService';
 
-const API_URL = '/api/v1';
 
 export interface Grade {
   id: string;

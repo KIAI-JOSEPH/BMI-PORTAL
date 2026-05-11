@@ -331,3 +331,44 @@ authRouter.post('/reset-password', zValidator('json', resetPasswordSchema), asyn
 });
 
 export default authRouter;
+// Change password endpoint
+authRoutes.post('/change-password', async (c) => {
+    try {
+        const { currentPassword, newPassword } = await c.req.json();
+
+        if (!currentPassword || !newPassword) {
+            return c.json({ success: false, error: 'Current password and new password are required' }, 400);
+        }
+
+        if (newPassword.length < 8) {
+            return c.json({ success: false, error: 'New password must be at least 8 characters' }, 400);
+        }
+
+        const authHeader = c.req.header('Authorization');
+        if (!authHeader?.startsWith('Bearer ')) {
+            return c.json({ success: false, error: 'Unauthorized' }, 401);
+        }
+
+        const token = authHeader.substring(7);
+        const { getPocketBase } = await import('../services/pocketbase');
+        const pb = getPocketBase();
+
+        try {
+            const payload = JSON.parse(atob(token.split('.')[1]));
+            const user = await pb.collection('users').getOne(payload.sub || payload.id);
+
+            await pb.collection('users').authWithPassword(user.email, currentPassword);
+
+            await pb.collection('users').update(user.id, {
+                password: newPassword,
+                passwordConfirm: newPassword,
+            });
+
+            return c.json({ success: true, message: 'Password updated successfully' });
+        } catch {
+            return c.json({ success: false, error: 'Current password is incorrect' }, 401);
+        }
+    } catch (error) {
+        return c.json({ success: false, error: 'Failed to update password' }, 500);
+    }
+});

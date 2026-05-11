@@ -1,3 +1,15 @@
+import { z } from 'zod';
+const importItemSchema = z.object({
+    type: z.enum(['student', 'course', 'grade', 'staff']),
+    data: z.record(z.unknown()),
+});
+
+const importRequestSchema = z.object({
+    items: z.array(importItemSchema).max(500, 'Maximum 500 items per import'),
+});
+
+const sanitizeImport = (v: string): string => v.replace(/["'\\]/g, '').substring(0, 100);
+
 import { Hono } from 'hono';
 import { getPocketBase } from '../services/pocketbase.js';
 import { authMiddleware, requireRole } from '../middleware/auth.js';
@@ -19,7 +31,12 @@ function calculateGrade(percentage: number) {
 
 importRouter.post('/v2', async (c) => {
   try {
-    const data = await c.req.json();
+    const rawBody = await c.req.json();
+    const parseResult = importRequestSchema.safeParse(rawBody);
+    if (!parseResult.success) {
+        return c.json({ success: false, error: 'Invalid request format', details: parseResult.error.issues }, 400);
+    }
+    const data = parseResult.data;
     const pb = getPocketBase();
     
     // We will build maps of Codes -> PB IDs
@@ -154,7 +171,7 @@ importRouter.post('/v2', async (c) => {
     return c.json({ success: true, results });
   } catch (error: any) {
     logger.error('V2 import failed', error);
-    return c.json({ success: false, error: error.message }, 500);
+    return c.json({ success: false, error: 'Import processing failed' }, 500);
   }
 });
 

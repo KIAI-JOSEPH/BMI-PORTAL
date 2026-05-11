@@ -1,3 +1,4 @@
+import { randomBytes } from 'crypto';
 /**
  * Batch create endpoints (partial failure reporting).
  */
@@ -73,7 +74,7 @@ batchRouter.post(
       try {
         const it = { ...items[i] };
         if (!it.student_number) {
-          it.student_number = `BMI-${new Date().getFullYear()}-${Math.floor(Math.random() * 9000) + 1000}`;
+          it.student_number = `BMI-${new Date().getFullYear()}-${randomBytes(2).readUInt16BE(0) % 9000 + 1000}`;
         }
         const avatar_color = generateAvatarColor(`${it.first_name} ${it.last_name}`);
         const row = await pb.collection('students').create({

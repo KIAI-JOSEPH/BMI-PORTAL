@@ -1,3 +1,4 @@
+import { sanitizeFilter } from '../utils/helpers';
 // BMI UMS - Courses Routes
 import { Hono } from 'hono';
 import { zValidator } from '@hono/zod-validator';
@@ -98,13 +99,12 @@ coursesRouter.get('/', async (c) => {
     const status = c.req.query('status');
     const search = c.req.query('search');
 
-    const safe = (v: string) => v.replace(/["'\\]/g, '').substring(0, 100);
     const filters: string[] = [];
-    if (faculty) filters.push(`faculty = "${safe(faculty)}"`);
-    if (level) filters.push(`level = "${safe(level)}"`);
-    if (status) filters.push(`status = "${safe(status)}"`);
+    if (faculty) filters.push(`faculty = "${sanitizeFilter(faculty)}"`);
+    if (level) filters.push(`level = "${sanitizeFilter(level)}"`);
+    if (status) filters.push(`status = "${sanitizeFilter(status)}"`);
     if (search) {
-      const s = safe(search);
+      const s = sanitizeFilter(search);
       filters.push(`(title ~ "${s}" || course_code ~ "${s}" || description ~ "${s}")`);
     }
     

@@ -1,3 +1,4 @@
+import { API_URL } from './config';
 /**
  * BMI UMS - Student Service
  * Handles all student-related API operations
@@ -7,7 +8,6 @@ import { authFetch } from './authService';
 import { Student } from '../types';
 import { parseJsonSafe } from './apiClient';
 
-const API_URL = '/api/v1';
 
 export interface StudentResponse {
   success: boolean;

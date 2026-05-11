@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import Dashboard from '../components/Dashboard';
 import Students from '../components/Students';
 import Staff from '../components/Staff';

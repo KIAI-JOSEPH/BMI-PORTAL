@@ -1,7 +1,7 @@
+import { API_URL } from './config';
 import { authFetch } from './authService';
 import { LibraryItem } from '../types';
 
-const API_URL = '/api/v1';
 
 export interface LibraryListResponse {
   success: boolean;

@@ -1,3 +1,5 @@
+import { randomBytes } from 'crypto';
+import { sanitizeFilter } from '../utils/helpers';
 // BMI UMS - Staff Routes
 import { Hono } from 'hono';
 import { zValidator } from '@hono/zod-validator';
@@ -119,13 +121,12 @@ staffRouter.get('/', async (c) => {
     const status = c.req.query('status');
     const search = c.req.query('search');
 
-    const safe = (v: string) => v.replace(/["'\\]/g, '').substring(0, 100);
     const filters: string[] = [];
-    if (department) filters.push(`department = "${safe(department)}"`);
-    if (category) filters.push(`category = "${safe(category)}"`);
-    if (status) filters.push(`status = "${safe(status)}"`);
+    if (department) filters.push(`department = "${sanitizeFilter(department)}"`);
+    if (category) filters.push(`category = "${sanitizeFilter(category)}"`);
+    if (status) filters.push(`status = "${sanitizeFilter(status)}"`);
     if (search) {
-      const s = safe(search);
+      const s = sanitizeFilter(search);
       filters.push(`(first_name ~ "${s}" || last_name ~ "${s}" || email ~ "${s}" || role ~ "${s}")`);
     }
     
@@ -262,7 +263,7 @@ staffRouter.post(
       
       // Generate staff ID
       const year = new Date().getFullYear();
-      const randomSuffix = Math.floor(Math.random() * 900) + 100;
+      const randomSuffix = randomBytes(2).readUInt16BE(0) % 900 + 100;
       const staffId = `STF-${year}-${randomSuffix}`;
       
       // Generate avatar color

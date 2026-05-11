@@ -277,7 +277,37 @@ async function createCollection(name: string): Promise<void> {
         offline_jwt: { type: 'text' },
         verification_count: { type: 'number' },
       }
-    },
+    
+        grade_appeals: {
+            name: 'grade_appeals',
+            type: 'base',
+            fields: [
+                { name: 'student_id', type: 'text', required: true },
+                { name: 'student_name', type: 'text', required: true },
+                { name: 'enrollment_id', type: 'text', required: true },
+                { name: 'course_code', type: 'text', required: true },
+                { name: 'course_name', type: 'text', required: true },
+                { name: 'current_grade', type: 'text', required: true },
+                { name: 'appeal_reason', type: 'text', required: true },
+                { name: 'status', type: 'select', options: { values: ['Pending', 'Under Review', 'Approved', 'Denied', 'Withdrawn'] } },
+                { name: 'instructor_response', type: 'text' },
+                { name: 'resolution_notes', type: 'text' },
+                { name: 'submitted_at', type: 'date', required: true },
+                { name: 'resolved_at', type: 'date' },
+            ],
+        },
+        grading_scales: {
+            name: 'grading_scales',
+            type: 'base',
+            fields: [
+                { name: 'name', type: 'text', required: true },
+                { name: 'description', type: 'text' },
+                { name: 'scale_data', type: 'json', required: true },
+                { name: 'is_default', type: 'bool' },
+                { name: 'academic_year', type: 'text' },
+                { name: 'created_by', type: 'text' },
+            ],
+        },},
     verification_logs: {
       fields: {
         certificate_serial: { type: 'text', required: true },
@@ -408,7 +438,7 @@ export async function createDefaultAdminIfNeeded(): Promise<void> {
     });
 
     logger.info(`Default admin user created: ${CONFIG.POCKETBASE_ADMIN_EMAIL}`);
-    logger.info(`Password: ${CONFIG.POCKETBASE_ADMIN_PASSWORD}`);
+    logger.info('PocketBase admin credentials configured');
   } catch (error) {
     logger.error('Failed to create default admin user:', error);
     // Don't throw - allow system to continue, but admin will need to create user manually

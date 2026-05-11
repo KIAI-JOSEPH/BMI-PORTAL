@@ -1,3 +1,5 @@
+import { randomBytes } from 'crypto';
+import { sanitizeFilter } from '../utils/helpers';
 // BMI UMS - Students Routes
 import { Hono } from 'hono';
 import { zValidator } from '@hono/zod-validator';
@@ -85,13 +87,12 @@ studentsRouter.get('/', requireRole('admin', 'registrar', 'faculty', 'staff'), a
     const search = c.req.query('search');
 
     // Sanitize inputs — strip PocketBase filter special chars to prevent injection
-    const safe = (v: string) => v.replace(/["'\\]/g, '');
 
     // Build filter (no legacy `faculty` field on canonical students — use program/catalog APIs)
     const filters: string[] = [];
-    if (status) filters.push(`status = "${safe(status)}"`);
+    if (status) filters.push(`status = "${sanitizeFilter(status)}"`);
     if (search) {
-      const s = safe(search).substring(0, 100); // cap search length
+      const s = sanitizeFilter(search).substring(0, 100); // cap search length
       filters.push(`(first_name ~ "${s}" || last_name ~ "${s}" || email ~ "${s}")`);
     }
     
@@ -171,7 +172,7 @@ studentsRouter.post(
       
       // For students, handle student_number generation if not provided
       if (!validData.student_number) {
-        validData.student_number = `BMI-${new Date().getFullYear()}-${Math.floor(Math.random() * 9000) + 1000}`;
+        validData.student_number = `BMI-${new Date().getFullYear()}-${randomBytes(2).readUInt16BE(0) % 9000 + 1000}`;
       }
 
       // Generate avatar color

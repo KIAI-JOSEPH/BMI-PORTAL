@@ -1,3 +1,4 @@
+import { API_URL } from './config';
 /**
  * BMI UMS - Staff Service
  */
@@ -5,7 +6,16 @@
 import { authFetch } from './authService';
 import { StaffMember } from '../types';
 
-const API_URL = '/api/v1';
+async function parseJsonSafe(response: Response): Promise<any> {
+    const text = await response.text();
+    if (!text) return null;
+    try {
+        return JSON.parse(text);
+    } catch {
+        return null;
+    }
+}
+
 
 export interface StaffResponse {
   success: boolean;
@@ -35,7 +45,7 @@ export async function getStaff(filters?: any): Promise<StaffListResponse> {
     const queryString = params.toString();
     const url = `${API_URL}/staff${queryString ? `?${queryString}` : ''}`;
     const response = await authFetch(url);
-    return await response.json();
+    return await parseJsonSafe(response);
   } catch (error) {
     return { success: false, error: 'Failed to fetch staff' };
   }
@@ -47,7 +57,7 @@ export async function createStaff(data: Partial<StaffMember>): Promise<StaffResp
       method: 'POST',
       body: JSON.stringify(data),
     });
-    return await response.json();
+    return await parseJsonSafe(response);
   } catch (error) {
     return { success: false, error: 'Failed to create staff' };
   }
@@ -59,7 +69,7 @@ export async function updateStaff(id: string, data: Partial<StaffMember>): Promi
       method: 'PATCH',
       body: JSON.stringify(data),
     });
-    return await response.json();
+    return await parseJsonSafe(response);
   } catch (error) {
     return { success: false, error: 'Failed to update staff' };
   }
@@ -68,7 +78,7 @@ export async function updateStaff(id: string, data: Partial<StaffMember>): Promi
 export async function deleteStaff(id: string): Promise<StaffResponse> {
   try {
     const response = await authFetch(`${API_URL}/staff/${id}`, { method: 'DELETE' });
-    return await response.json();
+    return await parseJsonSafe(response);
   } catch (error) {
     return { success: false, error: 'Failed to delete staff' };
   }
@@ -77,7 +87,7 @@ export async function deleteStaff(id: string): Promise<StaffResponse> {
 export async function getStaffStats(): Promise<any> {
   try {
     const response = await authFetch(`${API_URL}/staff/stats/overview`);
-    return await response.json();
+    return await parseJsonSafe(response);
   } catch (error) {
     return { success: false, error: 'Failed to fetch staff statistics' };
   }

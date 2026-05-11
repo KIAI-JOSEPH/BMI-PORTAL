@@ -1,3 +1,4 @@
+import { sanitizeFilter } from '../utils/helpers';
 // BMI UMS - Library Routes
 import { Hono } from 'hono';
 import { zValidator } from '@hono/zod-validator';
@@ -50,13 +51,12 @@ libraryRouter.get('/', async (c) => {
     const status = c.req.query('status');
     const search = c.req.query('search');
 
-    const safe = (v: string) => v.replace(/["'\\]/g, '').substring(0, 100);
     const filters: string[] = [];
-    if (category) filters.push(`category = "${safe(category)}"`);
-    if (type) filters.push(`type = "${safe(type)}"`);
-    if (status) filters.push(`status = "${safe(status)}"`);
+    if (category) filters.push(`category = "${sanitizeFilter(category)}"`);
+    if (type) filters.push(`type = "${sanitizeFilter(type)}"`);
+    if (status) filters.push(`status = "${sanitizeFilter(status)}"`);
     if (search) {
-      const s = safe(search);
+      const s = sanitizeFilter(search);
       filters.push(`(title ~ "${s}" || author ~ "${s}" || isbn ~ "${s}")`);
     }
     
