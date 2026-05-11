@@ -1,5 +1,5 @@
 
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import { 
   FileSpreadsheet, 
   Calendar, 
@@ -24,8 +24,9 @@ import {
 } from 'lucide-react';
 import { Student, Course } from '../types';
 import ImportModal from './ImportModal';
-import AddGradeModal, { GradeData } from './AddGradeModal';
-import { ExamImportRow } from '../services/importService';
+import GradeEntryModal, { GradeFormData } from './grading/GradeEntryModal';
+
+import { createGrade, updateGrade, getGrades, Grade } from '../services/gradeService';
 
 interface ExamsProps {
   students?: Student[];
@@ -69,53 +70,101 @@ const Exams: React.FC<ExamsProps> = ({ students = [], courses = [], setStudents,
   const [isImportOpen, setIsImportOpen] = useState(false);
   const [isAddGradeOpen, setIsAddGradeOpen] = useState(false);
   const [editingGrade, setEditingGrade] = useState<GradeRecord | null>(null);
-  const [importedExams, setImportedExams] = useState<ExamImportRow[]>([]);
 
-  const handleImportExams = (
-    exams: ExamImportRow[],
-    newStudents: Partial<Student>[],
-    newCourses: Partial<Course>[],
-    _dynamicFields: string[],
-    _collectionName: string
-  ) => {
-    setImportedExams(prev => [...exams, ...prev]);
-    if (setStudents && newStudents.length > 0) {
-      setStudents(prev => [...(newStudents as Student[]), ...prev]);
-    }
-    if (setCourses && newCourses.length > 0) {
-      setCourses(prev => [...(newCourses as Course[]), ...prev]);
-    }
-  };
+  const [savedGrades, setSavedGrades] = useState<Grade[]>([]);
+  const [isLoadingGrades, setIsLoadingGrades] = useState(false);
+  const [isSavingGrade, setIsSavingGrade] = useState(false);
 
-  const handleSaveGrade = (gradeData: GradeData) => {
-    if (editingGrade) {
-      // Update existing grade
-      const updatedExam: ExamImportRow = {
-        studentId: gradeData.admissionNo,
-        studentName: gradeData.studentName,
-        course: gradeData.courseName,
-        courseCode: gradeData.courseCode,
-        midterm: String(gradeData.grade),
-        final: String(gradeData.grade)
-      };
-      setImportedExams(prev => prev.map(e => 
-        e.studentId === editingGrade.studentId && e.course === editingGrade.course 
-          ? updatedExam 
-          : e
-      ));
-    } else {
-      // Add new grade
-      const newExam: ExamImportRow = {
-        studentId: gradeData.admissionNo,
-        studentName: gradeData.studentName,
-        course: gradeData.courseName,
-        courseCode: gradeData.courseCode,
-        midterm: String(gradeData.grade),
-        final: String(gradeData.grade)
-      };
-      setImportedExams(prev => [newExam, ...prev]);
+  // Load grades from database on component mount
+  useEffect(() => {
+    const loadGrades = async () => {
+      setIsLoadingGrades(true);
+      try {
+        console.log('[Exams] Loading grades from database...');
+        const result = await getGrades({ perPage: 500 });
+        
+        if (result.success && result.data) {
+          console.log('[Exams] Loaded grades:', result.data.items.length);
+          setSavedGrades(result.data.items);
+        } else {
+          console.error('[Exams] Failed to load grades:', result.error);
+          setSavedGrades([]);
+        }
+      } catch (error) {
+        console.error('[Exams] Exception loading grades:', error);
+        setSavedGrades([]);
+      } finally {
+        setIsLoadingGrades(false);
+      }
+    };
+
+    loadGrades();
+  }, []);
+
+
+
+  const handleSaveGrade = async (gradeData: GradeFormData) => {
+    setIsSavingGrade(true);
+    
+    try {
+      console.log('[Exams] Saving grade to database:', gradeData);
+      
+      const percentage = gradeData.components?.reduce((sum, c) => sum + (c.score || 0), 0) || 0;
+      
+      if (editingGrade && editingGrade.id.startsWith('DB-')) {
+        // Update existing database grade
+        const gradeId = editingGrade.id.replace('DB-', '');
+        const result = await updateGrade(gradeId, {
+          percentage: percentage,
+          academicYear: gradeData.academicYear,
+          semester: gradeData.semester,
+        });
+        
+        if (result.success && result.data) {
+          console.log('[Exams] Grade updated successfully:', result.data);
+          // Update local state
+          setSavedGrades(prev => prev.map(g => 
+            g.id === gradeId ? result.data! : g
+          ));
+          alert('Grade updated successfully!');
+        } else {
+          console.error('[Exams] Failed to update grade:', result.error);
+          alert(`Failed to update grade: ${result.error}`);
+        }
+      } else if (editingGrade && !editingGrade.id.startsWith('DB-')) {
+        // Obsolete local imported exam update
+        alert('Cannot update local imported exam.');
+      } else {
+        // Create new grade in database
+        const result = await createGrade({
+          studentId: gradeData.studentId,
+          studentName: gradeData.studentName,
+          admissionNo: gradeData.admissionNo,
+          courseCode: gradeData.courseCode,
+          courseName: gradeData.courseName,
+          percentage: percentage,
+          academicYear: gradeData.academicYear || new Date().getFullYear().toString(),
+          semester: gradeData.semester || 'Fall',
+        });
+        
+        if (result.success && result.data) {
+          console.log('[Exams] Grade created successfully:', result.data);
+          // Add to local state
+          setSavedGrades(prev => [result.data!, ...prev]);
+          alert('Grade saved successfully!');
+        } else {
+          console.error('[Exams] Failed to create grade:', result.error);
+          alert(`Failed to save grade: ${result.error}`);
+        }
+      }
+    } catch (error) {
+      console.error('[Exams] Exception saving grade:', error);
+      alert('An unexpected error occurred while saving the grade.');
+    } finally {
+      setIsSavingGrade(false);
+      setEditingGrade(null);
+      setIsAddGradeOpen(false);
     }
-    setEditingGrade(null);
   };
 
   const openAddGradeModal = (grade?: GradeRecord) => {
@@ -157,30 +206,35 @@ const Exams: React.FC<ExamsProps> = ({ students = [], courses = [], setStudents,
     return { total, grade, gpa };
   };
 
-  // Merge imported exams into grade data
+  // Merge imported exams and saved grades into grade data
   const allGradeData: GradeRecord[] = useMemo(() => {
     const base = rawGradeData.map(item => {
       const { total, grade, gpa } = calculateGradeDetails(item.midterm, item.final);
       return { ...item, total, grade, gpa, status: item.status as GradeRecord['status'], level: item.level as GradeRecord['level'] };
     });
-    const fromImport: GradeRecord[] = importedExams.map((row, i) => {
-      const mid = Number(row.midterm) || 0;
-      const fin = Number(row.final) || 0;
-      const { total, grade, gpa } = calculateGradeDetails(mid, fin);
+    
+    // Imported exams are obsolete since they are saved directly to DB now
+    const fromImport: GradeRecord[] = [];
+    
+    // Convert saved database grades to grade records
+    const fromDatabase: GradeRecord[] = savedGrades.map((grade) => {
       return {
-        id: `IMP-${i}`,
-        student: row.studentName || row.studentId,
-        studentId: row.studentId,
-        course: row.course,
-        midterm: mid,
-        final: fin,
-        total, grade, gpa,
-        status: 'Pending Review' as GradeRecord['status'],
+        id: `DB-${grade.id}`,
+        student: grade.studentName,
+        studentId: grade.studentId,
+        course: grade.courseName,
+        midterm: grade.midterm || grade.grade,
+        final: grade.final || grade.grade,
+        total: grade.total || grade.grade,
+        grade: grade.letterGrade || 'F',
+        gpa: grade.gpa || 0.0,
+        status: (grade.status || 'Pending Review') as GradeRecord['status'],
         level: 'Degree' as GradeRecord['level'],
       };
     });
-    return [...base, ...fromImport];
-  }, [importedExams]);
+    
+    return [...base, ...fromDatabase];
+  }, [savedGrades]);
 
   const gradeReviewData: GradeRecord[] = allGradeData;
 
@@ -192,7 +246,9 @@ const Exams: React.FC<ExamsProps> = ({ students = [], courses = [], setStudents,
   });
 
   const filteredGrades = gradeReviewData.filter(g => {
-    const matchesSearch = g.student.toLowerCase().includes(searchTerm.toLowerCase()) || g.studentId.toLowerCase().includes(searchTerm.toLowerCase());
+    const student = g.student || 'Unknown';
+    const studentId = g.studentId || 'Unknown';
+    const matchesSearch = student.toLowerCase().includes(searchTerm.toLowerCase()) || studentId.toLowerCase().includes(searchTerm.toLowerCase());
     const matchesLevel = academicLevelFilter === 'All Levels' || g.level === academicLevelFilter;
     const matchesSubject = selectedSubject === 'All Subjects' || g.course === selectedSubject;
     return matchesSearch && matchesLevel && matchesSubject;
@@ -528,9 +584,16 @@ const Exams: React.FC<ExamsProps> = ({ students = [], courses = [], setStudents,
                             </td>
                           </tr>
                         ))}
-                        {filteredGrades.length === 0 && (
+                        {isLoadingGrades ? (
+                          <tr><td colSpan={9} className="py-24 text-center text-gray-400 font-black uppercase tracking-[0.4em] text-sm">
+                            <div className="flex items-center justify-center gap-3">
+                              <div className="w-6 h-6 border-2 border-[#4B0082] border-t-transparent rounded-full animate-spin"></div>
+                              Loading grades from database...
+                            </div>
+                          </td></tr>
+                        ) : filteredGrades.length === 0 ? (
                           <tr><td colSpan={9} className="py-24 text-center text-gray-400 font-black uppercase tracking-[0.4em] text-sm italic">No grades found in registry</td></tr>
-                        )}
+                        ) : null}
                       </tbody>
                     </table>
                   </div>
@@ -555,36 +618,45 @@ const Exams: React.FC<ExamsProps> = ({ students = [], courses = [], setStudents,
       <ImportModal
         isOpen={isImportOpen}
         onClose={() => setIsImportOpen(false)}
-        type="exams"
-        existingStudents={students}
-        existingCourses={courses}
-        onImportExams={handleImportExams}
+        onSuccess={() => window.location.reload()}
       />
 
-      <AddGradeModal
+      <GradeEntryModal
         isOpen={isAddGradeOpen}
         onClose={() => {
           setIsAddGradeOpen(false);
           setEditingGrade(null);
         }}
         onSave={handleSaveGrade}
+        isLoading={isSavingGrade}
         students={students.map(s => ({
           id: s.id,
-          name: s.name,
-          admissionNo: s.admissionNo
+          name: `${s.firstName} ${s.lastName}`,
+          admissionNo: s.id
         }))}
         courses={courses.map(c => ({
           code: c.code,
           name: c.name,
-          fullName: c.name
+          fullName: c.name,
+          credits: c.credits || 3
         }))}
         editData={editingGrade ? {
+          id: editingGrade.id.startsWith('DB-') ? editingGrade.id.replace('DB-', '') : undefined,
           studentId: editingGrade.studentId,
           studentName: editingGrade.student,
           admissionNo: editingGrade.studentId,
-          courseCode: editingGrade.course.split(' ').map(w => w[0]).join(''),
+          courseCode: editingGrade.id.startsWith('DB-') ? 
+            savedGrades.find(g => g.id === editingGrade.id.replace('DB-', ''))?.courseCode || 
+            editingGrade.course.split(' ').map(w => w[0]).join('') : 
+            editingGrade.course.split(' ').map(w => w[0]).join(''),
           courseName: editingGrade.course,
-          grade: editingGrade.total
+          credits: 3,
+          components: [],
+          gradingScaleType: 0,
+          academicYear: editingGrade.id.startsWith('DB-') ? 
+            savedGrades.find(g => g.id === editingGrade.id.replace('DB-', ''))?.academicYear || '2024' : '2024',
+          semester: editingGrade.id.startsWith('DB-') ? 
+            savedGrades.find(g => g.id === editingGrade.id.replace('DB-', ''))?.semester || 'Fall' : 'Fall'
         } : null}
       />
     </div>

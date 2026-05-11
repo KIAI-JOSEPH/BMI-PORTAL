@@ -1,0 +1,563 @@
+/**
+ * BMI UMS - Grades Management Component
+ * Main component for managing student grades with the new grading system
+ */
+
+import React, { useState, useEffect, useMemo } from 'react';
+import { Plus, Search, Filter, Download, Upload, TrendingUp, Eye, User, BarChart2, FileText } from 'lucide-react';
+import GradeEntryModal, { GradeFormData } from './grading/GradeEntryModal';
+import GradeDetailsView from './grading/GradeDetailsView';
+import StudentGradeReport from './grading/StudentGradeReport';
+import CourseGradeDistribution from './grading/CourseGradeDistribution';
+import GradeAppealForm, { AppealFormData } from './grading/GradeAppealForm';
+import GradeAppealReview from './grading/GradeAppealReview';
+import { createGrade, getGrades, updateGrade, deleteGrade } from '../grading/services/GradeAPIService';
+import { Grade } from '../grading/types';
+import { Student, Course } from '../types';
+import { BulkEntryModal } from './BulkEntryModal';
+import { postGradeBatch } from '../services/batchService';
+
+interface GradesProps {
+  students?: Student[];
+  courses?: Course[];
+}
+
+const Grades: React.FC<GradesProps> = ({ students = [], courses = [] }) => {
+  const [grades, setGrades] = useState<Grade[]>([]);
+  const [isModalOpen, setIsModalOpen] = useState(false);
+  const [isDetailsOpen, setIsDetailsOpen] = useState(false);
+  const [isStudentReportOpen, setIsStudentReportOpen] = useState(false);
+  const [isCourseDistributionOpen, setIsCourseDistributionOpen] = useState(false);
+  const [isAppealFormOpen, setIsAppealFormOpen] = useState(false);
+  const [isAppealReviewOpen, setIsAppealReviewOpen] = useState(false);
+  const [selectedGradeId, setSelectedGradeId] = useState<string | null>(null);
+  const [selectedGradeForAppeal, setSelectedGradeForAppeal] = useState<Grade | null>(null);
+  const [selectedStudent, setSelectedStudent] = useState<{ id: string; name: string } | null>(null);
+  const [selectedCourse, setSelectedCourse] = useState<{ code: string; name: string; year: string; semester: string } | null>(null);
+  const [editingGrade, setEditingGrade] = useState<GradeFormData | null>(null);
+  const [isLoading, setIsLoading] = useState(false);
+  const [searchTerm, setSearchTerm] = useState('');
+  const [filterSemester, setFilterSemester] = useState('');
+  const [filterYear, setFilterYear] = useState('');
+  const [bulkOpen, setBulkOpen] = useState(false);
+
+  const studentOptions = useMemo(
+    () =>
+      students.map((s) => ({
+        id: s.id,
+        name: `${s.first_name} ${s.last_name}`.trim(),
+        admissionNo: s.student_number || s.id,
+      })),
+    [students]
+  );
+
+  const courseOptions = useMemo(
+    () =>
+      courses.map((c) => ({
+        code: c.code,
+        name: c.name,
+        fullName: c.name,
+        credits: c.credits,
+      })),
+    [courses]
+  );
+
+  useEffect(() => {
+    loadGrades();
+  }, [filterSemester, filterYear]);
+
+  const loadGrades = async () => {
+    setIsLoading(true);
+    try {
+      const response = await getGrades({
+        academicYear: filterYear || undefined,
+        semester: filterSemester || undefined,
+      });
+      
+      if (response.success && response.data) {
+        setGrades(response.data.items);
+      }
+    } catch (error) {
+      console.error('Failed to load grades:', error);
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const handleSaveGrade = async (gradeData: GradeFormData) => {
+    setIsLoading(true);
+    try {
+      if (gradeData.id) {
+        // Update existing grade
+        await updateGrade(gradeData.id, gradeData as any);
+      } else {
+        // Create new grade
+        await createGrade(gradeData as any);
+      }
+      
+      await loadGrades();
+      setIsModalOpen(false);
+      setEditingGrade(null);
+    } catch (error) {
+      console.error('Failed to save grade:', error);
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const handleEditGrade = (grade: Grade) => {
+    const formData: GradeFormData = {
+      id: grade.id,
+      studentId: grade.studentId,
+      studentName: grade.studentName,
+      admissionNo: grade.admissionNo,
+      courseCode: grade.courseCode,
+      courseName: grade.courseName,
+      credits: grade.credits,
+      components: grade.components,
+      academicYear: grade.academicYear,
+      semester: grade.semester,
+      gradingScaleType: grade.gradingScaleType,
+    };
+    setEditingGrade(formData);
+    setIsModalOpen(true);
+  };
+
+  const handleDeleteGrade = async (gradeId: string) => {
+    if (!confirm('Are you sure you want to delete this grade?')) return;
+    
+    setIsLoading(true);
+    try {
+      await deleteGrade(gradeId);
+      await loadGrades();
+    } catch (error) {
+      console.error('Failed to delete grade:', error);
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const handleViewDetails = (gradeId: string) => {
+    setSelectedGradeId(gradeId);
+    setIsDetailsOpen(true);
+  };
+
+  const handleViewStudentReport = (studentId: string, studentName: string) => {
+    setSelectedStudent({ id: studentId, name: studentName });
+    setIsStudentReportOpen(true);
+  };
+
+  const handleViewCourseDistribution = (courseCode: string, courseName: string, year: string, semester: string) => {
+    setSelectedCourse({ code: courseCode, name: courseName, year, semester });
+    setIsCourseDistributionOpen(true);
+  };
+
+  const handleSubmitAppeal = async (appealData: AppealFormData) => {
+    // TODO: Implement API call to submit appeal
+    console.log('Submitting appeal:', appealData);
+    // await submitGradeAppeal(appealData);
+  };
+
+  const handleApproveAppeal = async (appealId: string, revisedGrade: string, notes: string) => {
+    // TODO: Implement API call to approve appeal
+    console.log('Approving appeal:', { appealId, revisedGrade, notes });
+    // await approveGradeAppeal(appealId, revisedGrade, notes);
+  };
+
+  const handleDenyAppeal = async (appealId: string, notes: string) => {
+    // TODO: Implement API call to deny appeal
+    console.log('Denying appeal:', { appealId, notes });
+    // await denyGradeAppeal(appealId, notes);
+  };
+
+  const filteredGrades = grades.filter(grade =>
+    grade.studentName.toLowerCase().includes(searchTerm.toLowerCase()) ||
+    grade.courseCode.toLowerCase().includes(searchTerm.toLowerCase()) ||
+    grade.courseName.toLowerCase().includes(searchTerm.toLowerCase())
+  );
+
+  return (
+    <div className="p-6 space-y-6">
+      {/* Header */}
+      <div className="flex justify-between items-center">
+        <div>
+          <h1 className="text-3xl font-black uppercase tracking-tight text-gray-900 dark:text-white">
+            Grade Management
+          </h1>
+          <p className="text-sm text-gray-600 dark:text-gray-400 mt-1">
+            Manage student grades with weighted assessments
+          </p>
+        </div>
+        <div className="flex gap-2">
+          <button
+            type="button"
+            onClick={() => setBulkOpen(true)}
+            className="px-4 py-3 bg-white dark:bg-gray-800 border-2 border-[#4B0082] text-[#4B0082] dark:text-[#FFD700] font-black text-xs uppercase tracking-widest hover:bg-gray-50 dark:hover:bg-gray-700 transition-all"
+          >
+            Bulk JSON
+          </button>
+          <button
+            type="button"
+            onClick={() => {
+              setEditingGrade(null);
+              setIsModalOpen(true);
+            }}
+            className="px-6 py-3 bg-[#4B0082] text-white font-black text-xs uppercase tracking-widest hover:bg-black transition-all flex items-center gap-2 shadow-lg"
+          >
+            <Plus size={16} />
+            Add Grade
+          </button>
+        </div>
+      </div>
+
+      {/* Filters */}
+      <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+        <div className="relative">
+          <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400" size={20} />
+          <input
+            type="text"
+            placeholder="Search students or courses..."
+            value={searchTerm}
+            onChange={(e) => setSearchTerm(e.target.value)}
+            className="w-full pl-10 pr-4 py-3 bg-white dark:bg-gray-800 border-2 border-gray-200 dark:border-gray-700 rounded-none text-sm font-bold outline-none focus:border-[#4B0082] dark:text-white"
+          />
+        </div>
+        
+        <select
+          value={filterYear}
+          onChange={(e) => setFilterYear(e.target.value)}
+          className="px-4 py-3 bg-white dark:bg-gray-800 border-2 border-gray-200 dark:border-gray-700 rounded-none text-sm font-bold outline-none focus:border-[#4B0082] dark:text-white"
+        >
+          <option value="">All Years</option>
+          <option value="2024-2025">2024-2025</option>
+          <option value="2023-2024">2023-2024</option>
+        </select>
+
+        <select
+          value={filterSemester}
+          onChange={(e) => setFilterSemester(e.target.value)}
+          className="px-4 py-3 bg-white dark:bg-gray-800 border-2 border-gray-200 dark:border-gray-700 rounded-none text-sm font-bold outline-none focus:border-[#4B0082] dark:text-white"
+        >
+          <option value="">All Semesters</option>
+          <option value="Fall">Fall</option>
+          <option value="Spring">Spring</option>
+          <option value="Summer">Summer</option>
+        </select>
+
+        <div className="flex gap-2">
+          <button className="flex-1 px-4 py-3 bg-white dark:bg-gray-800 border-2 border-gray-200 dark:border-gray-700 text-gray-700 dark:text-gray-300 font-black text-xs uppercase tracking-widest hover:bg-gray-50 dark:hover:bg-gray-700 transition-all flex items-center justify-center gap-2">
+            <Download size={16} />
+            Export
+          </button>
+          <button className="flex-1 px-4 py-3 bg-white dark:bg-gray-800 border-2 border-gray-200 dark:border-gray-700 text-gray-700 dark:text-gray-300 font-black text-xs uppercase tracking-widest hover:bg-gray-50 dark:hover:bg-gray-700 transition-all flex items-center justify-center gap-2">
+            <Upload size={16} />
+            Import
+          </button>
+        </div>
+      </div>
+
+      {/* Quick Actions */}
+      <div className="flex gap-4">
+        <button
+          onClick={() => {
+            // Get unique students from grades
+            const uniqueStudents = Array.from(new Set(grades.map(g => g.studentId)))
+              .map(id => {
+                const grade = grades.find(g => g.studentId === id);
+                return { id, name: grade?.studentName || '' };
+              });
+            
+            if (uniqueStudents.length > 0) {
+              handleViewStudentReport(uniqueStudents[0].id, uniqueStudents[0].name);
+            }
+          }}
+          className="px-6 py-3 bg-blue-600 text-white font-black text-xs uppercase tracking-widest hover:bg-blue-700 transition-all flex items-center gap-2"
+        >
+          <User size={16} />
+          View Student Report
+        </button>
+        <button
+          onClick={() => {
+            // Get unique courses from grades
+            const uniqueCourses = Array.from(new Set(grades.map(g => g.courseCode)))
+              .map(code => {
+                const grade = grades.find(g => g.courseCode === code);
+                return {
+                  code,
+                  name: grade?.courseName || '',
+                  year: grade?.academicYear || '',
+                  semester: grade?.semester || ''
+                };
+              });
+            
+            if (uniqueCourses.length > 0) {
+              const course = uniqueCourses[0];
+              handleViewCourseDistribution(course.code, course.name, course.year, course.semester);
+            }
+          }}
+          className="px-6 py-3 bg-emerald-600 text-white font-black text-xs uppercase tracking-widest hover:bg-emerald-700 transition-all flex items-center gap-2"
+        >
+          <BarChart2 size={16} />
+          View Course Analytics
+        </button>
+        <button
+          onClick={() => setIsAppealReviewOpen(true)}
+          className="px-6 py-3 bg-amber-600 text-white font-black text-xs uppercase tracking-widest hover:bg-amber-700 transition-all flex items-center gap-2"
+        >
+          <FileText size={16} />
+          Review Appeals
+        </button>
+      </div>
+
+      {/* Filters */}
+      <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+        <div className="relative">
+          <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400" size={20} />
+          <input
+            type="text"
+            placeholder="Search students or courses..."
+            value={searchTerm}
+            onChange={(e) => setSearchTerm(e.target.value)}
+            className="w-full pl-10 pr-4 py-3 bg-white dark:bg-gray-800 border-2 border-gray-200 dark:border-gray-700 rounded-none text-sm font-bold outline-none focus:border-[#4B0082] dark:text-white"
+          />
+        </div>
+        
+        <select
+          value={filterYear}
+          onChange={(e) => setFilterYear(e.target.value)}
+          className="px-4 py-3 bg-white dark:bg-gray-800 border-2 border-gray-200 dark:border-gray-700 rounded-none text-sm font-bold outline-none focus:border-[#4B0082] dark:text-white"
+        >
+          <option value="">All Years</option>
+          <option value="2024">2024</option>
+          <option value="2023">2023</option>
+        </select>
+
+        <select
+          value={filterSemester}
+          onChange={(e) => setFilterSemester(e.target.value)}
+          className="px-4 py-3 bg-white dark:bg-gray-800 border-2 border-gray-200 dark:border-gray-700 rounded-none text-sm font-bold outline-none focus:border-[#4B0082] dark:text-white"
+        >
+          <option value="">All Semesters</option>
+          <option value="Fall">Fall</option>
+          <option value="Spring">Spring</option>
+          <option value="Summer">Summer</option>
+        </select>
+
+        <div className="flex gap-2">
+          <button className="flex-1 px-4 py-3 bg-white dark:bg-gray-800 border-2 border-gray-200 dark:border-gray-700 text-gray-700 dark:text-gray-300 font-black text-xs uppercase tracking-widest hover:bg-gray-50 dark:hover:bg-gray-700 transition-all flex items-center justify-center gap-2">
+            <Download size={16} />
+            Export
+          </button>
+          <button className="flex-1 px-4 py-3 bg-white dark:bg-gray-800 border-2 border-gray-200 dark:border-gray-700 text-gray-700 dark:text-gray-300 font-black text-xs uppercase tracking-widest hover:bg-gray-50 dark:hover:bg-gray-700 transition-all flex items-center justify-center gap-2">
+            <Upload size={16} />
+            Import
+          </button>
+        </div>
+      </div>
+
+      {/* Grades Table */}
+      <div className="bg-white dark:bg-gray-800 border-4 border-[#4B0082] shadow-xl overflow-hidden">
+        <div className="overflow-x-auto">
+          <table className="w-full">
+            <thead className="bg-gray-900 text-white">
+              <tr>
+                <th className="px-6 py-4 text-left text-xs font-black uppercase tracking-widest">Student</th>
+                <th className="px-6 py-4 text-left text-xs font-black uppercase tracking-widest">Course</th>
+                <th className="px-6 py-4 text-left text-xs font-black uppercase tracking-widest">Semester</th>
+                <th className="px-6 py-4 text-center text-xs font-black uppercase tracking-widest">Grade</th>
+                <th className="px-6 py-4 text-center text-xs font-black uppercase tracking-widest">GPA</th>
+                <th className="px-6 py-4 text-center text-xs font-black uppercase tracking-widest">Status</th>
+                <th className="px-6 py-4 text-center text-xs font-black uppercase tracking-widest">Actions</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-gray-200 dark:divide-gray-700">
+              {filteredGrades.length === 0 ? (
+                <tr>
+                  <td colSpan={7} className="px-6 py-12 text-center text-gray-500 dark:text-gray-400">
+                    <p className="text-sm font-bold">No grades found</p>
+                    <p className="text-xs mt-1">Add your first grade to get started</p>
+                  </td>
+                </tr>
+              ) : (
+                filteredGrades.map((grade) => (
+                  <tr key={grade.id} className="hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors">
+                    <td className="px-6 py-4">
+                      <div>
+                        <p className="text-sm font-bold text-gray-900 dark:text-white">{grade.studentName}</p>
+                        <p className="text-xs text-gray-500 dark:text-gray-400">{grade.admissionNo}</p>
+                      </div>
+                    </td>
+                    <td className="px-6 py-4">
+                      <div>
+                        <p className="text-sm font-bold text-gray-900 dark:text-white">{grade.courseCode}</p>
+                        <p className="text-xs text-gray-500 dark:text-gray-400">{grade.courseName}</p>
+                      </div>
+                    </td>
+                    <td className="px-6 py-4">
+                      <p className="text-sm font-bold text-gray-900 dark:text-white">
+                        {grade.semester} {grade.academicYear}
+                      </p>
+                    </td>
+                    <td className="px-6 py-4 text-center">
+                      <div className="flex flex-col items-center">
+                        <span className={`text-2xl font-black ${
+                          grade.letterGrade.startsWith('A') ? 'text-emerald-600' :
+                          grade.letterGrade.startsWith('B') ? 'text-blue-600' :
+                          grade.letterGrade.startsWith('C') ? 'text-amber-600' :
+                          grade.letterGrade.startsWith('D') ? 'text-orange-600' :
+                          'text-red-600'
+                        }`}>
+                          {grade.letterGrade}
+                        </span>
+                        <span className="text-xs text-gray-500 dark:text-gray-400">
+                          {grade.numericGrade.toFixed(1)}%
+                        </span>
+                      </div>
+                    </td>
+                    <td className="px-6 py-4 text-center">
+                      <span className="text-lg font-black text-gray-900 dark:text-white">
+                        {grade.gradePoints.toFixed(2)}
+                      </span>
+                    </td>
+                    <td className="px-6 py-4 text-center">
+                      <span className={`px-3 py-1 text-xs font-black uppercase tracking-widest ${
+                        grade.status === 'Finalized' ? 'bg-green-100 text-green-800 dark:bg-green-900/20 dark:text-green-400' :
+                        grade.status === 'Verified' ? 'bg-blue-100 text-blue-800 dark:bg-blue-900/20 dark:text-blue-400' :
+                        grade.status === 'Provisional' ? 'bg-amber-100 text-amber-800 dark:bg-amber-900/20 dark:text-amber-400' :
+                        'bg-gray-100 text-gray-800 dark:bg-gray-900/20 dark:text-gray-400'
+                      }`}>
+                        {grade.status}
+                      </span>
+                    </td>
+                    <td className="px-6 py-4 text-center">
+                      <div className="flex items-center justify-center gap-2">
+                        <button
+                          onClick={() => handleViewDetails(grade.id)}
+                          className="px-3 py-1 bg-[#4B0082] text-white text-xs font-bold uppercase hover:bg-black transition-colors flex items-center gap-1"
+                        >
+                          <Eye size={14} />
+                          View
+                        </button>
+                        <button
+                          onClick={() => handleEditGrade(grade)}
+                          className="px-3 py-1 bg-blue-600 text-white text-xs font-bold uppercase hover:bg-blue-700 transition-colors"
+                        >
+                          Edit
+                        </button>
+                        <button
+                          onClick={() => handleDeleteGrade(grade.id)}
+                          className="px-3 py-1 bg-red-600 text-white text-xs font-bold uppercase hover:bg-red-700 transition-colors"
+                        >
+                          Delete
+                        </button>
+                      </div>
+                    </td>
+                  </tr>
+                ))
+              )}
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      {/* Grade Entry Modal */}
+      <GradeEntryModal
+        isOpen={isModalOpen}
+        onClose={() => {
+          setIsModalOpen(false);
+          setEditingGrade(null);
+        }}
+        onSave={handleSaveGrade}
+        students={studentOptions}
+        courses={courseOptions}
+        editData={editingGrade}
+        isLoading={isLoading}
+      />
+
+      {/* Grade Details View */}
+      {selectedGradeId && (
+        <GradeDetailsView
+          gradeId={selectedGradeId}
+          isOpen={isDetailsOpen}
+          onClose={() => {
+            setIsDetailsOpen(false);
+            setSelectedGradeId(null);
+          }}
+        />
+      )}
+
+      {/* Student Grade Report */}
+      {selectedStudent && (
+        <StudentGradeReport
+          studentId={selectedStudent.id}
+          studentName={selectedStudent.name}
+          isOpen={isStudentReportOpen}
+          onClose={() => {
+            setIsStudentReportOpen(false);
+            setSelectedStudent(null);
+          }}
+        />
+      )}
+
+      {/* Course Grade Distribution */}
+      {selectedCourse && (
+        <CourseGradeDistribution
+          courseCode={selectedCourse.code}
+          courseName={selectedCourse.name}
+          academicYear={selectedCourse.year}
+          semester={selectedCourse.semester}
+          isOpen={isCourseDistributionOpen}
+          onClose={() => {
+            setIsCourseDistributionOpen(false);
+            setSelectedCourse(null);
+          }}
+        />
+      )}
+
+      {/* Grade Appeal Form */}
+      {selectedGradeForAppeal && (
+        <GradeAppealForm
+          grade={selectedGradeForAppeal}
+          isOpen={isAppealFormOpen}
+          onClose={() => {
+            setIsAppealFormOpen(false);
+            setSelectedGradeForAppeal(null);
+          }}
+          onSubmit={handleSubmitAppeal}
+        />
+      )}
+
+      {/* Grade Appeal Review */}
+      <GradeAppealReview
+        isOpen={isAppealReviewOpen}
+        onClose={() => setIsAppealReviewOpen(false)}
+        onApprove={handleApproveAppeal}
+        onDeny={handleDenyAppeal}
+      />
+
+      <BulkEntryModal
+        open={bulkOpen}
+        onClose={() => setBulkOpen(false)}
+        title="Bulk grades (JSON lines)"
+        entity="grades"
+        sampleLine='{"studentId":"STUDENT_ID_OR_NUMBER","courseCode":"THEO101","academicYear":"2024-2025","semester":"Fall","percentage":88}'
+        onSubmit={async (lines) => {
+          try {
+            const items = lines.map((l) => JSON.parse(l) as Record<string, unknown>);
+            const r = await postGradeBatch(items);
+            await loadGrades();
+            const ok = (r.data?.failureCount ?? 0) === 0;
+            return {
+              ok,
+              message: `Created: ${r.data?.successCount ?? 0}, failed: ${r.data?.failureCount ?? 0}. ${(r.data?.errors || []).map((e) => `#${e.index}: ${e.error}`).join(' | ')}`,
+            };
+          } catch {
+            return { ok: false, message: 'Invalid JSON on one or more lines.' };
+          }
+        }}
+      />
+    </div>
+  );
+};
+
+export default Grades;

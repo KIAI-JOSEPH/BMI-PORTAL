@@ -1,7 +1,11 @@
 #!/usr/bin/env tsx
 /**
- * BMI UMS - Database Migration Script
- * Sets up PocketBase collections programmatically
+ * BMI UMS - Legacy Database Migration Script
+ *
+ * @deprecated Blocked by default. Canonical schema: backend/src/services/pocketbase.ts
+ * (setupCollections on API startup). See docs/SCHEMA_SETUP.md
+ *
+ * To run this legacy script anyway (not recommended): ALLOW_LEGACY_POCKETBASE_MIGRATE=1
  */
 
 import PocketBase from 'pocketbase';
@@ -155,6 +159,23 @@ const collections = [
 ];
 
 async function migrate() {
+  if (process.env.ALLOW_LEGACY_POCKETBASE_MIGRATE !== '1') {
+    console.error(`
+[DEPRECATED] scripts/migrate-db.ts
+
+This script can create camelCase / flat schemas that conflict with the canonical
+snake_case + relations model in backend/src/services/pocketbase.ts.
+
+Use: start PocketBase → cd backend && npm run dev
+
+Emergency only: ALLOW_LEGACY_POCKETBASE_MIGRATE=1 npx tsx scripts/migrate-db.ts
+Docs: docs/SCHEMA_SETUP.md
+`);
+    process.exit(1);
+  }
+
+  console.warn('[WARN] Running legacy migrate-db.ts — schema may drift from canonical pocketbase.ts\n');
+
   console.log('🔧 BMI UMS Database Migration');
   console.log(`Connecting to PocketBase at ${PB_URL}...`);
   

@@ -1,5 +1,5 @@
 
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import { 
   Download, 
   Plus, 
@@ -28,6 +28,10 @@ import {
   CreditCard
 } from 'lucide-react';
 import { Transaction, Student, StaffMember } from '../types';
+import { getPrograms } from '../services/catalogService';
+import { getTransactions, createTransaction, updateTransaction } from '../services/financeService';
+import { BulkEntryModal } from './BulkEntryModal';
+import { postTransactionBatch } from '../services/batchService';
 
 interface FinanceProps {
   theme: string;
@@ -47,11 +51,30 @@ const Finance: React.FC<FinanceProps> = ({ theme, students, staff, transactions,
   const [editingTx, setEditingTx] = useState<Transaction | null>(null);
   const [showReceipt, setShowReceipt] = useState<Transaction | null>(null);
   const [keepOpen, setKeepOpen] = useState(false);
-  
+  const [bulkTxOpen, setBulkTxOpen] = useState(false);
+  const [programRows, setProgramRows] = useState<Array<{ id: string; label: string }>>([]);
+
   // Advanced Filters
-  const [facultyFilter, setFacultyFilter] = useState('All Faculty');
+  const [programFilter, setProgramFilter] = useState('All Programs');
   const [deptFilter, setDeptFilter] = useState('All Dept');
   const [yearFilter, setYearFilter] = useState('All Years');
+
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      const r = await getPrograms();
+      if (cancelled || !r.success || !r.data) return;
+      setProgramRows(
+        r.data.map((p: Record<string, unknown>) => ({
+          id: String(p.id),
+          label: `${String(p.program_code ?? '')} — ${String(p.name ?? '')}`,
+        }))
+      );
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   const [newTx, setNewTx] = useState<{
     name: string;
@@ -70,25 +93,26 @@ const Finance: React.FC<FinanceProps> = ({ theme, students, staff, transactions,
   const [showToast, setShowToast] = useState(false);
   const [toastMsg, setToastMsg] = useState('');
 
-  const faculties = ['All Faculty', 'Theology', 'ICT', 'Business', 'Education'];
   const depts = ['All Dept', 'Biblical Studies', 'Computer Science', 'Undeclared'];
   const years = ['All Years', '2022', '2023', '2024'];
 
   const studentLedgerData = useMemo(() => {
     return students.filter(s => {
-      const matchesSearch = `${s.firstName} ${s.lastName} ${s.id}`.toLowerCase().includes(searchTerm.toLowerCase());
-      const matchesFaculty = facultyFilter === 'All Faculty' || s.faculty === facultyFilter;
-      const matchesDept = deptFilter === 'All Dept' || s.department === deptFilter;
-      const matchesYear = yearFilter === 'All Years' || s.admissionYear === yearFilter;
-      return matchesSearch && matchesFaculty && matchesDept && matchesYear;
+      const matchesSearch = `${s.first_name} ${s.last_name} ${s.id}`.toLowerCase().includes(searchTerm.toLowerCase());
+      const matchesProgram = programFilter === 'All Programs' || s.program_code === programFilter;
+      const matchesDept = deptFilter === 'All Dept' || (s as unknown as { department?: string }).department === deptFilter;
+      const matchesYear =
+        yearFilter === 'All Years' ||
+        String((s as unknown as { admission_date?: string }).admission_date || '').includes(yearFilter);
+      return matchesSearch && matchesProgram && matchesDept && matchesYear;
     }).map(s => {
-      const studentName = `${s.firstName} ${s.lastName}`;
+      const studentName = `${s.first_name} ${s.last_name}`;
       const studentTxs = transactions.filter(t => t.name === studentName);
       const paid = studentTxs.reduce((acc, curr) => curr.status === 'Paid' ? acc + curr.amt : acc, 0);
       const pending = studentTxs.reduce((acc, curr) => curr.status === 'Pending' ? acc + curr.amt : acc, 0);
       return { ...s, paid, pending, txCount: studentTxs.length };
     });
-  }, [students, transactions, searchTerm, facultyFilter, deptFilter, yearFilter]);
+  }, [students, transactions, searchTerm, programFilter, deptFilter, yearFilter]);
 
   const employeeLedgerData = useMemo(() => {
     return staff.filter(st => {
@@ -101,7 +125,7 @@ const Finance: React.FC<FinanceProps> = ({ theme, students, staff, transactions,
     });
   }, [staff, transactions, searchTerm]);
 
-  const handleAddTx = (e: React.FormEvent) => {
+  const handleAddTx = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!newTx.name) {
       setToastMsg('Please select a recipient from the registry');
@@ -110,54 +134,83 @@ const Finance: React.FC<FinanceProps> = ({ theme, students, staff, transactions,
       return;
     }
 
-    let committedTx: Transaction;
+    let committedTx: Transaction | null = null;
 
-    if (editingTx) {
-      committedTx = {
-        ...editingTx,
-        name: newTx.name,
-        desc: newTx.desc,
-        amt: parseFloat(newTx.amt) || 0,
-        status: newTx.status,
-        date: newTx.date
-      };
-      setTransactions(prev => prev.map(t => t.ref === editingTx.ref ? committedTx : t));
-      setIsNewTxModalOpen(false);
-      setEditingTx(null);
-      setToastMsg('Transaction updated successfully');
-    } else {
-      committedTx = {
-        ref: `TRX-${Math.floor(Math.random() * 10000).toString().padStart(4, '0')}`,
-        name: newTx.name,
-        desc: newTx.desc,
-        date: newTx.date,
-        amt: parseFloat(newTx.amt) || 0,
-        status: newTx.status
-      };
-      
-      setTransactions(prev => [committedTx, ...prev]);
-      
-      if (!keepOpen) {
+    try {
+      if (editingTx && editingTx.id) {
+        const res = await updateTransaction(editingTx.id, {
+          name: newTx.name,
+          desc: newTx.desc,
+          amt: parseFloat(newTx.amt) || 0,
+          status: newTx.status,
+          date: newTx.date,
+        });
+        if (res.success && res.data) {
+          committedTx = res.data as Transaction;
+          setTransactions((prev) => prev.map((t) => (t.id === editingTx.id ? committedTx! : t)));
+        } else {
+          setToastMsg(res.error || 'Update failed');
+          setShowToast(true);
+          return;
+        }
         setIsNewTxModalOpen(false);
+        setEditingTx(null);
+        setToastMsg('Transaction updated successfully');
+      } else if (editingTx) {
+        committedTx = {
+          ...editingTx,
+          name: newTx.name,
+          desc: newTx.desc,
+          amt: parseFloat(newTx.amt) || 0,
+          status: newTx.status,
+          date: newTx.date,
+        };
+        setTransactions((prev) => prev.map((t) => (t.ref === editingTx.ref ? committedTx! : t)));
+        setIsNewTxModalOpen(false);
+        setEditingTx(null);
+        setToastMsg('Transaction updated locally (no server id)');
+      } else {
+        const res = await createTransaction({
+          ref: `TRX-${Math.floor(Math.random() * 10000).toString().padStart(4, '0')}`,
+          name: newTx.name,
+          desc: newTx.desc,
+          date: newTx.date,
+          amt: parseFloat(newTx.amt) || 0,
+          status: newTx.status,
+        });
+        if (res.success && res.data) {
+          committedTx = res.data as Transaction;
+          setTransactions((prev) => [committedTx!, ...prev]);
+          setToastMsg(`Entry for ${committedTx.name} committed successfully`);
+        } else {
+          setToastMsg(res.error || 'Create failed');
+          setShowToast(true);
+          return;
+        }
+        if (!keepOpen) {
+          setIsNewTxModalOpen(false);
+        }
       }
-      
-      setToastMsg(`Entry for ${committedTx.name} committed successfully`);
-    }
 
-    if (committedTx.status === 'Paid') {
-      setShowReceipt(committedTx);
+      if (committedTx?.status === 'Paid') {
+        setShowReceipt(committedTx);
+      }
+
+      setNewTx({
+        name: '',
+        desc: financeView === 'students' ? 'Tuition Payment' : 'Salary Disbursement',
+        amt: '',
+        status: 'Paid',
+        date: new Date().toISOString().split('T')[0],
+      });
+
+      setShowToast(true);
+      setTimeout(() => setShowToast(false), 3000);
+    } catch (err) {
+      console.error(err);
+      setToastMsg('Network error saving transaction');
+      setShowToast(true);
     }
-    
-    setNewTx({ 
-      name: '', 
-      desc: financeView === 'students' ? 'Tuition Payment' : 'Salary Disbursement', 
-      amt: '', 
-      status: 'Paid',
-      date: new Date().toISOString().split('T')[0]
-    });
-    
-    setShowToast(true);
-    setTimeout(() => setShowToast(false), 3000);
   };
 
   const handleEditClick = (tx: Transaction) => {
@@ -179,7 +232,7 @@ const Finance: React.FC<FinanceProps> = ({ theme, students, staff, transactions,
   };
 
   const getReceiptData = (tx: Transaction) => {
-    const student = students.find(s => `${s.firstName} ${s.lastName}` === tx.name);
+    const student = students.find(s => `${s.first_name} ${s.last_name}` === tx.name);
     const studentTxs = transactions.filter(t => t.name === tx.name && t.status === 'Paid');
     const totalPaid = studentTxs.reduce((acc, curr) => acc + curr.amt, 0);
     const tuitionTotal = 5000; 
@@ -199,6 +252,13 @@ const Finance: React.FC<FinanceProps> = ({ theme, students, staff, transactions,
            </div>
         </div>
         <div className="flex gap-3 pl-14 md:pl-0 w-full md:w-auto justify-end">
+          <button
+            type="button"
+            onClick={() => setBulkTxOpen(true)}
+            className="flex items-center gap-2 px-4 py-2 bg-indigo-700 text-white rounded-none shadow-xl hover:bg-indigo-900 transition-all font-black text-[9px] uppercase tracking-widest"
+          >
+            Bulk JSON
+          </button>
           <button 
             onClick={() => {
               setEditingTx(null);
@@ -275,11 +335,14 @@ const Finance: React.FC<FinanceProps> = ({ theme, students, staff, transactions,
               {financeView === 'students' && (
                 <div className="flex flex-wrap gap-4 items-center animate-fade-in">
                    <select 
-                     value={facultyFilter} 
-                     onChange={(e) => setFacultyFilter(e.target.value)}
-                     className="px-4 py-2 bg-white dark:bg-gray-700 border border-gray-200 dark:border-gray-600 text-[10px] font-black uppercase outline-none focus:ring-1 focus:ring-[#4B0082]"
+                     value={programFilter} 
+                     onChange={(e) => setProgramFilter(e.target.value)}
+                     className="px-4 py-2 bg-white dark:bg-gray-700 border border-gray-200 dark:border-gray-600 text-[10px] font-black uppercase outline-none focus:ring-1 focus:ring-[#4B0082] max-w-[200px]"
                    >
-                      {faculties.map(f => <option key={f} value={f}>{f}</option>)}
+                      <option value="All Programs">All Programs</option>
+                      {programRows.map((p) => (
+                        <option key={p.id} value={p.id}>{p.label}</option>
+                      ))}
                    </select>
                    <select 
                      value={deptFilter} 
@@ -296,7 +359,7 @@ const Finance: React.FC<FinanceProps> = ({ theme, students, staff, transactions,
                       {years.map(y => <option key={y} value={y}>{y}</option>)}
                    </select>
                    <button 
-                    onClick={() => { setFacultyFilter('All Faculty'); setDeptFilter('All Dept'); setYearFilter('All Years'); }}
+                    onClick={() => { setProgramFilter('All Programs'); setDeptFilter('All Dept'); setYearFilter('All Years'); }}
                     className="text-[10px] font-black uppercase text-[#4B0082] hover:underline px-2"
                    >Reset Registry Filters</button>
                 </div>
@@ -323,13 +386,13 @@ const Finance: React.FC<FinanceProps> = ({ theme, students, staff, transactions,
                     <tr key={idx} className="hover:bg-purple-50/30 dark:hover:bg-gray-700/30 transition-all group">
                       <td className="px-6 py-5 text-xs font-mono font-bold text-[#4B0082] dark:text-purple-300">{s.id}</td>
                       <td className="px-6 py-5">
-                        <p className="text-sm font-black text-gray-900 dark:text-white uppercase tracking-tight leading-none">{s.firstName} {s.lastName}</p>
+                        <p className="text-sm font-black text-gray-900 dark:text-white uppercase tracking-tight leading-none">{s.first_name} {s.last_name}</p>
                         <p className="text-[9px] font-bold text-gray-400 uppercase tracking-widest mt-1.5">{s.careerPath}</p>
                       </td>
                       <td className="px-6 py-5">
                         <div className="flex items-center gap-2">
                           <div className="w-1 h-4 bg-blue-400"></div>
-                          <span className="text-xs font-bold text-gray-400 dark:text-gray-400 uppercase tracking-tight">{s.faculty} • {s.department}</span>
+                          <span className="text-xs font-bold text-gray-400 dark:text-gray-400 uppercase tracking-tight">{s.program_code || '—'}</span>
                         </div>
                       </td>
                       <td className="px-6 py-5 text-xs text-gray-500 font-black">{s.admissionYear}</td>
@@ -348,7 +411,7 @@ const Finance: React.FC<FinanceProps> = ({ theme, students, staff, transactions,
                             className="p-2 text-gray-300 hover:text-[#4B0082] transition-colors" title="Bursary Detail"
                           ><History size={18} /></button>
                           <button 
-                            onClick={() => sendReceipt(`${s.firstName} ${s.lastName}`, 'total')}
+                            onClick={() => sendReceipt(`${s.first_name} ${s.last_name}`, 'total')}
                             className="p-2 text-gray-300 hover:text-[#4B0082] transition-colors" title="Dispatch Total Receipt"
                           ><Mail size={18} /></button>
                         </div>
@@ -392,7 +455,7 @@ const Finance: React.FC<FinanceProps> = ({ theme, students, staff, transactions,
              <div className="bg-white dark:bg-gray-900 w-full max-w-4xl shadow-2xl border-2 border-gray-900 overflow-hidden flex flex-col max-h-[90vh]">
                 <div className="p-8 border-b-4 border-[#4B0082] flex justify-between items-center bg-gray-900 text-white">
                    <div>
-                      <h3 className="text-2xl font-bold uppercase tracking-tight">{selectedStudent.firstName} {selectedStudent.lastName}</h3>
+                      <h3 className="text-2xl font-bold uppercase tracking-tight">{selectedStudent.first_name} {selectedStudent.last_name}</h3>
                       <p className="text-xs font-bold text-[#FFD700] uppercase tracking-widest mt-1">Institutional Financial Node: {selectedStudent.id}</p>
                    </div>
                    <button onClick={() => setSelectedStudent(null)} className="p-2 hover:bg-red-500 transition-all"><X size={24}/></button>
@@ -411,11 +474,11 @@ const Finance: React.FC<FinanceProps> = ({ theme, students, staff, transactions,
                       </div>
                       <div className="flex flex-col gap-2">
                          <button 
-                           onClick={() => sendReceipt(`${selectedStudent.firstName} ${selectedStudent.lastName}`, 'yearly')}
+                           onClick={() => sendReceipt(`${selectedStudent.first_name} ${selectedStudent.last_name}`, 'yearly')}
                            className="flex-1 bg-[#4B0082] text-white text-[10px] font-black uppercase tracking-widest py-3 hover:bg-black transition-all"
                          >Dispatch Yearly Statement</button>
                          <button 
-                           onClick={() => sendReceipt(`${selectedStudent.firstName} ${selectedStudent.lastName}`, 'total')}
+                           onClick={() => sendReceipt(`${selectedStudent.first_name} ${selectedStudent.last_name}`, 'total')}
                            className="flex-1 border-2 border-[#4B0082] text-[#4B0082] text-[10px] font-black uppercase tracking-widest py-3 hover:bg-gray-50 transition-all"
                          >Request Final Clearance</button>
                       </div>
@@ -436,7 +499,7 @@ const Finance: React.FC<FinanceProps> = ({ theme, students, staff, transactions,
                             </tr>
                          </thead>
                          <tbody className="divide-y divide-gray-100 dark:divide-gray-700">
-                            {transactions.filter(t => t.name === `${selectedStudent.firstName} ${selectedStudent.lastName}`).map((t, i) => (
+                            {transactions.filter(t => t.name === `${selectedStudent.first_name} ${selectedStudent.last_name}`).map((t, i) => (
                                <tr key={i} className="hover:bg-gray-50 dark:hover:bg-gray-800/50">
                                   <td className="px-4 py-3 text-xs font-mono font-bold text-[#4B0082]">{t.ref}</td>
                                   <td className="px-4 py-3 text-xs font-bold uppercase tracking-tight">{t.desc}</td>
@@ -460,7 +523,7 @@ const Finance: React.FC<FinanceProps> = ({ theme, students, staff, transactions,
                                   </td>
                                </tr>
                             ))}
-                            {transactions.filter(t => t.name === `${selectedStudent.firstName} ${selectedStudent.lastName}`).length === 0 && (
+                            {transactions.filter(t => t.name === `${selectedStudent.first_name} ${selectedStudent.last_name}`).length === 0 && (
                               <tr><td colSpan={5} className="p-10 text-center text-xs font-bold text-gray-400 uppercase italic">No documented transactions found in registry</td></tr>
                             )}
                          </tbody>
@@ -516,7 +579,7 @@ const Finance: React.FC<FinanceProps> = ({ theme, students, staff, transactions,
                               <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest mb-1">RECIPIENT DOMAIN</p>
                               <h3 className="text-xl font-black text-gray-900 uppercase tracking-tight">{showReceipt.name}</h3>
                               <p className="text-xs font-bold text-[#4B0082] mt-1 italic">{student?.id || 'BMI-EXT-USR'}</p>
-                              <p className="text-[10px] font-bold text-gray-500 uppercase mt-0.5">{student?.faculty || 'External Audit'}</p>
+                              <p className="text-[10px] font-bold text-gray-500 uppercase mt-0.5">{student?.program_code || 'External Audit'}</p>
                            </div>
                            <div>
                               <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest mb-1">PAYMENT SPECIFICATION</p>
@@ -618,9 +681,9 @@ const Finance: React.FC<FinanceProps> = ({ theme, students, staff, transactions,
                     >
                       <option value="">{financeView === 'students' ? '--- Select Student ---' : '--- Select Staff ---'}</option>
                       {financeView === 'students' 
-                        ? students.sort((a,b) => `${a.firstName} ${a.lastName}`.localeCompare(`${b.firstName} ${b.lastName}`)).map(s => (
-                            <option key={s.id} value={`${s.firstName} ${s.lastName}`}>
-                              {s.id} | {s.firstName} {s.lastName}
+                        ? students.sort((a,b) => `${a.first_name} ${a.last_name}`.localeCompare(`${b.first_name} ${b.last_name}`)).map(s => (
+                            <option key={s.id} value={`${s.first_name} ${s.last_name}`}>
+                              {s.id} | {s.first_name} {s.last_name}
                             </option>
                           ))
                         : staff.sort((a,b) => a.name.localeCompare(b.name)).map(st => (
@@ -739,6 +802,28 @@ const Finance: React.FC<FinanceProps> = ({ theme, students, staff, transactions,
                </div>
             </div>
         )}
+
+        <BulkEntryModal
+          open={bulkTxOpen}
+          onClose={() => setBulkTxOpen(false)}
+          title="Bulk transactions (JSON lines)"
+          entity="transactions"
+          sampleLine='{"ref":"TX-B-1","name":"Jane Doe","desc":"Tuition","amt":1500,"status":"Paid","date":"2025-01-01"}'
+          onSubmit={async (lines) => {
+            try {
+              const items = lines.map((l) => JSON.parse(l) as Record<string, unknown>);
+              const r = await postTransactionBatch(items);
+              const list = await getTransactions({ perPage: 500 });
+              if (list.success && list.data) setTransactions(list.data);
+              return {
+                ok: (r.data?.failureCount ?? 0) === 0,
+                message: `Created: ${r.data?.successCount ?? 0}, failed: ${r.data?.failureCount ?? 0}.`,
+              };
+            } catch {
+              return { ok: false, message: 'Invalid JSON on one or more lines.' };
+            }
+          }}
+        />
 
         {/* Security Protocol Footer */}
         <div className="bg-gray-900 border-l-4 border-[#FFD700] p-6 text-white flex items-start gap-5 shadow-2xl mt-auto">

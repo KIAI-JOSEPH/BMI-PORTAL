@@ -42,7 +42,7 @@ libraryRouter.get('/', async (c) => {
     const { page, perPage } = parsePagination(
       c.req.query('page'),
       c.req.query('perPage'),
-      { page: 1, perPage: 20, maxPerPage: 100 }
+      { page: 1, perPage: 20, maxPerPage: 500 }
     );
     
     const category = c.req.query('category');

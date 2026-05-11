@@ -21,7 +21,8 @@ import {
   Award, 
   FileText,
   Scroll,
-  X
+  X,
+  GraduationCap
 } from 'lucide-react';
 import { NavItem } from '../types';
 
@@ -43,6 +44,7 @@ const Sidebar: React.FC<SidebarProps> = ({ currentView, onChangeView, onLogout, 
     { id: 'finance', label: 'Finance', icon: CreditCard },
     { id: 'courses', label: 'Courses', icon: MonitorPlay },
     { id: 'exams', label: 'Exams & Grading', icon: FileSpreadsheet },
+    { id: 'grades', label: 'Grade Management', icon: GraduationCap },
     { id: 'transcripts', label: 'Transcripts', icon: FileText },
     { id: 'certificates', label: 'Certificates', icon: Scroll },
     { id: 'library', label: 'Library', icon: Book },

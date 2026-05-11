@@ -74,7 +74,25 @@ aiRouter.post('/completions', authMiddleware, zValidator('json', openAIChatSchem
       temperature: body.temperature,
       max_tokens: body.max_tokens,
     });
-    return c.json(response);
+    return c.json<ApiResponse<typeof response>>({ success: true, data: response });
+  } catch (error) {
+    logger.error('AI completions error:', error);
+    return c.json<ApiResponse<never>>({ success: false, error: 'AI service temporarily unavailable' }, 503);
+  }
+});
+
+/**
+ * POST /api/v1/ai/chat/completions
+ * Backward-compatible alias for clients expecting /chat/completions.
+ */
+aiRouter.post('/chat/completions', authMiddleware, zValidator('json', openAIChatSchema), async (c) => {
+  try {
+    const body = c.req.valid('json');
+    const response = await chatCompletions(body.messages as any, {
+      temperature: body.temperature,
+      max_tokens: body.max_tokens,
+    });
+    return c.json<ApiResponse<typeof response>>({ success: true, data: response });
   } catch (error) {
     logger.error('AI completions error:', error);
     return c.json<ApiResponse<never>>({ success: false, error: 'AI service temporarily unavailable' }, 503);

@@ -21,8 +21,8 @@ The admin user created via CLI (`./bin/pocketbase superuser upsert`) is not auth
 5. If you can't log in, reset the password through the UI
 
 ### Option 2: Create Admin via PocketBase UI
-1. Stop PocketBase: `make stop-all` or kill the process
-2. Start PocketBase: `make start-all`
+1. Stop PocketBase/API stack: `make stop` or kill the process
+2. Start PocketBase/API stack: `make start`
 3. Check logs for the setup URL (first-time setup)
 4. Open the URL in browser and create admin with:
    - Email: `admin@bmi.edu`
@@ -32,8 +32,8 @@ The admin user created via CLI (`./bin/pocketbase superuser upsert`) is not auth
 If all else fails, start fresh:
 
 ```bash
-# 1. Stop PocketBase
-make stop-all
+# 1. Stop PocketBase/API stack
+make stop
 
 # 2. Backup current database (optional)
 cp -r data/pb_data data/pb_data.backup
@@ -42,7 +42,7 @@ cp -r data/pb_data data/pb_data.backup
 rm -rf data/pb_data
 
 # 4. Start PocketBase (will create fresh database)
-make start-all
+make start
 
 # 5. Check logs for first-time setup URL
 tail -f logs/pocketbase.log

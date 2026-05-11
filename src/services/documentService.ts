@@ -27,6 +27,7 @@ import type {
 
 // QR Code generation (using free API or local implementation)
 import QRCode from 'qrcode';
+import { getHtml2Pdf } from './pdfService';
 
 /** 
  * Document Service - Central hub for all document operations
@@ -40,7 +41,9 @@ export class DocumentService {
   private readonly TEMPLATES_KEY = 'bmi_document_templates';
 
   private constructor() {
-    this.API_BASE = import.meta.env.VITE_API_URL || 'http://localhost:3001/api/v1';
+    // Use relative path — Vite proxy handles dev, same-origin handles production.
+    // If you need an explicit URL (e.g., mobile device testing), set VITE_API_URL=/api/v1 or a full origin.
+    this.API_BASE = import.meta.env.VITE_API_URL || '/api/v1';
   }
 
   static getInstance(): DocumentService {
@@ -450,9 +453,7 @@ export class DocumentService {
     }
 
     try {
-      // Dynamic import of html2pdf
-      const html2pdfModule = await import('html2pdf.js');
-      const html2pdf = html2pdfModule.default || html2pdfModule;
+      const html2pdf = await getHtml2Pdf();
 
       const qualityMap = { low: 1, medium: 1.5, high: 2, maximum: 3 };
       const scale = qualityMap[options.quality || 'high'];

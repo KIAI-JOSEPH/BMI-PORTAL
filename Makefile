@@ -1,20 +1,21 @@
 # BMI UMS - Makefile for common development tasks
 
-.PHONY: help install start stop dev docker-up docker-down migrate test lint clean
+.PHONY: help install start stop dev docker-up docker-down migrate test lint verify clean
 
 # Default target
 help:
 	@echo "BMI University Management System - Available Commands"
 	@echo "======================================================"
 	@echo "make install      - Install all dependencies"
-	@echo "make start        - Start all services (PocketBase, Ollama, API)"
+	@echo "make start        - Start full dev stack (PocketBase, Ollama, API, Frontend)"
 	@echo "make stop         - Stop all services"
 	@echo "make dev          - Start development mode with hot reload"
 	@echo "make docker-up    - Start with Docker Compose"
 	@echo "make docker-down  - Stop Docker Compose"
-	@echo "make migrate      - Run database migrations"
+	@echo "make migrate      - Show PocketBase schema bootstrap instructions"
 	@echo "make test         - Run tests"
 	@echo "make lint         - Run linter"
+	@echo "make verify       - Run backend test/lint/build + frontend build"
 	@echo "make clean        - Clean build artifacts and logs"
 	@echo "make logs         - View all logs"
 	@echo "make status       - Check service status"
@@ -27,8 +28,8 @@ install:
 
 # Start all services
 start:
-	@echo "Starting all services..."
-	./scripts/start-all.sh
+	@echo "Starting full development stack..."
+	./start-dev.sh
 
 # Stop all services
 stop:
@@ -56,10 +57,12 @@ docker-logs:
 	@echo "Viewing Docker logs..."
 	docker-compose logs -f
 
-# Database migrations
+# PocketBase schema is applied by the API on startup (pocketbase.ts setupCollections).
 migrate:
-	@echo "Running database migrations..."
-	cd backend && npx tsx ../scripts/migrate-db.ts
+	@echo "PocketBase schema: created by backend on startup (src/services/pocketbase.ts)."
+	@echo "  1. Start PocketBase  2. cd backend && npm run dev"
+	@echo "Docs: docs/SCHEMA_SETUP.md"
+	@echo "Legacy migrate-db.ts: set ALLOW_LEGACY_POCKETBASE_MIGRATE=1 (not recommended)."
 
 # Create first admin user
 create-admin:
@@ -75,6 +78,12 @@ test:
 lint:
 	@echo "Running linter..."
 	cd backend && npm run lint
+
+# Full local verification
+verify:
+	@echo "Running full verification..."
+	cd backend && npm test -- --run && npm run lint && npm run build
+	npm run build
 
 # Clean
 clean:

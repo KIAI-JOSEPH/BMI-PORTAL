@@ -12,6 +12,7 @@ import {
 } from 'lucide-react';
 import { Student } from '../types';
 import { documentService } from '../services/documentService';
+import { getHtml2Pdf } from '../services/pdfService';
 import type { GoodStandingLetter as GoodStandingLetterType, DocumentSecurityFeatures } from '../types/documents';
 
 interface GoodStandingLetterProps {
@@ -38,10 +39,14 @@ export const GoodStandingLetter: React.FC<GoodStandingLetterProps> = ({ students
     purpose: 'Employment Application',
   });
 
+  const getFirstName = (student: Student) => student.first_name || (student as any).firstName || '';
+  const getLastName = (student: Student) => student.last_name || (student as any).lastName || '';
+  const getProgram = (student: Student) => student.program_code || (student as any).program || '';
+
   const filteredStudents = useMemo(() => {
     return students.filter(s => {
       const q = searchTerm.toLowerCase();
-      return `${s.firstName} ${s.lastName} ${s.id}`.toLowerCase().includes(q);
+      return `${getFirstName(s)} ${getLastName(s)} ${s.id}`.toLowerCase().includes(q);
     });
   }, [students, searchTerm]);
 
@@ -49,14 +54,14 @@ export const GoodStandingLetter: React.FC<GoodStandingLetterProps> = ({ students
     const letterData: Omit<GoodStandingLetterType, 'id' | 'security' | 'createdAt' | 'updatedAt'> = {
       type: 'good_standing',
       studentId: student.id,
-      studentName: `${student.firstName} ${student.lastName}`,
+      studentName: `${getFirstName(student)} ${getLastName(student)}`,
       letterType: letterConfig.letterType,
       purpose: letterConfig.purpose,
       academicStatus: 'Good Standing',
       conductStatus: 'Satisfactory',
       financialStatus: 'Cleared',
       effectiveDate: new Date().toISOString().split('T')[0],
-      letterBody: `This letter certifies that ${student.firstName} ${student.lastName} is a student in good standing at BMI University.`,
+      letterBody: `This letter certifies that ${getFirstName(student)} ${getLastName(student)} is a student in good standing at BMI University.`,
       authorizedBy: 'Dr. Michael Ochieng',
       authorizedTitle: 'University Registrar',
       status: 'draft',
@@ -100,8 +105,7 @@ export const GoodStandingLetter: React.FC<GoodStandingLetterProps> = ({ students
     if (!element) return;
 
     try {
-      const html2pdfModule = await import('html2pdf.js');
-      const html2pdf = (html2pdfModule as any).default || html2pdfModule;
+      const html2pdf = await getHtml2Pdf();
       
       const opt = {
         margin: 0,
@@ -172,11 +176,11 @@ export const GoodStandingLetter: React.FC<GoodStandingLetterProps> = ({ students
               >
                 <div className="flex items-center gap-3">
                   <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-cyan-500 to-blue-600 flex items-center justify-center text-white font-bold shadow-md">
-                    {student.firstName[0]}{student.lastName[0]}
+                    {getFirstName(student)[0]}{getLastName(student)[0]}
                   </div>
                   <div className="flex-1">
-                    <h4 className="font-semibold text-slate-900">{student.firstName} {student.lastName}</h4>
-                    <p className="text-xs text-slate-500">{student.id} • {student.program}</p>
+                    <h4 className="font-semibold text-slate-900">{getFirstName(student)} {getLastName(student)}</h4>
+                    <p className="text-xs text-slate-500">{student.id} • {getProgram(student)}</p>
                   </div>
                 </div>
               </div>

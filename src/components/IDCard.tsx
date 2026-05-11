@@ -12,6 +12,7 @@ import {
 } from 'lucide-react';
 import { Student } from '../types';
 import { documentService } from '../services/documentService';
+import { getHtml2Pdf } from '../services/pdfService';
 import type { StudentIDCard as StudentIDCardType, DocumentSecurityFeatures } from '../types/documents';
 
 interface IDCardProps {
@@ -35,10 +36,17 @@ export const IDCard: React.FC<IDCardProps> = ({ students, logo }) => {
   const [securityFeatures, setSecurityFeatures] = useState<DocumentSecurityFeatures | null>(null);
   const [activeDesign, setActiveDesign] = useState<'modern' | 'classic' | 'minimal'>('modern');
 
+  const getFirstName = (student: Student) => student.first_name || (student as any).firstName || '';
+  const getLastName = (student: Student) => student.last_name || (student as any).lastName || '';
+  const getProgram = (student: Student) => student.program_code || (student as any).program || '';
+  const getFaculty = (student: Student) => (student as any).faculty || student.program_code;
+  const getDepartment = (student: Student) => (student as any).department || student.program_code;
+  const getStudentNumber = (student: Student) => (student as any).student_number || (student as any).studentNumber || student.id;
+
   const filteredStudents = useMemo(() => {
     return students.filter(s => {
       const q = searchTerm.toLowerCase();
-      return `${s.firstName} ${s.lastName} ${s.id}`.toLowerCase().includes(q);
+      return `${getFirstName(s)} ${getLastName(s)} ${s.id}`.toLowerCase().includes(q);
     });
   }, [students, searchTerm]);
 
@@ -48,11 +56,11 @@ export const IDCard: React.FC<IDCardProps> = ({ students, logo }) => {
 
     const cardData: Omit<StudentIDCardType, 'id' | 'security' | 'createdAt' | 'updatedAt' | 'type'> = {
       studentId: student.id,
-      studentName: `${student.firstName} ${student.lastName}`,
-      studentNumber: student.studentNumber || student.id,
-      program: student.program,
-      faculty: student.faculty,
-      department: student.department,
+      studentName: `${getFirstName(student)} ${getLastName(student)}`,
+      studentNumber: getStudentNumber(student),
+      program: getProgram(student),
+      faculty: getFaculty(student),
+      department: getDepartment(student),
       issueDate: new Date().toISOString().split('T')[0],
       expiryDate: expiryDate.toISOString().split('T')[0],
       bloodGroup: 'O+',
@@ -93,8 +101,7 @@ export const IDCard: React.FC<IDCardProps> = ({ students, logo }) => {
     if (!element) return;
 
     try {
-      const html2pdfModule = await import('html2pdf.js');
-      const html2pdf = (html2pdfModule as any).default || html2pdfModule;
+      const html2pdf = await getHtml2Pdf();
       
       const opt = {
         margin: 0,
@@ -185,11 +192,11 @@ export const IDCard: React.FC<IDCardProps> = ({ students, logo }) => {
               >
                 <div className="flex items-center gap-3">
                   <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-violet-500 to-purple-600 flex items-center justify-center text-white font-bold shadow-md">
-                    {student.firstName[0]}{student.lastName[0]}
+                    {getFirstName(student)[0]}{getLastName(student)[0]}
                   </div>
                   <div className="flex-1">
-                    <h4 className="font-semibold text-slate-900">{student.firstName} {student.lastName}</h4>
-                    <p className="text-xs text-slate-500">{student.id} • {student.program}</p>
+                    <h4 className="font-semibold text-slate-900">{getFirstName(student)} {getLastName(student)}</h4>
+                    <p className="text-xs text-slate-500">{student.id} • {getProgram(student)}</p>
                   </div>
                 </div>
               </div>

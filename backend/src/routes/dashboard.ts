@@ -3,7 +3,7 @@ import { Hono } from 'hono';
 import { getPocketBase } from '../services/pocketbase.js';
 import { authMiddleware } from '../middleware/auth.js';
 import { logger } from '../utils/logger.js';
-import type { ApiResponse, Student, StaffMember, Course, Certificate, Transaction, LibraryItem } from '../types/index.js';
+import type { ApiResponse } from '../types/index.js';
 
 const dashboardRouter = new Hono();
 

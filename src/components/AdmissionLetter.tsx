@@ -12,6 +12,7 @@ import {
 } from 'lucide-react';
 import { Student } from '../types';
 import { documentService } from '../services/documentService';
+import { getHtml2Pdf } from '../services/pdfService';
 import type { AdmissionLetter as AdmissionLetterType, DocumentSecurityFeatures } from '../types/documents';
 
 interface AdmissionLetterProps {
@@ -40,10 +41,14 @@ export const AdmissionLetter: React.FC<AdmissionLetterProps> = ({ students, logo
     reference: '',
   });
 
+  const getFirstName = (student: Student) => student.first_name || (student as any).firstName || '';
+  const getLastName = (student: Student) => student.last_name || (student as any).lastName || '';
+  const getDepartment = (student: Student) => (student as any).department || student.program_code;
+
   const filteredStudents = useMemo(() => {
     return students.filter(s => {
       const q = searchTerm.toLowerCase();
-      return `${s.firstName} ${s.lastName} ${s.id}`.toLowerCase().includes(q);
+      return `${getFirstName(s)} ${getLastName(s)} ${s.id}`.toLowerCase().includes(q);
     });
   }, [students, searchTerm]);
 
@@ -51,13 +56,13 @@ export const AdmissionLetter: React.FC<AdmissionLetterProps> = ({ students, logo
     const letterData: Omit<AdmissionLetterType, 'id' | 'security' | 'createdAt' | 'updatedAt'> = {
       type: 'admission_letter',
       studentId: student.id,
-      studentName: `${student.firstName} ${student.lastName}`,
+      studentName: `${getFirstName(student)} ${getLastName(student)}`,
       admissionNumber: `ADM-${Date.now().toString().slice(-6)}`,
       academicYear: '2024-2025',
       semester: letterConfig.semester,
       program: letterConfig.program,
       faculty: letterConfig.faculty,
-      department: student.department,
+      department: getDepartment(student),
       admissionDate: new Date().toISOString().split('T')[0],
       registrationDeadline: '2025-01-15',
       tuitionFees: 85000,
@@ -111,8 +116,7 @@ export const AdmissionLetter: React.FC<AdmissionLetterProps> = ({ students, logo
     if (!element) return;
 
     try {
-      const html2pdfModule = await import('html2pdf.js');
-      const html2pdf = (html2pdfModule as any).default || html2pdfModule;
+      const html2pdf = await getHtml2Pdf();
       
       const opt = {
         margin: 0,
@@ -183,11 +187,11 @@ export const AdmissionLetter: React.FC<AdmissionLetterProps> = ({ students, logo
               >
                 <div className="flex items-center gap-3">
                   <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-emerald-500 to-teal-600 flex items-center justify-center text-white font-bold shadow-md">
-                    {student.firstName[0]}{student.lastName[0]}
+                    {getFirstName(student)[0]}{getLastName(student)[0]}
                   </div>
                   <div className="flex-1">
-                    <h4 className="font-semibold text-slate-900">{student.firstName} {student.lastName}</h4>
-                    <p className="text-xs text-slate-500">{student.id} • {student.department}</p>
+                    <h4 className="font-semibold text-slate-900">{getFirstName(student)} {getLastName(student)}</h4>
+                    <p className="text-xs text-slate-500">{student.id} • {getDepartment(student)}</p>
                   </div>
                 </div>
               </div>

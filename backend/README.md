@@ -56,6 +56,10 @@ ollama serve
 npm run dev
 ```
 
+### Database schema (PocketBase)
+
+Collections are created automatically on API startup via `src/services/pocketbase.ts` (`setupCollections()`). Use **snake_case** fields and relations as defined there — do not run deprecated root `scripts/migrate-db.ts` or `backend/scripts/setup-collections.ts` without reading `docs/SCHEMA_SETUP.md`.
+
 ## API Endpoints
 
 ### Authentication

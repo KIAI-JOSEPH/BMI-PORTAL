@@ -1,6 +1,5 @@
 import { describe, it, expect, vi } from 'vitest';
-import { authMiddleware, requireRole, getUser } from './auth.js';
-import { CONFIG } from '../config/index.js';
+import { authMiddleware, requireRole } from './auth.js';
 
 vi.mock('../config/index.js', () => ({
   CONFIG: {
