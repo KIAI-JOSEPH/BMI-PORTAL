@@ -1,6 +1,7 @@
 import React, { useState, useMemo } from 'react';
 import { Search, Printer, Download, Award, ChevronRight, ShieldCheck, X, Layout, QrCode, Loader2, AlertCircle } from 'lucide-react';
 import { Student } from '../types';
+import { getHtml2Pdf } from '../services/pdfService';
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 interface CertificateRecord {
@@ -425,8 +426,7 @@ const Certificates: React.FC<CertificatesProps> = ({ students, logo }) => {
     if (!el) return;
 
     try {
-      const html2pdfModule = await import('html2pdf.js');
-      const html2pdf = (html2pdfModule as any).default || html2pdfModule;
+      const html2pdf = await getHtml2Pdf();
       
       const serial = formatSerial(generatedCert?.serial_number || '');
       const isLand = orientation === 'landscape';

@@ -33,6 +33,9 @@ cd ~/bmi-ums
 # Setup (first time)
 make setup
 
+# PocketBase collections are created when the API starts (not via legacy migrate scripts).
+# See docs/SCHEMA_SETUP.md
+
 # Start all services
 make start
 
@@ -82,7 +85,16 @@ make docker-up  # Start with Docker
 make migrate    # Run database migrations
 make status     # Check service status
 make clean      # Clean everything
+make verify     # Run backend test/lint/build + frontend build
 ```
+
+## First 30 Minutes
+
+1. Run `make setup` once.
+2. Start services with `make start`.
+3. Confirm app at `http://localhost:3000` and API health at `http://localhost:3001/health`.
+4. Run `make verify` before starting feature work.
+5. Use `scripts/README.md` to distinguish supported scripts from legacy helpers.
 
 ## Environment Variables
 
@@ -98,6 +110,8 @@ Copy `backend/.env.example` to `backend/.env` and configure:
 ## Documentation
 
 - [Architecture Document](OPEN_SOURCE_ARCHITECTURE.md) - Full technical details
+- [Quick Start](QUICK_START.md) - End-to-end local setup and workflow
+- [Scripts Governance](scripts/README.md) - Supported vs legacy scripts
 
 ## License
 

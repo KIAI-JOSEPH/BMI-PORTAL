@@ -60,7 +60,7 @@ export async function authMiddleware(c: Context, next: Next) {
   userContext.set(c, payload);
   c.set('user', payload); // also set on context for audit middleware compatibility
   
-  await next();
+  return await next();
 }
 
 /**
@@ -76,7 +76,9 @@ export function getUser(c: Context) {
  */
 export function requireRole(...allowedRoles: string[]) {
   return async (c: Context, next: Next) => {
-    const user = getUser(c);
+    // Prefer the verified user payload from WeakMap, but fall back to
+    // context storage for compatibility with tests/middleware composition.
+    const user = getUser(c) ?? c.get('user');
 
     if (!user) {
       return c.json({
@@ -93,7 +95,7 @@ export function requireRole(...allowedRoles: string[]) {
       }, 403);
     }
 
-    await next();
+    return await next();
   };
 }
 

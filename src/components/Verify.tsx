@@ -11,6 +11,8 @@ const Verify: React.FC<VerifyProps> = ({ students }) => {
   const [status, setStatus] = useState<'loading' | 'valid' | 'invalid'>('loading');
   const [student, setStudent] = useState<Student | null>(null);
   const [serial, setSerial] = useState('');
+  const getFirstName = (value: Student | null) => (value?.first_name || (value as any)?.firstName || '');
+  const getLastName = (value: Student | null) => (value?.last_name || (value as any)?.lastName || '');
 
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
@@ -91,7 +93,7 @@ const Verify: React.FC<VerifyProps> = ({ students }) => {
               <div className="p-8 space-y-6">
                   <div className="text-center">
                       <img src="/BMI.svg" className="h-20 mx-auto mb-4 object-contain filter drop-shadow-sm" alt="Logo"/>
-                      <h1 className="text-xl font-black text-gray-900 uppercase leading-tight">{student?.firstName} {student?.lastName}</h1>
+                      <h1 className="text-xl font-black text-gray-900 uppercase leading-tight">{getFirstName(student)} {getLastName(student)}</h1>
                       <p className="text-xs font-bold text-[#4B0082] uppercase tracking-widest mt-1">{student?.id}</p>
                   </div>
 

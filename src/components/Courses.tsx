@@ -18,6 +18,14 @@ import {
 } from 'lucide-react';
 import { Course } from '../types';
 import CourseModal from './CourseModal';
+import {
+  createCourse as createCourseApi,
+  deleteCourse as deleteCourseApi,
+  updateCourse as updateCourseApi,
+  getCourses,
+} from '../services/courseService';
+import { BulkEntryModal } from './BulkEntryModal';
+import { postCourseBatch } from '../services/batchService';
 
 interface CoursesProps {
   theme: string;
@@ -32,6 +40,12 @@ const Courses: React.FC<CoursesProps> = ({ theme, courses, setCourses }) => {
   const [facultyFilter, setFacultyFilter] = useState('All Faculty');
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingCourse, setEditingCourse] = useState<Course | null>(null);
+  const [bulkCoursesOpen, setBulkCoursesOpen] = useState(false);
+
+  const facultyOptions = useMemo(() => {
+    const fromData = [...new Set(courses.map((c) => c.faculty).filter(Boolean))];
+    return ['All Faculty', ...fromData.sort()];
+  }, [courses]);
 
   const filteredCourses = useMemo(() => {
     return courses.filter(course => {
@@ -57,20 +71,15 @@ const Courses: React.FC<CoursesProps> = ({ theme, courses, setCourses }) => {
     if (editingCourse) {
       // Update existing course
       try {
-        const response = await fetch(`http://localhost:3001/api/v1/courses/${editingCourse.id}`, {
-          method: 'PATCH',
-          headers: {
-            'Content-Type': 'application/json',
-            'Authorization': `Bearer ${localStorage.getItem('token')}`
-          },
-          body: JSON.stringify(courseData)
-        });
+        const result = await updateCourseApi(editingCourse.id, courseData);
 
-        if (response.ok) {
-          setCourses(prev => prev.map(c => c.id === editingCourse.id ? { ...c, ...courseData } as Course : c));
+        if (result.success) {
+          // Use server response when available; fall back to local merge.
+          const next = result.data ? result.data : ({ ...editingCourse, ...courseData } as Course);
+          setCourses(prev => prev.map(c => c.id === editingCourse.id ? next : c));
           alert('Course updated successfully!');
         } else {
-          console.warn('Backend update failed, updating local state only');
+          console.warn('Backend update failed, updating local state only', result.error);
           setCourses(prev => prev.map(c => c.id === editingCourse.id ? { ...c, ...courseData } as Course : c));
           alert('Course updated in local state (not saved to database). Backend may be offline.');
         }
@@ -87,21 +96,13 @@ const Courses: React.FC<CoursesProps> = ({ theme, courses, setCourses }) => {
       };
 
       try {
-        const response = await fetch('http://localhost:3001/api/v1/courses', {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            'Authorization': `Bearer ${localStorage.getItem('token')}`
-          },
-          body: JSON.stringify(newCourse)
-        });
+        const result = await createCourseApi(newCourse);
 
-        if (response.ok) {
-          const result = await response.json();
+        if (result.success) {
           setCourses(prev => [result.data || newCourse, ...prev]);
           alert('Course added successfully!');
         } else {
-          console.warn('Backend save failed, adding to local state only');
+          console.warn('Backend save failed, adding to local state only', result.error);
           setCourses(prev => [newCourse, ...prev]);
           alert('Course added to local state (not saved to database). Backend may be offline.');
         }
@@ -117,18 +118,13 @@ const Courses: React.FC<CoursesProps> = ({ theme, courses, setCourses }) => {
   const deleteCourse = async (id: string) => {
     if (window.confirm('Are you sure you want to delete this course?')) {
       try {
-        const response = await fetch(`http://localhost:3001/api/v1/courses/${id}`, {
-          method: 'DELETE',
-          headers: {
-            'Authorization': `Bearer ${localStorage.getItem('token')}`
-          }
-        });
+        const result = await deleteCourseApi(id);
 
-        if (response.ok) {
+        if (result.success) {
           setCourses(prev => prev.filter(c => c.id !== id));
           alert('Course deleted successfully!');
         } else {
-          console.warn('Backend delete failed, removing from local state only');
+          console.warn('Backend delete failed, removing from local state only', result.error);
           setCourses(prev => prev.filter(c => c.id !== id));
           alert('Course removed from local state (not deleted from database). Backend may be offline.');
         }
@@ -161,6 +157,13 @@ const Courses: React.FC<CoursesProps> = ({ theme, courses, setCourses }) => {
              <button onClick={() => setViewMode('grid')} className={`p-1.5 transition-all ${viewMode === 'grid' ? 'bg-[#4B0082] text-white' : 'text-gray-400 hover:text-[#4B0082]'}`}><LayoutGrid size={14} /></button>
              <button onClick={() => setViewMode('list')} className={`p-1.5 transition-all ${viewMode === 'list' ? 'bg-[#4B0082] text-white' : 'text-gray-400 hover:text-[#4B0082]'}`}><List size={14} /></button>
           </div>
+          <button
+            type="button"
+            onClick={() => setBulkCoursesOpen(true)}
+            className="flex items-center gap-2 px-3 py-2 bg-indigo-700 text-white rounded-none shadow-xl hover:bg-indigo-900 transition-all font-black text-[9px] uppercase tracking-widest"
+          >
+            Bulk JSON
+          </button>
           <button 
             onClick={() => openModal()}
             className="flex items-center gap-2 px-4 py-2 bg-[#4B0082] text-white rounded-none shadow-xl hover:bg-black transition-all font-black text-[9px] uppercase tracking-widest border border-[#FFD700]/30"
@@ -216,7 +219,9 @@ const Courses: React.FC<CoursesProps> = ({ theme, courses, setCourses }) => {
              onChange={(e) => setFacultyFilter(e.target.value)}
              className="px-4 py-2 bg-gray-50 dark:bg-gray-700 border border-gray-200 dark:border-gray-600 text-[10px] font-black uppercase outline-none cursor-pointer dark:text-white"
            >
-             {['All Faculty', 'Theology', 'ICT', 'Business', 'Education', 'General'].map(f => <option key={f} value={f}>{f}</option>)}
+             {facultyOptions.map((f) => (
+               <option key={f} value={f}>{f}</option>
+             ))}
            </select>
       </div>
 
@@ -328,6 +333,28 @@ const Courses: React.FC<CoursesProps> = ({ theme, courses, setCourses }) => {
         onClose={() => setIsModalOpen(false)} 
         onSave={handleSave} 
         editData={editingCourse} 
+      />
+
+      <BulkEntryModal
+        open={bulkCoursesOpen}
+        onClose={() => setBulkCoursesOpen(false)}
+        title="Bulk courses (JSON lines)"
+        entity="courses"
+        sampleLine='{"name":"Sample Course","code":"SMPL101","faculty":"Theology","department":"Ministry","level":"Undergraduate","credits":3,"status":"Published","description":"At least ten chars here.","syllabus":"At least ten chars in syllabus text."}'
+        onSubmit={async (lines) => {
+          try {
+            const items = lines.map((l) => JSON.parse(l) as Record<string, unknown>);
+            const r = await postCourseBatch(items);
+            const list = await getCourses({ perPage: 500 });
+            if (list.success && list.data) setCourses(list.data);
+            return {
+              ok: (r.data?.failureCount ?? 0) === 0,
+              message: `Created: ${r.data?.successCount ?? 0}, failed: ${r.data?.failureCount ?? 0}.`,
+            };
+          } catch {
+            return { ok: false, message: 'Invalid JSON on one or more lines.' };
+          }
+        }}
       />
     </div>
   );

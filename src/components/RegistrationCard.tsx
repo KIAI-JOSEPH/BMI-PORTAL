@@ -12,6 +12,7 @@ import {
 } from 'lucide-react';
 import { Student, Course } from '../types';
 import { documentService } from '../services/documentService';
+import { getHtml2Pdf } from '../services/pdfService';
 import type { RegistrationCard as RegistrationCardType, DocumentSecurityFeatures, RegisteredCourse } from '../types/documents';
 
 interface RegistrationCardProps {
@@ -43,16 +44,22 @@ export const RegistrationCard: React.FC<RegistrationCardProps> = ({ students, co
   const [generatedCard, setGeneratedCard] = useState<RegistrationCardType | null>(null);
   const [securityFeatures, setSecurityFeatures] = useState<DocumentSecurityFeatures | null>(null);
 
+  const getFirstName = (student: Student) => student.first_name || (student as any).firstName || '';
+  const getLastName = (student: Student) => student.last_name || (student as any).lastName || '';
+  const getFaculty = (student: Student) => (student as any).faculty || student.program_code;
+  const getDepartment = (student: Student) => (student as any).department || student.program_code;
+  const getGpa = (student: Student) => (student as any).gpa;
+
   const filteredStudents = useMemo(() => {
     return students.filter(s => {
       const q = searchTerm.toLowerCase();
-      return `${s.firstName} ${s.lastName} ${s.id}`.toLowerCase().includes(q);
+      return `${getFirstName(s)} ${getLastName(s)} ${s.id}`.toLowerCase().includes(q);
     });
   }, [students, searchTerm]);
 
   const generateCardData = useCallback(async (student: Student): Promise<{ card: RegistrationCardType; security: DocumentSecurityFeatures }> => {
     const studentCourses = courses
-      .filter(c => c.faculty === student.faculty || c.department === student.department)
+      .filter(c => c.faculty === getFaculty(student) || c.department === getDepartment(student))
       .slice(0, 6);
     
     const registeredCourses: RegisteredCourse[] = studentCourses.map(c => ({
@@ -72,7 +79,7 @@ export const RegistrationCard: React.FC<RegistrationCardProps> = ({ students, co
     const cardData: Omit<RegistrationCardType, 'id' | 'security' | 'createdAt' | 'updatedAt'> = {
       type: 'registration_card',
       studentId: student.id,
-      studentName: `${student.firstName} ${student.lastName}`,
+      studentName: `${getFirstName(student)} ${getLastName(student)}`,
       academicYear: '2024-2025',
       semester: 'Fall 2024',
       registrationDate: new Date().toISOString().split('T')[0],
@@ -125,8 +132,7 @@ export const RegistrationCard: React.FC<RegistrationCardProps> = ({ students, co
     if (!element) return;
 
     try {
-      const html2pdfModule = await import('html2pdf.js');
-      const html2pdf = (html2pdfModule as any).default || html2pdfModule;
+      const html2pdf = await getHtml2Pdf();
       
       const opt = {
         margin: 0,
@@ -197,14 +203,16 @@ export const RegistrationCard: React.FC<RegistrationCardProps> = ({ students, co
               >
                 <div className="flex items-center gap-3">
                   <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-amber-500 to-orange-600 flex items-center justify-center text-white font-bold shadow-md">
-                    {student.firstName[0]}{student.lastName[0]}
+                    {getFirstName(student)[0]}{getLastName(student)[0]}
                   </div>
                   <div className="flex-1">
-                    <h4 className="font-semibold text-slate-900">{student.firstName} {student.lastName}</h4>
-                    <p className="text-xs text-slate-500">{student.id} • {student.department}</p>
-                    <span className="inline-block mt-1.5 px-2 py-0.5 bg-emerald-50 text-emerald-700 rounded-full text-xs font-semibold">
-                      GPA: {student.gpa}
-                    </span>
+                    <h4 className="font-semibold text-slate-900">{getFirstName(student)} {getLastName(student)}</h4>
+                    <p className="text-xs text-slate-500">{student.id} • {getDepartment(student)}</p>
+                    {getGpa(student) !== undefined && (
+                      <span className="inline-block mt-1.5 px-2 py-0.5 bg-emerald-50 text-emerald-700 rounded-full text-xs font-semibold">
+                        GPA: {getGpa(student)}
+                      </span>
+                    )}
                   </div>
                 </div>
               </div>
@@ -220,9 +228,9 @@ export const RegistrationCard: React.FC<RegistrationCardProps> = ({ students, co
               <div className="p-4">
                 <div className="mb-4 p-3 bg-slate-50 rounded-xl">
                   <p className="text-sm text-slate-600">
-                    <span className="font-semibold">Selected:</span> {selectedStudent.firstName} {selectedStudent.lastName}
+                    <span className="font-semibold">Selected:</span> {getFirstName(selectedStudent)} {getLastName(selectedStudent)}
                   </p>
-                  <p className="text-xs text-slate-500 mt-1">{selectedStudent.faculty} • {selectedStudent.department}</p>
+                  <p className="text-xs text-slate-500 mt-1">{getFaculty(selectedStudent)} • {getDepartment(selectedStudent)}</p>
                 </div>
                 <button
                   onClick={handleGenerate}

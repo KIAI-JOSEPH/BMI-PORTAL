@@ -9,6 +9,23 @@ import { logger } from '../utils/logger.js';
 import { parsePagination } from '../utils/helpers.js';
 import type { ApiResponse, Course } from '../types/index.js';
 
+function mapCourseRecord(record: Record<string, unknown>): Course {
+  return {
+    id: String(record.id),
+    name: String(record.title ?? record.name ?? ''),
+    code: String(record.course_code ?? record.code ?? ''),
+    faculty: String(record.faculty ?? ''),
+    department: String(record.department ?? ''),
+    level: (record.level as Course['level']) || 'Undergraduate',
+    credits: Number(record.credits ?? 0),
+    status: (record.status as Course['status']) || 'Published',
+    description: String(record.description ?? ''),
+    syllabus: String(record.syllabus ?? ''),
+    created: String(record.created ?? ''),
+    updated: String(record.updated ?? ''),
+  } as Course;
+}
+
 const coursesRouter = new Hono();
 
 // Apply auth middleware
@@ -30,6 +47,38 @@ const courseSchema = z.object({
 
 const updateCourseSchema = courseSchema.partial();
 
+type CourseCreate = z.infer<typeof courseSchema>;
+type CourseUpdate = z.infer<typeof updateCourseSchema>;
+
+function courseDtoToPb(data: CourseCreate) {
+  return {
+    course_code: data.code,
+    title: data.name,
+    credits: data.credits,
+    faculty: data.faculty,
+    department: data.department,
+    level: data.level,
+    status: data.status,
+    description: data.description,
+    syllabus: data.syllabus,
+    is_elective: false,
+  };
+}
+
+function coursePatchToPb(data: CourseUpdate): Record<string, unknown> {
+  const out: Record<string, unknown> = {};
+  if (data.name !== undefined) out.title = data.name;
+  if (data.code !== undefined) out.course_code = data.code;
+  if (data.faculty !== undefined) out.faculty = data.faculty;
+  if (data.department !== undefined) out.department = data.department;
+  if (data.level !== undefined) out.level = data.level;
+  if (data.credits !== undefined) out.credits = data.credits;
+  if (data.status !== undefined) out.status = data.status;
+  if (data.description !== undefined) out.description = data.description;
+  if (data.syllabus !== undefined) out.syllabus = data.syllabus;
+  return out;
+}
+
 /**
  * GET /api/v1/courses
  * List all courses with pagination and filtering
@@ -41,7 +90,7 @@ coursesRouter.get('/', async (c) => {
     const { page, perPage } = parsePagination(
       c.req.query('page'),
       c.req.query('perPage'),
-      { page: 1, perPage: 20, maxPerPage: 100 }
+      { page: 1, perPage: 20, maxPerPage: 500 }
     );
     
     const faculty = c.req.query('faculty');
@@ -56,7 +105,7 @@ coursesRouter.get('/', async (c) => {
     if (status) filters.push(`status = "${safe(status)}"`);
     if (search) {
       const s = safe(search);
-      filters.push(`(name ~ "${s}" || code ~ "${s}" || description ~ "${s}")`);
+      filters.push(`(title ~ "${s}" || course_code ~ "${s}" || description ~ "${s}")`);
     }
     
     const filterString = filters.join(' && ') || undefined;
@@ -68,7 +117,7 @@ coursesRouter.get('/', async (c) => {
     
     return c.json<ApiResponse<Course[]>>({
       success: true,
-      data: result.items as unknown as Course[],
+      data: result.items.map((r) => mapCourseRecord(r as unknown as Record<string, unknown>)),
       meta: {
         page: result.page,
         perPage: result.perPage,
@@ -86,6 +135,58 @@ coursesRouter.get('/', async (c) => {
 });
 
 /**
+ * GET /api/v1/courses/stats/overview (before /:id)
+ */
+coursesRouter.get('/stats/overview', async (c) => {
+  try {
+    const pb = getPocketBase();
+
+    const [
+      all, ug, pg, dip, cert,
+      published, draft, archived,
+    ] = await Promise.all([
+      pb.collection('courses').getList(1, 1),
+      pb.collection('courses').getList(1, 1, { filter: 'level = "Undergraduate"' }),
+      pb.collection('courses').getList(1, 1, { filter: 'level = "Postgraduate"' }),
+      pb.collection('courses').getList(1, 1, { filter: 'level = "Diploma"' }),
+      pb.collection('courses').getList(1, 1, { filter: 'level = "Certificate"' }),
+      pb.collection('courses').getList(1, 1, { filter: 'status = "Published"' }),
+      pb.collection('courses').getList(1, 1, { filter: 'status = "Draft"' }),
+      pb.collection('courses').getList(1, 1, { filter: 'status = "Archived"' }),
+    ]);
+
+    const creditRecords = await pb.collection('courses').getList(1, 1000, { fields: 'faculty,credits' });
+    const courses = creditRecords.items.map((r) => mapCourseRecord(r as unknown as Record<string, unknown>));
+
+    const stats = {
+      total: all.totalItems,
+      byLevel: {
+        Undergraduate: ug.totalItems,
+        Postgraduate: pg.totalItems,
+        Diploma: dip.totalItems,
+        Certificate: cert.totalItems,
+      },
+      byStatus: {
+        Published: published.totalItems,
+        Draft: draft.totalItems,
+        Archived: archived.totalItems,
+      },
+      byFaculty: courses.reduce((acc: Record<string, number>, c: Course) => {
+        const f = c.faculty || 'Unknown';
+        acc[f] = (acc[f] || 0) + 1;
+        return acc;
+      }, {}),
+      totalCredits: courses.reduce((sum: number, c: Course) => sum + (c.credits || 0), 0),
+    };
+
+    return c.json<ApiResponse<typeof stats>>({ success: true, data: stats });
+  } catch (error) {
+    logger.error('Get course stats error:', error);
+    return c.json<ApiResponse<never>>({ success: false, error: 'Failed to fetch statistics' }, 500);
+  }
+});
+
+/**
  * GET /api/v1/courses/:id
  * Get a single course
  */
@@ -98,7 +199,7 @@ coursesRouter.get('/:id', async (c) => {
     
     return c.json<ApiResponse<Course>>({
       success: true,
-      data: course as unknown as Course,
+      data: mapCourseRecord(course as unknown as Record<string, unknown>),
     });
     
   } catch (error) {
@@ -126,7 +227,7 @@ coursesRouter.post(
       
       // Check for duplicate course code
       const existing = await pb.collection('courses').getList(1, 1, {
-        filter: `code = "${data.code}"`,
+        filter: `course_code = "${data.code.replace(/["'\\]/g, '')}"`,
       });
       
       if (existing.items.length > 0) {
@@ -136,13 +237,13 @@ coursesRouter.post(
         }, 409);
       }
       
-      const newCourse = await pb.collection('courses').create(data);
+      const newCourse = await pb.collection('courses').create(courseDtoToPb(data));
       
       logger.info('Course created', { courseId: newCourse.id });
       
       return c.json<ApiResponse<Course>>({
         success: true,
-        data: newCourse as unknown as Course,
+        data: mapCourseRecord(newCourse as unknown as Record<string, unknown>),
         message: 'Course created successfully',
       }, 201);
       
@@ -171,13 +272,13 @@ coursesRouter.patch(
       const data = c.req.valid('json');
       const pb = getPocketBase();
       
-      const updated = await pb.collection('courses').update(id, data);
+      const updated = await pb.collection('courses').update(id, coursePatchToPb(data));
       
       logger.info('Course updated', { courseId: id });
       
       return c.json<ApiResponse<Course>>({
         success: true,
-        data: updated as unknown as Course,
+        data: mapCourseRecord(updated as unknown as Record<string, unknown>),
         message: 'Course updated successfully',
       });
       
@@ -223,59 +324,5 @@ coursesRouter.delete(
     }
   }
 );
-
-/**
- * GET /api/v1/courses/stats/overview
- * Get course statistics — paginated counts, no full table scan
- */
-coursesRouter.get('/stats/overview', async (c) => {
-  try {
-    const pb = getPocketBase();
-
-    const [
-      all, ug, pg, dip, cert,
-      published, draft, archived,
-    ] = await Promise.all([
-      pb.collection('courses').getList(1, 1),
-      pb.collection('courses').getList(1, 1, { filter: 'level = "Undergraduate"' }),
-      pb.collection('courses').getList(1, 1, { filter: 'level = "Postgraduate"' }),
-      pb.collection('courses').getList(1, 1, { filter: 'level = "Diploma"' }),
-      pb.collection('courses').getList(1, 1, { filter: 'level = "Certificate"' }),
-      pb.collection('courses').getList(1, 1, { filter: 'status = "Published"' }),
-      pb.collection('courses').getList(1, 1, { filter: 'status = "Draft"' }),
-      pb.collection('courses').getList(1, 1, { filter: 'status = "Archived"' }),
-    ]);
-
-    // Fetch credits for sum (bounded to 1000 courses)
-    const creditRecords = await pb.collection('courses').getList(1, 1000, { fields: 'faculty,credits' });
-    const courses = creditRecords.items as unknown as Course[];
-
-    const stats = {
-      total: all.totalItems,
-      byLevel: {
-        Undergraduate: ug.totalItems,
-        Postgraduate: pg.totalItems,
-        Diploma: dip.totalItems,
-        Certificate: cert.totalItems,
-      },
-      byStatus: {
-        Published: published.totalItems,
-        Draft: draft.totalItems,
-        Archived: archived.totalItems,
-      },
-      byFaculty: courses.reduce((acc: Record<string, number>, c: Course) => {
-        acc[c.faculty] = (acc[c.faculty] || 0) + 1;
-        return acc;
-      }, {}),
-      totalCredits: courses.reduce((sum: number, c: Course) => sum + (c.credits || 0), 0),
-    };
-
-    return c.json<ApiResponse<typeof stats>>({ success: true, data: stats });
-
-  } catch (error) {
-    logger.error('Get course stats error:', error);
-    return c.json<ApiResponse<never>>({ success: false, error: 'Failed to fetch statistics' }, 500);
-  }
-});
 
 export default coursesRouter;

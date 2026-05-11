@@ -37,39 +37,35 @@ cp backend/.env.example backend/.env
 nano backend/.env
 ```
 
-### 4. Download PocketBase
+### 4. Setup PocketBase + Ollama (optional)
 
 ```bash
-# Create bin directory
-mkdir -p bin
-
-# Download PocketBase (Linux AMD64)
-curl -L -o /tmp/pb.zip https://github.com/pocketbase/pocketbase/releases/download/v0.22.0/pocketbase_0.22.0_linux_amd64.zip
-
-# Extract
-unzip -o /tmp/pb.zip -d bin/
-rm /tmp/pb.zip
-
-# Make executable
-chmod +x bin/pocketbase
+make setup
 ```
 
-### 5. Install Ollama (Optional - for AI features)
-
-```bash
-# Install Ollama
-curl -fsSL https://ollama.com/install.sh | sh
-
-# Pull Llama model
-ollama pull llama3.2:latest
-```
+This downloads PocketBase into `bin/` and ensures Ollama is installed (AI features still require the model to be pulled; `make start` handles pulling when needed).
 
 ## Daily Development
+
+### First 30 Minutes (Recommended Path)
+
+```bash
+# 1) setup once
+make setup
+
+# 2) start stack
+make start
+
+# 3) validate baseline before coding
+make verify
+```
+
+Then open `http://localhost:3000` and verify API health at `http://localhost:3001/health`.
 
 ### Start All Services
 
 ```bash
-./start-dev.sh
+make start
 ```
 
 This will start:
@@ -87,7 +83,7 @@ This will start:
 ### Stop All Services
 
 ```bash
-./stop-dev.sh
+make stop
 ```
 
 ### View Logs
@@ -144,8 +140,8 @@ cat logs/backend.log
 cat logs/pocketbase.log
 
 # Restart services
-./stop-dev.sh
-./start-dev.sh
+make stop
+make start
 ```
 
 ### Dependencies Issues
@@ -170,7 +166,7 @@ rm -rf data/pb_data
 ### 1. Start Services
 
 ```bash
-./start-dev.sh
+make start
 ```
 
 ### 2. Make Changes
@@ -196,10 +192,16 @@ git push
 ### 5. Stop Services
 
 ```bash
-./stop-dev.sh
+make stop
 ```
 
 ## Useful Commands
+
+### Full Baseline Check
+
+```bash
+make verify
+```
 
 ### Backend
 
@@ -271,8 +273,8 @@ cd backend && npm install
 
 ### "Port already in use"
 ```bash
-./stop-dev.sh
-./start-dev.sh
+make stop
+make start
 ```
 
 ### "PocketBase not found"
@@ -290,4 +292,4 @@ ollama pull llama3.2:latest
 
 **Ready to develop!** 🎉
 
-Run `./start-dev.sh` to begin.
+Run `make start` to begin.

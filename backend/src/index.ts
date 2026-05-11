@@ -10,6 +10,7 @@ import { rateLimiter } from 'hono-rate-limiter';
 import { CONFIG, validateConfig } from './config/index.js';
 import { logger } from './utils/logger.js';
 import { getPocketBase, setupCollections, healthCheck as pbHealthCheck, authenticateAdmin, createDefaultAdminIfNeeded, scheduleAdminTokenRefresh } from './services/pocketbase.js';
+import { seedAcademicReferenceDataIfEmpty } from './services/academicSeed.js';
 import { checkOllamaHealth } from './services/ollama.js';
 
 // Import routes
@@ -23,6 +24,11 @@ import financeRouter from './routes/finance.js';
 import libraryRouter from './routes/library.js';
 import dashboardRouter from './routes/dashboard.js';
 import importRouter from './routes/import.js';
+import { gradeRouter } from './routes/grades.js';
+import { gradingScalesRouter } from './routes/grading-scales.js';
+import { gradeAppealsRouter } from './routes/grade-appeals.js';
+import catalogRouter from './routes/catalog.js';
+import batchRouter from './routes/batch.js';
 
 // Validate configuration
 validateConfig();
@@ -108,6 +114,11 @@ app.route('/api/v1/finance', financeRouter);
 app.route('/api/v1/library', libraryRouter);
 app.route('/api/v1/dashboard', dashboardRouter);
 app.route('/api/v1/import', importRouter);
+app.route('/api/v1/grades', gradeRouter);
+app.route('/api/v1/grading-scales', gradingScalesRouter);
+app.route('/api/v1/grade-appeals', gradeAppealsRouter);
+app.route('/api/v1/catalog', catalogRouter);
+app.route('/api/v1/batch', batchRouter);
 
 // 404 handler
 app.notFound((c) => {
@@ -162,6 +173,13 @@ async function startServer() {
       logger.info('✓ Database schema verified');
     } catch (error) {
       logger.warn('Database schema setup failed (may already exist):', error);
+    }
+
+    try {
+      await seedAcademicReferenceDataIfEmpty();
+      logger.info('✓ Academic reference seed checked');
+    } catch (error) {
+      logger.warn('Academic seed skipped:', error);
     }
 
     // Create default admin user if no users exist

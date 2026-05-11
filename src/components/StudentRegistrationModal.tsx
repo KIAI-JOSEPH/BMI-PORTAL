@@ -12,22 +12,17 @@ interface StudentRegistrationModalProps {
 
 const StudentRegistrationModal: React.FC<StudentRegistrationModalProps> = ({ isOpen, onClose, onSuccess, initialData }) => {
   const [formData, setFormData] = useState<Partial<Student>>({
-    firstName: '',
-    lastName: '',
+    first_name: '',
+    last_name: '',
     email: '',
     phone: '',
-    faculty: 'Theology',
-    department: 'Biblical Studies',
+    program_code: 'Theology',
     status: 'Applicant',
-    academicLevel: 'Degree',
     gender: 'Male',
-    admissionYear: new Date().getFullYear().toString(),
-    enrollmentTerm: 'Fall ' + new Date().getFullYear(),
-    careerPath: 'Degree in Theology',
-    standing: 'Good',
-    gpa: 0.0,
-    avatarColor: 'bg-purple-600',
-    photoZoom: 1
+    admission_date: new Date().getFullYear().toString(),
+    
+    avatar_color: 'bg-purple-600',
+    photo_zoom: 1
   });
   
   const [photoPreview, setPhotoPreview] = useState<string | undefined>(undefined);
@@ -40,22 +35,17 @@ const StudentRegistrationModal: React.FC<StudentRegistrationModalProps> = ({ isO
       setPhotoPreview(initialData.photo);
     } else if (isOpen) {
       setFormData({
-        firstName: '',
-        lastName: '',
+        first_name: '',
+        last_name: '',
         email: '',
         phone: '',
-        faculty: 'Theology',
-        department: 'Biblical Studies',
+        program_code: 'Theology',
         status: 'Applicant',
-        academicLevel: 'Degree',
         gender: 'Male',
-        admissionYear: new Date().getFullYear().toString(),
-        enrollmentTerm: 'Fall ' + new Date().getFullYear(),
-        careerPath: 'Degree in Theology',
-        standing: 'Good',
-        gpa: 0.0,
-        avatarColor: 'bg-purple-600',
-        photoZoom: 1
+        admission_date: new Date().getFullYear().toString(),
+        
+        avatar_color: 'bg-purple-600',
+        photo_zoom: 1
       });
       setPhotoPreview(undefined);
       setError(null);
@@ -81,7 +71,7 @@ const StudentRegistrationModal: React.FC<StudentRegistrationModalProps> = ({ isO
 
   const handleSubmit = async () => {
     // Validate required fields (only First Name and Last Name are required)
-    if (!formData.firstName || !formData.lastName) {
+    if (!formData.first_name || !formData.last_name) {
       setError('Please fill in all required fields (First Name, Last Name)');
       return;
     }
@@ -178,8 +168,8 @@ const StudentRegistrationModal: React.FC<StudentRegistrationModalProps> = ({ isO
                     <label className="text-[10px] font-bold uppercase text-gray-500 tracking-widest">First Name</label>
                     <input 
                       type="text" 
-                      value={formData.firstName} 
-                      onChange={(e) => handleChange('firstName', e.target.value)}
+                      value={formData.first_name} 
+                      onChange={(e) => handleChange('first_name', e.target.value)}
                       className="w-full p-3 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 outline-none font-bold text-sm focus:border-[#4B0082]"
                     />
                  </div>
@@ -187,8 +177,8 @@ const StudentRegistrationModal: React.FC<StudentRegistrationModalProps> = ({ isO
                     <label className="text-[10px] font-bold uppercase text-gray-500 tracking-widest">Last Name</label>
                     <input 
                       type="text" 
-                      value={formData.lastName} 
-                      onChange={(e) => handleChange('lastName', e.target.value)}
+                      value={formData.last_name} 
+                      onChange={(e) => handleChange('last_name', e.target.value)}
                       className="w-full p-3 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 outline-none font-bold text-sm focus:border-[#4B0082]"
                     />
                  </div>
@@ -249,8 +239,8 @@ const StudentRegistrationModal: React.FC<StudentRegistrationModalProps> = ({ isO
                  <div className="space-y-1">
                     <label className="text-[9px] font-bold uppercase text-gray-500 tracking-widest">Faculty</label>
                     <select 
-                      value={formData.faculty} 
-                      onChange={(e) => handleChange('faculty', e.target.value)}
+                      value={formData.program_code} 
+                      onChange={(e) => handleChange('program_code', e.target.value)}
                       className="w-full p-3 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 outline-none font-bold text-xs uppercase cursor-pointer"
                     >
                        {['Theology', 'ICT', 'Business', 'Education'].map(f => <option key={f} value={f}>{f}</option>)}
@@ -260,16 +250,16 @@ const StudentRegistrationModal: React.FC<StudentRegistrationModalProps> = ({ isO
                     <label className="text-[9px] font-bold uppercase text-gray-500 tracking-widest">Department</label>
                     <input 
                       type="text" 
-                      value={formData.department} 
-                      onChange={(e) => handleChange('department', e.target.value)}
+                      value={formData.program_code} 
+                      onChange={(e) => handleChange('program_code', e.target.value)}
                       className="w-full p-3 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 outline-none font-bold text-xs uppercase"
                     />
                  </div>
                  <div className="space-y-1">
                     <label className="text-[9px] font-bold uppercase text-gray-500 tracking-widest">Academic Level</label>
                     <select 
-                      value={formData.academicLevel} 
-                      onChange={(e) => handleChange('academicLevel', e.target.value)}
+                      value={formData.program_code} 
+                      onChange={(e) => handleChange('program_code', e.target.value)}
                       className="w-full p-3 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 outline-none font-bold text-xs uppercase cursor-pointer"
                     >
                        {['Certificate', 'Diploma', 'Degree', 'Masters', 'PhD'].map(l => <option key={l} value={l}>{l}</option>)}
@@ -279,8 +269,8 @@ const StudentRegistrationModal: React.FC<StudentRegistrationModalProps> = ({ isO
                     <label className="text-[9px] font-bold uppercase text-gray-500 tracking-widest">Career Path / Major</label>
                     <input 
                       type="text" 
-                      value={formData.careerPath} 
-                      onChange={(e) => handleChange('careerPath', e.target.value)}
+                      value={formData.program_code} 
+                      onChange={(e) => handleChange('program_code', e.target.value)}
                       className="w-full p-3 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 outline-none font-bold text-xs uppercase"
                     />
                  </div>

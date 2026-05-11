@@ -11,28 +11,51 @@ import type { ApiResponse, Student } from '../types/index.js';
 
 const studentsRouter = new Hono();
 
+function mapStudentRecord(record: any): Student {
+  const firstName = record.first_name ?? record.firstName ?? '';
+  const lastName = record.last_name ?? record.lastName ?? '';
+  const programCode = record.program_code ?? record.programCode ?? '';
+  const admissionDate = record.admission_date ?? record.admissionDate ?? '';
+  const avatarColor = record.avatar_color ?? record.avatarColor ?? 'bg-purple-600';
+  const photoZoom = record.photo_zoom ?? record.photoZoom ?? 1;
+  const photoPosition = record.photo_position ?? record.photoPosition ?? { x: 0, y: 0 };
+
+  return {
+    ...record,
+    // Canonical snake_case fields for frontend consumers in this repo.
+    first_name: firstName,
+    last_name: lastName,
+    program_code: programCode,
+    admission_date: admissionDate,
+    avatar_color: avatarColor,
+    photo_zoom: photoZoom,
+    photo_position: photoPosition,
+    // Compatibility aliases for camelCase consumers.
+    firstName,
+    lastName,
+    programCode,
+    admissionDate,
+    avatarColor,
+    photoZoom,
+    photoPosition,
+  } as Student;
+}
+
 // Apply auth middleware to all routes
 studentsRouter.use('*', authMiddleware);
 studentsRouter.use('*', auditMiddleware);
 
 // Validation schemas
 const studentSchema = z.object({
-  firstName: z.string().min(1),
-  lastName: z.string().min(1),
-  middleName: z.string().optional(),
-  gender: z.enum(['Male', 'Female']),
+  student_number: z.string().optional(),
+  first_name: z.string().min(1),
+  last_name: z.string().min(1),
   email: z.string().email().optional().or(z.literal('')),
-  phone: z.string().min(10).optional().or(z.literal('')),
-  nationality: z.string().optional(),
-  faculty: z.string().min(1),
-  department: z.string().min(1),
-  careerPath: z.string().min(1),
-  academicLevel: z.enum(['Diploma', 'Degree', 'Masters', 'PhD']),
-  admissionYear: z.string().min(4),
-  enrollmentTerm: z.string().min(1),
+  phone: z.string().optional().or(z.literal('')),
+  gender: z.enum(['Male', 'Female']),
+  program_code: z.string().min(1),
+  admission_date: z.string(),
   status: z.enum(['Active', 'Applicant', 'On Leave', 'Graduated', 'Suspended']).default('Applicant'),
-  standing: z.enum(['Honor Roll', 'Good', 'Probation', 'Warning']).default('Good'),
-  gpa: z.number().min(0).max(4).default(0),
 });
 
 const updateStudentSchema = studentSchema.partial();
@@ -52,26 +75,24 @@ studentsRouter.get('/', requireRole('admin', 'registrar', 'faculty', 'staff'), a
     }
     
     // Parse query parameters
-    const { page, perPage, offset } = parsePagination(
+    const { page, perPage } = parsePagination(
       c.req.query('page'),
       c.req.query('perPage'),
       { page: 1, perPage: 20, maxPerPage: 100 }
     );
     
-    const faculty = c.req.query('faculty');
     const status = c.req.query('status');
     const search = c.req.query('search');
 
     // Sanitize inputs — strip PocketBase filter special chars to prevent injection
     const safe = (v: string) => v.replace(/["'\\]/g, '');
 
-    // Build filter
+    // Build filter (no legacy `faculty` field on canonical students — use program/catalog APIs)
     const filters: string[] = [];
-    if (faculty) filters.push(`faculty = "${safe(faculty)}"`);
     if (status) filters.push(`status = "${safe(status)}"`);
     if (search) {
       const s = safe(search).substring(0, 100); // cap search length
-      filters.push(`(firstName ~ "${s}" || lastName ~ "${s}" || email ~ "${s}")`);
+      filters.push(`(first_name ~ "${s}" || last_name ~ "${s}" || email ~ "${s}")`);
     }
     
     const filterString = filters.length > 0 ? filters.join(' && ') : '';
@@ -86,7 +107,7 @@ studentsRouter.get('/', requireRole('admin', 'registrar', 'faculty', 'staff'), a
     
     return c.json<ApiResponse<Student[]>>({
       success: true,
-      data: result.items as unknown as Student[],
+      data: result.items.map(mapStudentRecord),
       meta: {
         page: result.page,
         perPage: result.perPage,
@@ -112,7 +133,7 @@ studentsRouter.get('/:id', async (c) => {
     const user = getUser(c);
     
     // Students can only access their own record
-    if (user?.role === 'student' && user.studentId !== id) {
+    if (user?.role === 'student' && (user as any).studentId !== id) {
       return c.json({ success: false, error: 'Forbidden' }, 403);
     }
   try {
@@ -122,7 +143,7 @@ studentsRouter.get('/:id', async (c) => {
     
     return c.json<ApiResponse<Student>>({
       success: true,
-      data: student as unknown as Student,
+      data: mapStudentRecord(student),
     });
     
   } catch (error) {
@@ -145,30 +166,29 @@ studentsRouter.post(
   logAction('CREATE', 'students'),
   async (c) => {
     try {
-      const data = c.req.valid('json');
+      const validData = c.req.valid('json');
       const pb = getPocketBase();
       
-      // Generate student ID (as a custom field, not the PocketBase ID)
-      const year = new Date().getFullYear();
-      const randomSuffix = Math.floor(Math.random() * 9000) + 1000;
-      const studentId = `BMI-${year}-${randomSuffix}`;
-      
+      // For students, handle student_number generation if not provided
+      if (!validData.student_number) {
+        validData.student_number = `BMI-${new Date().getFullYear()}-${Math.floor(Math.random() * 9000) + 1000}`;
+      }
+
       // Generate avatar color
-      const avatarColor = generateAvatarColor(`${data.firstName} ${data.lastName}`);
+      const avatarColor = generateAvatarColor(`${validData.first_name} ${validData.last_name}`);
       
       const newStudent = await pb.collection('students').create({
-        ...data,
-        studentId,  // Store as studentId field, not id
-        avatarColor,
-        photoZoom: 1,
-        photoPosition: { x: 0, y: 0 },
+        ...validData,
+        avatar_color: avatarColor,
+        photo_zoom: 1,
+        photo_position: { x: 0, y: 0 },
       });
       
       logger.info('Student created', { studentId: newStudent.id });
       
       return c.json<ApiResponse<Student>>({
         success: true,
-        data: newStudent as unknown as Student,
+        data: mapStudentRecord(newStudent),
         message: 'Student created successfully',
       }, 201);
       
@@ -203,7 +223,7 @@ studentsRouter.patch(
       
       return c.json<ApiResponse<Student>>({
         success: true,
-        data: updated as unknown as Student,
+        data: mapStudentRecord(updated),
         message: 'Student updated successfully',
       });
       
@@ -260,7 +280,7 @@ studentsRouter.get('/stats/overview', async (c) => {
     
     // Get all students
     const allStudents = await pb.collection('students').getFullList();
-    const students = allStudents as unknown as Student[];
+    const students = allStudents.map(mapStudentRecord);
     
     const stats = {
       total: students.length,

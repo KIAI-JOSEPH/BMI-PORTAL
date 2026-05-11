@@ -27,6 +27,23 @@ export default defineConfig({
   build: {
     outDir: 'dist',
     assetsDir: 'assets',
-    sourcemap: false
+    sourcemap: false,
+    chunkSizeWarningLimit: 1000,
+    rollupOptions: {
+      output: {
+        manualChunks(id) {
+          if (!id.includes('node_modules')) return undefined;
+
+          if (id.includes('html2pdf.js')) return 'vendor-html2pdf';
+          if (id.includes('xlsx')) return 'vendor-xlsx';
+          if (id.includes('recharts')) return 'vendor-charts';
+          if (id.includes('file-saver')) return 'vendor-files';
+          if (id.includes('qrcode') || id.includes('jsqr')) return 'vendor-qr';
+          if (id.includes('lucide-react')) return 'vendor-icons';
+
+          return undefined;
+        },
+      },
+    },
   }
 });

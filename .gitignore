@@ -43,6 +43,7 @@ backend/.env.*
 # Runtime data and databases
 bin/
 data/pb_data/
+.ollama/
 *.db
 *.db-wal
 *.db-shm
@@ -81,6 +82,9 @@ README_EXAM_*.md
 tmp/
 temp/
 .cache/
+*.tmp
+*.bak
+*.orig
 
 # Specific files to exclude
 /BMI SEAL.png
@@ -88,3 +92,21 @@ temp/
 export-students.html
 test-backend-connection.sh
 COURSE_CODES_VISUAL_MAP.txt
+
+# Export archives
+*.zip
+
+# Agent memory and tooling
+.agent/
+.agent.zip
+AGENTS.md
+AGENT_SKILLS.md
+
+# Debug and task tracking
+DEBUG_FIX.md
+NEXT_ACTIONS_CHECKLIST.md
+GRADING_SYSTEM_IMPLEMENTATION_STATUS.md
+
+# Slide and generated content
+slide.md
+philosophy-slides-generator/

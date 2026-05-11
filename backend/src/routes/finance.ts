@@ -6,7 +6,7 @@ import { getPocketBase } from '../services/pocketbase.js';
 import { authMiddleware, requireRole, getUser } from '../middleware/auth.js';
 import { auditMiddleware, logAction } from '../middleware/audit.js';
 import { logger } from '../utils/logger.js';
-import { parsePagination, formatCurrency } from '../utils/helpers.js';
+import { parsePagination } from '../utils/helpers.js';
 import type { ApiResponse, Transaction } from '../types/index.js';
 
 const financeRouter = new Hono();
@@ -39,9 +39,14 @@ financeRouter.get('/transactions', requireRole('admin', 'registrar', 'student'),
 
     // Students can only see their own transactions
     if (user?.role === 'student') {
-      const { page, perPage } = parsePagination(c.req.query('page'), c.req.query('perPage'));
+      const { page, perPage } = parsePagination(
+        c.req.query('page'),
+        c.req.query('perPage'),
+        { page: 1, perPage: 20, maxPerPage: 500 }
+      );
+      const studentId = (user as any).studentId as string | undefined;
       const result = await pb.collection('transactions').getList(page, perPage, {
-        filter: `studentId = "${user.studentId}"`,
+        filter: `student_id = "${(studentId || '').replace(/["'\\]/g, '')}"`,
         sort: '-date',
       });
       return c.json<ApiResponse<Transaction[]>>({
@@ -58,7 +63,7 @@ financeRouter.get('/transactions', requireRole('admin', 'registrar', 'student'),
     const { page, perPage } = parsePagination(
       c.req.query('page'),
       c.req.query('perPage'),
-      { page: 1, perPage: 20, maxPerPage: 100 }
+      { page: 1, perPage: 20, maxPerPage: 500 }
     );
 
     const status = c.req.query('status');
@@ -111,7 +116,9 @@ financeRouter.get('/transactions/:id', requireRole('admin', 'registrar', 'studen
     const transaction = await pb.collection('transactions').getOne(id);
 
     // Students can only access their own transaction
-    if (user?.role === 'student' && (transaction as any).studentId !== user.studentId) {
+    const studentId = (user as any).studentId as string | undefined;
+    const txStudent = (transaction as { student_id?: string }).student_id;
+    if (user?.role === 'student' && txStudent !== studentId) {
       return c.json({ success: false, error: 'Forbidden' }, 403);
     }
 
@@ -143,7 +150,11 @@ financeRouter.post(
       const data = c.req.valid('json');
       const pb = getPocketBase();
 
-      const newTransaction = await pb.collection('transactions').create(data);  
+      const { studentId, ...rest } = data as typeof data & { studentId?: string };
+      const newTransaction = await pb.collection('transactions').create({
+        ...rest,
+        ...(studentId ? { student_id: studentId } : {}),
+      });  
 
       logger.info('Transaction created', { transactionId: newTransaction.id }); 
 
@@ -178,7 +189,11 @@ financeRouter.patch(
       const data = c.req.valid('json');
       const pb = getPocketBase();
 
-      const updated = await pb.collection('transactions').update(id, data);     
+      const { studentId, ...rest } = data as typeof data & { studentId?: string };
+      const payload: Record<string, unknown> = { ...rest };
+      if (studentId !== undefined) payload.student_id = studentId;
+
+      const updated = await pb.collection('transactions').update(id, payload);     
 
       logger.info('Transaction updated', { transactionId: id });
 

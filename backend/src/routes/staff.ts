@@ -9,6 +9,29 @@ import { logger } from '../utils/logger.js';
 import { generateAvatarColor, parsePagination } from '../utils/helpers.js';
 import type { ApiResponse, StaffMember } from '../types/index.js';
 
+function mapStaffRecord(record: Record<string, unknown>): StaffMember {
+  const fn = String(record.first_name ?? '');
+  const ln = String(record.last_name ?? '');
+  const full = `${fn} ${ln}`.trim();
+  return {
+    id: String(record.id),
+    name: full || String(record.name ?? 'Staff'),
+    role: String(record.role ?? ''),
+    department: String(record.department ?? ''),
+    email: String(record.email ?? ''),
+    phone: String(record.phone ?? ''),
+    status: (record.status as StaffMember['status']) || 'Full-time',
+    category: (record.category as StaffMember['category']) || 'Academic',
+    specialization: String(record.specialization ?? ''),
+    office: String(record.office ?? ''),
+    officeHours: String(record.office_hours ?? record.officeHours ?? ''),
+    avatarColor: String(record.avatar_color ?? record.avatarColor ?? 'bg-purple-700'),
+    joinDate: String(record.join_date ?? record.joinDate ?? ''),
+    created: String(record.created ?? ''),
+    updated: String(record.updated ?? ''),
+  } as StaffMember;
+}
+
 const staffRouter = new Hono();
 
 // Apply auth middleware
@@ -32,6 +55,51 @@ const staffSchema = z.object({
 
 const updateStaffSchema = staffSchema.partial();
 
+type StaffCreate = z.infer<typeof staffSchema>;
+type StaffUpdate = z.infer<typeof updateStaffSchema>;
+
+function staffDtoToPb(data: StaffCreate, id: string, avatarColor: string) {
+  const parts = data.name.trim().split(/\s+/);
+  const first_name = parts[0] || 'Staff';
+  const last_name = parts.slice(1).join(' ') || 'Member';
+  return {
+    id,
+    staff_number: id,
+    first_name,
+    last_name,
+    email: data.email,
+    phone: data.phone,
+    role: data.role,
+    department: data.department,
+    category: data.category,
+    specialization: data.specialization,
+    office: data.office,
+    office_hours: data.officeHours,
+    status: data.status,
+    join_date: data.joinDate,
+    avatar_color: avatarColor,
+  };
+}
+
+function patchDtoToPb(data: StaffUpdate): Record<string, unknown> {
+  const out: Record<string, unknown> = { ...data };
+  if (data.officeHours !== undefined) {
+    out.office_hours = data.officeHours;
+    delete out.officeHours;
+  }
+  if (data.joinDate !== undefined) {
+    out.join_date = data.joinDate;
+    delete out.joinDate;
+  }
+  if (data.name !== undefined) {
+    const parts = data.name.trim().split(/\s+/);
+    out.first_name = parts[0] || 'Staff';
+    out.last_name = parts.slice(1).join(' ') || 'Member';
+    delete out.name;
+  }
+  return out;
+}
+
 /**
  * GET /api/v1/staff
  * List all staff with pagination and filtering
@@ -43,7 +111,7 @@ staffRouter.get('/', async (c) => {
     const { page, perPage } = parsePagination(
       c.req.query('page'),
       c.req.query('perPage'),
-      { page: 1, perPage: 20, maxPerPage: 100 }
+      { page: 1, perPage: 20, maxPerPage: 500 }
     );
     
     const department = c.req.query('department');
@@ -58,7 +126,7 @@ staffRouter.get('/', async (c) => {
     if (status) filters.push(`status = "${safe(status)}"`);
     if (search) {
       const s = safe(search);
-      filters.push(`(name ~ "${s}" || email ~ "${s}" || role ~ "${s}")`);
+      filters.push(`(first_name ~ "${s}" || last_name ~ "${s}" || email ~ "${s}" || role ~ "${s}")`);
     }
     
     const filterString = filters.join(' && ') || undefined;
@@ -70,7 +138,7 @@ staffRouter.get('/', async (c) => {
     
     return c.json<ApiResponse<StaffMember[]>>({
       success: true,
-      data: result.items as unknown as StaffMember[],
+      data: result.items.map((r) => mapStaffRecord(r as unknown as Record<string, unknown>)),
       meta: {
         page: result.page,
         perPage: result.perPage,
@@ -88,6 +156,72 @@ staffRouter.get('/', async (c) => {
 });
 
 /**
+ * GET /api/v1/staff/stats/overview
+ * (Registered before /:id so "stats" is not captured as an id.)
+ */
+staffRouter.get('/stats/overview', async (c) => {
+  try {
+    const pb = getPocketBase();
+
+    const [all, academic, admin, mgmt, fulltime, parttime, onleave] = await Promise.all([
+      pb.collection('staff').getList(1, 1),
+      pb.collection('staff').getList(1, 1, { filter: 'category = "Academic"' }),
+      pb.collection('staff').getList(1, 1, { filter: 'category = "Administrative"' }),
+      pb.collection('staff').getList(1, 1, { filter: 'category = "Management"' }),
+      pb.collection('staff').getList(1, 1, { filter: 'status = "Full-time"' }),
+      pb.collection('staff').getList(1, 1, { filter: 'status = "Part-time"' }),
+      pb.collection('staff').getList(1, 1, { filter: 'status = "On Leave"' }),
+    ]);
+
+    const deptRecords = await pb.collection('staff').getList(1, 500, { fields: 'department' });
+    const byDepartment = deptRecords.items.reduce((acc: Record<string, number>, s) => {
+      const rec = s as unknown as { department?: string };
+      const d = String(rec.department || '');
+      if (d) acc[d] = (acc[d] || 0) + 1;
+      return acc;
+    }, {});
+
+    const stats = {
+      total: all.totalItems,
+      byCategory: {
+        Academic: academic.totalItems,
+        Administrative: admin.totalItems,
+        Management: mgmt.totalItems,
+      },
+      byStatus: {
+        'Full-time': fulltime.totalItems,
+        'Part-time': parttime.totalItems,
+        'On Leave': onleave.totalItems,
+      },
+      byDepartment,
+    };
+
+    return c.json<ApiResponse<typeof stats>>({ success: true, data: stats });
+  } catch (error) {
+    logger.error('Get staff stats error:', error);
+    return c.json<ApiResponse<never>>({ success: false, error: 'Failed to fetch statistics' }, 500);
+  }
+});
+
+staffRouter.get('/meta/departments', async (c) => {
+  try {
+    const pb = getPocketBase();
+    const records = await pb.collection('staff').getList(1, 500, { fields: 'department' });
+    const departments = [
+      ...new Set(
+        records.items
+          .map((s) => String((s as { department?: string }).department || ''))
+          .filter(Boolean)
+      ),
+    ].sort();
+    return c.json<ApiResponse<string[]>>({ success: true, data: departments });
+  } catch (error) {
+    logger.error('Get departments error:', error);
+    return c.json<ApiResponse<never>>({ success: false, error: 'Failed to fetch departments' }, 500);
+  }
+});
+
+/**
  * GET /api/v1/staff/:id
  * Get a single staff member
  */
@@ -95,11 +229,12 @@ staffRouter.get('/:id', async (c) => {
   try {
     const pb = getPocketBase();
     
+    const id = c.req.param('id');
     const staff = await pb.collection('staff').getOne(id);
     
     return c.json<ApiResponse<StaffMember>>({
       success: true,
-      data: staff as unknown as StaffMember,
+      data: mapStaffRecord(staff as unknown as Record<string, unknown>),
     });
     
   } catch (error) {
@@ -133,17 +268,15 @@ staffRouter.post(
       // Generate avatar color
       const avatarColor = generateAvatarColor(data.name);
       
-      const newStaff = await pb.collection('staff').create({
-        id: staffId,
-        ...data,
-        avatarColor,
-      });
+      const newStaff = await pb.collection('staff').create(
+        staffDtoToPb(data, staffId, avatarColor)
+      );
       
       logger.info('Staff member created', { staffId: newStaff.id });
       
       return c.json<ApiResponse<StaffMember>>({
         success: true,
-        data: newStaff as unknown as StaffMember,
+        data: mapStaffRecord(newStaff as unknown as Record<string, unknown>),
         message: 'Staff member created successfully',
       }, 201);
       
@@ -172,13 +305,13 @@ staffRouter.patch(
       const data = c.req.valid('json');
       const pb = getPocketBase();
       
-      const updated = await pb.collection('staff').update(id, data);
+      const updated = await pb.collection('staff').update(id, patchDtoToPb(data));
       
       logger.info('Staff member updated', { staffId: id });
       
       return c.json<ApiResponse<StaffMember>>({
         success: true,
-        data: updated as unknown as StaffMember,
+        data: mapStaffRecord(updated as unknown as Record<string, unknown>),
         message: 'Staff member updated successfully',
       });
       
@@ -224,72 +357,6 @@ staffRouter.delete(
     }
   }
 );
-
-/**
- * GET /api/v1/staff/stats/overview
- * Get staff statistics — paginated counts, no full table scan
- */
-staffRouter.get('/stats/overview', async (c) => {
-  try {
-    const pb = getPocketBase();
-
-    const [all, academic, admin, mgmt, fulltime, parttime, onleave] = await Promise.all([
-      pb.collection('staff').getList(1, 1),
-      pb.collection('staff').getList(1, 1, { filter: 'category = "Academic"' }),
-      pb.collection('staff').getList(1, 1, { filter: 'category = "Administrative"' }),
-      pb.collection('staff').getList(1, 1, { filter: 'category = "Management"' }),
-      pb.collection('staff').getList(1, 1, { filter: 'status = "Full-time"' }),
-      pb.collection('staff').getList(1, 1, { filter: 'status = "Part-time"' }),
-      pb.collection('staff').getList(1, 1, { filter: 'status = "On Leave"' }),
-    ]);
-
-    // Fetch departments (bounded)
-    const deptRecords = await pb.collection('staff').getList(1, 500, { fields: 'department' });
-    const byDepartment = (deptRecords.items as unknown as StaffMember[]).reduce(
-      (acc: Record<string, number>, s: StaffMember) => {
-        acc[s.department] = (acc[s.department] || 0) + 1;
-        return acc;
-      }, {}
-    );
-
-    const stats = {
-      total: all.totalItems,
-      byCategory: {
-        Academic: academic.totalItems,
-        Administrative: admin.totalItems,
-        Management: mgmt.totalItems,
-      },
-      byStatus: {
-        'Full-time': fulltime.totalItems,
-        'Part-time': parttime.totalItems,
-        'On Leave': onleave.totalItems,
-      },
-      byDepartment,
-    };
-
-    return c.json<ApiResponse<typeof stats>>({ success: true, data: stats });
-
-  } catch (error) {
-    logger.error('Get staff stats error:', error);
-    return c.json<ApiResponse<never>>({ success: false, error: 'Failed to fetch statistics' }, 500);
-  }
-});
-
-/**
- * GET /api/v1/staff/meta/departments
- * Get all unique departments
- */
-staffRouter.get('/meta/departments', async (c) => {
-  try {
-    const pb = getPocketBase();
-    const records = await pb.collection('staff').getList(1, 500, { fields: 'department' });
-    const departments = [...new Set((records.items as unknown as StaffMember[]).map((s: StaffMember) => s.department))].sort();
-    return c.json<ApiResponse<string[]>>({ success: true, data: departments });
-  } catch (error) {
-    logger.error('Get departments error:', error);
-    return c.json<ApiResponse<never>>({ success: false, error: 'Failed to fetch departments' }, 500);
-  }
-});
 
 export default staffRouter;
 
