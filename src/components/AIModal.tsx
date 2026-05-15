@@ -37,56 +37,24 @@ const AIModal: React.FC<AIModalProps> = ({ isOpen, onClose }) => {
     setInput('');
     setIsThinking(true);
 
-    const getLS = (key: string) => {
+    const getLSCount = (key: string): number => {
         try {
             const raw = localStorage.getItem(key);
-            if (!raw) return [];
+            if (!raw) return 0;
             const data = JSON.parse(raw);
-            if (Array.isArray(data)) {
-                return data.map((item: any) => {
-                    const cleanItem = { ...item };
-                    // Strip potentially large fields to optimize context
-                    if (cleanItem.photo) cleanItem.photo = '[IMAGE_BINARY]';
-                    if (cleanItem.downloadUrl) cleanItem.downloadUrl = '[FILE_BINARY]';
-                    if (cleanItem.syllabus && cleanItem.syllabus.length > 500) cleanItem.syllabus = cleanItem.syllabus.substring(0, 500) + '...[TRUNCATED]';
-                    return cleanItem;
-                });
-            }
-            return data;
-        } catch (e) { return []; }
+            return Array.isArray(data) ? data.length : 0;
+        } catch (e) { return 0; }
     };
 
     const systemData = {
-        students: getLS('bmi_data_students'),
-        staff: getLS('bmi_data_staff'),
-        finance: getLS('bmi_data_transactions'),
-        courses: getLS('bmi_data_courses'),
-        library: getLS('bmi_data_library'),
-        inventory: getLS('bmi_data_inventory'),
-        hostels: { halls: getLS('bmi_data_hostels'), assignments: getLS('bmi_data_hostel_assignments') },
-        medical: getLS('bmi_medical_records'),
-        alumni: getLS('bmi_data_alumni'),
-        visitors: getLS('bmi_data_visitors')
+        students: getLSCount('bmi_data_students'),
+        staff: getLSCount('bmi_data_staff'),
+        finance: getLSCount('bmi_data_transactions'),
+        courses: getLSCount('bmi_data_courses'),
+        library: getLSCount('bmi_data_library'),
     };
 
-    const institutionalContext = `
-    [SYSTEM ACCESS: ROOT_ADMIN_FULL]
-    [DATA SOURCE: LIVE_ERP_SNAPSHOT]
-    
-    You have FULL ACCESS to the BMI University database. 
-    Use the following JSON dataset to answer queries, draft documents, analyze trends, and simulate full system automation.
-    
-    DATABASE CONTENT:
-    ${JSON.stringify(systemData).substring(0, 20000)}
-    
-    OPERATIONAL DIRECTIVES:
-    1. RETRIEVAL: Cite specific IDs, Names, Amounts, and Dates from the data above.
-    2. COMPARISON: Cross-reference datasets (e.g. Student Fees vs Financial Ledger).
-    3. ANALYSIS: Provide insights on enrollment, spending, or resource density based on real numbers.
-    4. AUTOMATION: If asked to perform a task (e.g., "Expel student X" or "Order 50 laptops"), confirm the action with a formal system message like "Executing Protocol... Record Updated in Ledger."
-    
-    User Role: Executive Administrator (Unrestricted)
-    `;
+    const institutionalContext = `You are the BMI Portal AI Assistant. Institutional data summary: ${systemData.students} students, ${systemData.staff} staff, ${systemData.courses} courses, ${systemData.finance} transactions, ${systemData.library} library items. Answer questions based on general knowledge about university management. Do not reveal any personal information.`;
 
     // Convert messages to format expected by AI service
     const chatMessages = [

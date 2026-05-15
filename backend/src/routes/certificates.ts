@@ -27,6 +27,12 @@ import type { ApiResponse, Certificate, CertificateVerificationResult } from '..
 const certificatesRouter = new Hono();
 
 // ─── Helper ───────────────────────────────────────────────────────────────────
+function getStudentName(student: any): string {
+  const firstName = student.first_name ?? student.firstName ?? '';
+  const lastName = student.last_name ?? student.lastName ?? '';
+  return `${firstName} ${lastName}`.trim();
+}
+
 function getGraduationClass(gpa: number): string {
   if (gpa >= 3.7) return 'First Class Honours';
   if (gpa >= 3.3) return 'Second Class Honours (Upper Division)';
@@ -98,7 +104,7 @@ certificatesRouter.get('/', requireRole('admin', 'registrar'), async (c) => {
     if (status) filters.push(`status = "${status}"`);
     
     const result = await pb.collection('certificates').getList(page, perPage, {
-      filter: filters.join(' && ') || undefined,
+      ...(filters.length > 0 ? { filter: filters.join(' && ') } : {}),
       sort: '-issue_date',
       expand: 'student_id',
     });
@@ -176,7 +182,7 @@ certificatesRouter.post(
       const contentHash = await generateContentHash({
         serial: serialNumber,
         studentId: data.studentId,
-        name: student.firstName + ' ' + student.lastName,
+        name: getStudentName(student),
         degree: data.degree,
         issueDate,
       });
@@ -186,7 +192,7 @@ certificatesRouter.post(
       const signingPayload = buildSigningPayload({
         serial: serialNumber,
         studentId: data.studentId,
-        studentName: student.firstName + ' ' + student.lastName,
+        studentName: getStudentName(student),
         degree: data.degree,
         faculty: student.faculty,
         issueDate,
@@ -209,7 +215,7 @@ certificatesRouter.post(
       // Generate offline JWT (self-contained, verifiable without internet)
       const offlineJWT = await generateOfflineJWT({
         serial: serialNumber,
-        studentName: student.firstName + ' ' + student.lastName,
+        studentName: getStudentName(student),
         degree: data.degree,
         faculty: student.faculty,
         issueDate,
@@ -220,7 +226,7 @@ certificatesRouter.post(
       const certificate = await pb.collection('certificates').create({
         serial_number: serialNumber,
         student_id: data.studentId,
-        student_name: student.firstName + ' ' + student.lastName,
+        student_name: getStudentName(student),
         degree: data.degree,
         graduation_class: graduationClass,
         faculty: student.faculty,

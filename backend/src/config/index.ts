@@ -44,6 +44,15 @@ export const CONFIG = {
   // Pagination
   DEFAULT_PAGE_SIZE: 20,
   MAX_PAGE_SIZE: 100,
+
+  // Redis (for token blacklist in multi-instance deployments)
+  REDIS_URL: process.env.REDIS_URL || 'redis://localhost:6379',
+
+  // JWT Algorithm (RS256 recommended for production)
+  // Set JWT_PRIVATE_KEY and JWT_PUBLIC_KEY (PEM format) for RS256
+  // If not set, falls back to HS256 with JWT_SECRET
+  JWT_PRIVATE_KEY: process.env.JWT_PRIVATE_KEY || '',
+  JWT_PUBLIC_KEY: process.env.JWT_PUBLIC_KEY || '',
 } as const;
 
 // Validation

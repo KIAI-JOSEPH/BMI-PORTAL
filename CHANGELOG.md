@@ -5,42 +5,33 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [1.0.0] - 2026-05-04
+## [0.1.0-alpha] - 2026-05-11
 
 ### Added
-- Initial release of BMI University Management System
-- 100% open-source architecture with Ollama, PocketBase, Hono.js, React
-- Student management with registration, enrollment, and profile management
-- Course management with scheduling and enrollment tracking
-- Exam management with grade recording and transcript generation
-- Certificate generation with QR code verification
-- Document verification system with content hashing
-- Staff management with role-based access control (Admin, Registrar, Staff)
-- Finance module for fee tracking and payment management
-- Library management system
-- Hostel management system
-- Medical records management
-- Attendance tracking
-- Communications module for announcements
-- AI integration via local Ollama LLM
-- JWT-based authentication with session management
-- Audit logging for all critical operations
-- Dashboard with statistics and analytics
-- Document generation (transcripts, certificates, admission letters, ID cards)
-- Excel import/export functionality
-- QR code scanner for document verification
-- Session timeout warnings
-- Comprehensive security features (encryption, rate limiting, CORS)
+- Initial Alpha Skeleton of BMI University Management System
+- 100% open-source architecture defined (Ollama, PocketBase, Hono.js, React)
+- Dockerized development environment with Caddy and service orchestration
+- Backend API initialized with Hono.js
+- PocketBase integration for Database and Auth
+- Basic Student and Staff management (API-connected)
+- Dashboard skeleton with mock/initial data
+- AI integration foundation via local Ollama LLM
+- JWT-based authentication infrastructure
 
-### Security
-- JWT token authentication
-- AES-256 encryption for sensitive data
-- Role-based access control
-- Session management with automatic timeout
-- Audit logging
-- Content Security Policy headers
-- Rate limiting on API endpoints
-- Input validation and sanitization
+### Fixed
+- Removed Tailwind Play CDN to prevent production CSS breakage
+- Cleaned up frontend dependencies (removed backend-specific packages)
+- Fixed Makefile to support full-stack development (`make dev`)
+- Created truthful Implementation Checklist
+
+### Planned
+- Role-based access control (RBAC) full integration
+- Audit logging for all critical operations
+- Grade recording and transcript generation
+- Certificate generation with QR code verification
+- Finance module transaction verification
+- Comprehensive test suite and CI/CD
+- Mobile application and PWA support
 
 ### Documentation
 - Complete README with quick start guide

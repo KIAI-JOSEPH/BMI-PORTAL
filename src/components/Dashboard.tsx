@@ -1,5 +1,6 @@
 
 import React, { useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { 
   Users, 
   GraduationCap, 
@@ -17,20 +18,8 @@ import { AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContai
 import StatCard from './StatCard';
 import StudentRegistrationModal from './StudentRegistrationModal';
 import { Student } from '../types';
-
-interface DashboardProps {
-  userName: string;
-  theme: string;
-  onNavigate: (view: string) => void;
-  stats: {
-    students: number;
-    admissions: number;
-    tuition: number;
-    events: number;
-  };
-  onAddStudent: (student: Student) => void;
-  onAddTransaction: (amt: number) => void;
-}
+import { useAuthStore } from '../stores/authStore';
+import { useDataStore } from '../stores/dataStore';
 
 const revenueTrend = [
   { month: 'Jan', revenue: 120000 },
@@ -41,7 +30,22 @@ const revenueTrend = [
   { month: 'Jun', revenue: 389000 },
 ];
 
-const Dashboard: React.FC<DashboardProps> = ({ userName, theme, onNavigate, stats, onAddStudent, onAddTransaction }) => {
+const Dashboard: React.FC = () => {
+  const navigate = useNavigate();
+  const user = useAuthStore((s) => s.user);
+  const students = useDataStore((s) => s.students);
+  const transactions = useDataStore((s) => s.transactions);
+  
+  const stats = React.useMemo(() => ({
+    students: students.length,
+    admissions: students.filter(st => st.status === 'Applicant').length,
+    tuition: transactions.filter(t => t.status === 'Paid').reduce((acc, curr) => acc + curr.amt, 0),
+    events: 5
+  }), [students, transactions]);
+  const addStudent = useDataStore((s) => s.addStudent);
+  const addTransaction = useDataStore((s) => s.addTransaction);
+
+  const userName = user?.name || 'Administrator';
   const currentDate = new Date().toLocaleDateString('en-US', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' });
   
   const [activeModal, setActiveModal] = useState<'attendance' | 'transaction' | 'sms' | null>(null);
@@ -68,9 +72,19 @@ const Dashboard: React.FC<DashboardProps> = ({ userName, theme, onNavigate, stat
   };
 
   const handleStudentEnrolled = (student: Student) => {
-    onAddStudent(student);
+    addStudent(student);
     showToast(`Institutional Record committed to registry.`);
     setIsStudentRegistrationOpen(false);
+  };
+
+  const onNavigate = (view: string) => {
+    const routeMap: Record<string, string> = {
+      'students': '/students',
+      'finance': '/finance',
+      'staff': '/staff',
+      'courses': '/courses',
+    };
+    navigate(routeMap[view] || `/${view}`);
   };
 
   return (

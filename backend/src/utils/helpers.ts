@@ -69,6 +69,14 @@ export function sanitizeString(input: string): string {
 }
 
 /**
+ * Sanitize a string for safe use in PocketBase filter expressions.
+ * Strips quotes and backslashes, and truncates to maxLength.
+ */
+export function sanitizeFilter(value: string, maxLength: number = 100): string {
+    return value.replace(/["'\\]/g, '').substring(0, maxLength);
+}
+
+/**
  * Parse pagination parameters
  */
 export function parsePagination(

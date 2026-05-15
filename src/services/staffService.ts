@@ -4,8 +4,8 @@
 
 import { authFetch } from './authService';
 import { StaffMember } from '../types';
-
-const API_URL = '/api/v1';
+import { API_URL } from './config';
+import { parseJsonSafe } from './apiClient';
 
 export interface StaffResponse {
   success: boolean;
@@ -35,7 +35,8 @@ export async function getStaff(filters?: any): Promise<StaffListResponse> {
     const queryString = params.toString();
     const url = `${API_URL}/staff${queryString ? `?${queryString}` : ''}`;
     const response = await authFetch(url);
-    return await response.json();
+    const data = await parseJsonSafe<StaffListResponse>(response);
+    return data ?? { success: false, error: 'Failed to parse staff response' };
   } catch (error) {
     return { success: false, error: 'Failed to fetch staff' };
   }
@@ -47,7 +48,8 @@ export async function createStaff(data: Partial<StaffMember>): Promise<StaffResp
       method: 'POST',
       body: JSON.stringify(data),
     });
-    return await response.json();
+    const result = await parseJsonSafe<StaffResponse>(response);
+    return result ?? { success: false, error: 'Failed to parse create staff response' };
   } catch (error) {
     return { success: false, error: 'Failed to create staff' };
   }
@@ -59,7 +61,8 @@ export async function updateStaff(id: string, data: Partial<StaffMember>): Promi
       method: 'PATCH',
       body: JSON.stringify(data),
     });
-    return await response.json();
+    const result = await parseJsonSafe<StaffResponse>(response);
+    return result ?? { success: false, error: 'Failed to parse update staff response' };
   } catch (error) {
     return { success: false, error: 'Failed to update staff' };
   }
@@ -68,7 +71,8 @@ export async function updateStaff(id: string, data: Partial<StaffMember>): Promi
 export async function deleteStaff(id: string): Promise<StaffResponse> {
   try {
     const response = await authFetch(`${API_URL}/staff/${id}`, { method: 'DELETE' });
-    return await response.json();
+    const result = await parseJsonSafe<StaffResponse>(response);
+    return result ?? { success: false, error: 'Failed to parse delete staff response' };
   } catch (error) {
     return { success: false, error: 'Failed to delete staff' };
   }
@@ -77,7 +81,8 @@ export async function deleteStaff(id: string): Promise<StaffResponse> {
 export async function getStaffStats(): Promise<any> {
   try {
     const response = await authFetch(`${API_URL}/staff/stats/overview`);
-    return await response.json();
+    const data = await parseJsonSafe<any>(response);
+    return data ?? { success: false, error: 'Failed to parse staff statistics response' };
   } catch (error) {
     return { success: false, error: 'Failed to fetch staff statistics' };
   }

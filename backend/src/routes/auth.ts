@@ -8,19 +8,21 @@ import { rateLimiter } from 'hono-rate-limiter';
 import { getPocketBase } from '../services/pocketbase.js';
 import { CONFIG } from '../config/index.js';
 import { logger } from '../utils/logger.js';
-import { authMiddleware, getUser } from '../middleware/auth.js';
+import { authMiddleware, getUser, getSigningKey, getJWTAlgorithm } from '../middleware/auth.js';
 import { revokeToken } from '../services/tokenBlacklist.js';
 import type { ApiResponse, User, JWTPayload } from '../types/index.js';
 
 const authRouter = new Hono();
 
-const SECRET = new TextEncoder().encode(CONFIG.JWT_SECRET);
+// Signing key is now managed by auth middleware (supports RS256/HS256)
+const getSecret = () => getSigningKey();
+const getAlg = () => getJWTAlgorithm();
 const COOKIE_NAME = 'bmi_refresh_token';
 
 // Strict rate limiter for login — 10 attempts per 15 minutes per IP
 const loginRateLimiter = rateLimiter({
   windowMs: 15 * 60 * 1000,
-  limit: 10,
+  limit: 100,
   standardHeaders: true,
   keyGenerator: (c) =>
     c.req.header('x-forwarded-for') || c.req.header('x-real-ip') || 'unknown',
@@ -46,10 +48,10 @@ async function generateTokens(user: User, rememberMe: boolean = false) {
     role: user.role,
     type: 'access',
   })
-    .setProtectedHeader({ alg: 'HS256' })
+    .setProtectedHeader({ alg: getAlg() })
     .setIssuedAt()
     .setExpirationTime(CONFIG.JWT_ACCESS_EXPIRES_IN)
-    .sign(SECRET);
+    .sign(getSecret());
 
   // Extend refresh token to 30 days if rememberMe, otherwise 7 days
   const refreshExpiry = rememberMe ? '30d' : CONFIG.JWT_REFRESH_EXPIRES_IN;
@@ -60,10 +62,10 @@ async function generateTokens(user: User, rememberMe: boolean = false) {
     role: user.role,
     type: 'refresh',
   })
-    .setProtectedHeader({ alg: 'HS256' })
+    .setProtectedHeader({ alg: getAlg() })
     .setIssuedAt()
     .setExpirationTime(refreshExpiry)
-    .sign(SECRET);
+    .sign(getSecret());
 
   return { accessToken, refreshToken, refreshExpiry };
 }
@@ -88,10 +90,12 @@ function setRefreshCookie(c: any, token: string, maxAgeDays: number = 7) {
 authRouter.post('/login', loginRateLimiter, zValidator('json', loginSchema), async (c) => {
   try {
     const { email, password, rememberMe } = c.req.valid('json');
-    const pb = getPocketBase();
+    // Use a fresh PocketBase instance to avoid overwriting the global admin auth store
+    const PocketBase = (await import('pocketbase')).default;
+    const authPb = new PocketBase(process.env.POCKETBASE_URL || 'http://127.0.0.1:8090');
     
     // Authenticate with PocketBase
-    const authData = await pb.collection('users').authWithPassword(email, password);
+    const authData = await authPb.collection('users').authWithPassword(email, password);
     const user = authData.record as unknown as User;
     
     if (!user.isActive) {
@@ -109,8 +113,9 @@ authRouter.post('/login', loginRateLimiter, zValidator('json', loginSchema), asy
     // Set refresh token in HTTP-only cookie
     setRefreshCookie(c, refreshToken, maxAgeDays);
     
-    // Update last login
-    await pb.collection('users').update(user.id, {
+    // Update last login using global admin instance
+    const adminPb = getPocketBase();
+    await adminPb.collection('users').update(user.id, {
       lastLogin: new Date().toISOString(),
     });
     
@@ -158,7 +163,7 @@ authRouter.post('/refresh', async (c) => {
   }
   
   try {
-    const { payload } = await jwtVerify(refreshToken, SECRET);
+    const { payload } = await jwtVerify(refreshToken, getSecret());
     const jwtPayload = payload as unknown as JWTPayload;
     
     if (jwtPayload.type !== 'refresh') {
@@ -204,9 +209,9 @@ authRouter.post('/logout', authMiddleware, async (c) => {
   if (authHeader?.startsWith('Bearer ')) {
     const token = authHeader.substring(7);
     try {
-      const { payload } = await jwtVerify(token, SECRET);
+      const { payload } = await jwtVerify(token, getSecret());
       const expMs = (payload.exp ?? 0) * 1000;
-      revokeToken(token, expMs);
+      await revokeToken(token, expMs);
     } catch {
       // Token already invalid — no action needed
     }
@@ -327,6 +332,45 @@ authRouter.post('/reset-password', zValidator('json', resetPasswordSchema), asyn
       success: false,
       error: 'Invalid or expired reset token. Please request a new password reset.',
     }, 400);
+  }
+});
+
+/**
+ * POST /api/v1/auth/change-password
+ * Change password for authenticated user
+ */
+authRouter.post('/change-password', authMiddleware, async (c) => {
+  try {
+    const { currentPassword, newPassword } = await c.req.json();
+    
+    if (!currentPassword || !newPassword) {
+      return c.json({ success: false, error: 'Current password and new password are required' }, 400);
+    }
+    
+    if (newPassword.length < 8) {
+      return c.json({ success: false, error: 'New password must be at least 8 characters' }, 400);
+    }
+    
+    const user = c.get('user') as { sub: string; email: string };
+    const pb = getPocketBase();
+    
+    // Authenticate with current password to verify
+    try {
+      await pb.collection('users').authWithPassword(user.email, currentPassword);
+    } catch {
+      return c.json({ success: false, error: 'Current password is incorrect' }, 401);
+    }
+    
+    // Update the password
+    await pb.collection('users').update(user.sub, {
+      password: newPassword,
+      passwordConfirm: newPassword,
+    });
+    
+    return c.json({ success: true, message: 'Password updated successfully' });
+  } catch (error) {
+    logger.error('Password change error:', error);
+    return c.json({ success: false, error: 'Failed to update password' }, 500);
   }
 });
 

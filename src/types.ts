@@ -2,26 +2,19 @@ import { ReactNode } from 'react';
 
 export interface Student {
   id: string;
-  firstName: string;
-  lastName: string;
-  middleName?: string;
+  student_number?: string;
+  first_name: string;
+  last_name: string;
   gender: 'Male' | 'Female';
   email: string;
   phone: string;
-  nationality?: string;
-  faculty: string;
-  department: string;
-  careerPath: string; 
-  academicLevel: 'Diploma' | 'Degree' | 'Masters' | 'PhD';
-  admissionYear: string;
-  enrollmentTerm: string;
+  program_code: string;
+  admission_date: string;
   status: 'Active' | 'Applicant' | 'On Leave' | 'Graduated' | 'Suspended';
-  standing: 'Honor Roll' | 'Good' | 'Probation' | 'Warning';
-  gpa: number;
-  avatarColor: string;
+  avatar_color: string;
   photo?: string;
-  photoZoom: number;
-  photoPosition?: { x: number; y: number };
+  photo_zoom: number;
+  photo_position?: { x: number; y: number };
 }
 
 export interface NavItem {
@@ -56,6 +49,7 @@ export interface StaffMember {
 }
 
 export interface Transaction {
+  id?: string;
   ref: string;
   name: string;
   desc: string;

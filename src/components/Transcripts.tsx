@@ -1,5 +1,5 @@
 
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import { 
   Search, 
   Printer, 
@@ -17,11 +17,16 @@ import {
   Maximize2
 } from 'lucide-react';
 import { Student, Course } from '../types';
+import { getStudentGrades, Grade } from '../services/gradeService';
+import { getPrograms } from '../services/catalogService';
+import { getHtml2Pdf } from '../services/pdfService';
+import { useDataStore } from '../stores/dataStore';
+import { useUIStore } from '../stores/uiStore';
 
 interface TranscriptsProps {
-  students: Student[];
-  courses: Course[];
-  logo: string;
+  students?: Student[];
+  courses?: Course[];
+  logo?: string;
 }
 
 interface PerformanceRecord {
@@ -34,17 +39,177 @@ interface PerformanceRecord {
   term: string;
 }
 
-export const Transcripts: React.FC<TranscriptsProps> = ({ students, courses, logo }) => {
+type EditableBlockKey =
+  | 'microTop'
+  | 'headerTitle'
+  | 'studentName'
+  | 'studentMeta'
+  | 'table'
+  | 'metrics'
+  | 'recommendation'
+  | 'grading'
+  | 'signatures'
+  | 'footer';
+
+type BlockPosition = { x: number; y: number; align?: 'left' | 'center' | 'right' };
+type TranscriptTemplateLayout = {
+  rows: number;
+  blocks: Record<EditableBlockKey, BlockPosition>;
+};
+
+const TRANSCRIPT_LAYOUT_STORAGE_KEY = 'bmi_transcript_template_layout_v1';
+// Locked layout (submitted by you). This becomes the canonical transcript geometry.
+const TRANSCRIPT_TEMPLATE_LOCKED = true;
+const DEFAULT_TRANSCRIPT_TEMPLATE_LAYOUT: TranscriptTemplateLayout = {
+  rows: 25,
+  blocks: {
+    microTop: { x: 0, y: -10, align: 'center' },
+    headerTitle: { x: 0, y: 0, align: 'center' },
+    studentName: { x: 0, y: 0, align: 'center' },
+    studentMeta: { x: 0, y: 0, align: 'left' },
+    table: { x: 0, y: 12, align: 'left' },
+    metrics: { x: 0, y: 0, align: 'left' },
+    recommendation: { x: 0, y: 0, align: 'left' },
+    grading: { x: 0, y: 0, align: 'center' },
+    signatures: { x: 0, y: 0, align: 'left' },
+    footer: { x: 0, y: 0, align: 'left' },
+  },
+};
+
+export const Transcripts: React.FC<TranscriptsProps> = (props) => {
+  // Source data from store with prop overrides for backward compat
+  const storeStudents = useDataStore((s) => s.students);
+  const storeCourses = useDataStore((s) => s.courses);
+  const storeLogo = useUIStore((s) => s.logo);
+  const students = props.students ?? storeStudents ?? [];
+  const courses = props.courses ?? storeCourses ?? [];
+  const logo = props.logo ?? storeLogo ?? '';
   const [searchTerm, setSearchTerm] = useState('');
-  const [facultyFilter, setFacultyFilter] = useState('All Faculty');
+  const [programFilter, setProgramFilter] = useState('All Programs');
+  const [programOptions, setProgramOptions] = useState<Array<{ id: string; label: string }>>([]);
   const [selectedStudent, setSelectedStudent] = useState<Student | null>(null);
   const [showTranscript, setShowTranscript] = useState(false);
   const [transcriptType, setTranscriptType] = useState<'Official' | 'Provisional'>('Official');
   const [selectedTerm, setSelectedTerm] = useState('Fall 2023');
   const [zoomLevel, setZoomLevel] = useState(100); // Zoom percentage
+  const [studentGrades, setStudentGrades] = useState<Grade[]>([]);
+  const [loadingGrades, setLoadingGrades] = useState(false);
+  const [editorMode, setEditorMode] = useState(false);
+  const [selectedBlock, setSelectedBlock] = useState<EditableBlockKey | null>(null);
+  const [templateLayout, setTemplateLayout] = useState<TranscriptTemplateLayout>(DEFAULT_TRANSCRIPT_TEMPLATE_LAYOUT);
+  const dragRef = React.useRef<{ key: EditableBlockKey; startX: number; startY: number; originX: number; originY: number } | null>(null);
 
-  const faculties = ['All Faculty', 'Theology', 'ICT', 'Business', 'Education'];
   const terms = ['Fall 2022', 'Spring 2023', 'Fall 2023', 'Spring 2024'];
+
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      const r = await getPrograms();
+      if (cancelled || !r.success || !r.data) return;
+      setProgramOptions(
+        r.data.map((p: Record<string, unknown>) => ({
+          id: String(p.id),
+          label: `${String(p.program_code ?? '')} — ${String(p.name ?? '')}`,
+        }))
+      );
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  useEffect(() => {
+    if (TRANSCRIPT_TEMPLATE_LOCKED) {
+      setTemplateLayout(DEFAULT_TRANSCRIPT_TEMPLATE_LAYOUT);
+      return;
+    }
+    try {
+      const raw = localStorage.getItem(TRANSCRIPT_LAYOUT_STORAGE_KEY);
+      if (!raw) return;
+      const parsed = JSON.parse(raw) as Partial<TranscriptTemplateLayout>;
+      if (!parsed || !parsed.blocks) return;
+      setTemplateLayout({
+        rows: parsed.rows && parsed.rows > 0 ? parsed.rows : DEFAULT_TRANSCRIPT_TEMPLATE_LAYOUT.rows,
+        blocks: { ...DEFAULT_TRANSCRIPT_TEMPLATE_LAYOUT.blocks, ...parsed.blocks },
+      });
+    } catch {
+      // Ignore invalid persisted layout and fallback to defaults.
+    }
+  }, []);
+
+  useEffect(() => {
+    if (TRANSCRIPT_TEMPLATE_LOCKED) return;
+    localStorage.setItem(TRANSCRIPT_LAYOUT_STORAGE_KEY, JSON.stringify(templateLayout));
+  }, [templateLayout]);
+
+  const updateBlockPosition = (key: EditableBlockKey, patch: Partial<BlockPosition>) => {
+    setTemplateLayout((prev) => ({
+      ...prev,
+      blocks: {
+        ...prev.blocks,
+        [key]: { ...prev.blocks[key], ...patch },
+      },
+    }));
+  };
+
+  const getBlockStyle = (key: EditableBlockKey): React.CSSProperties => {
+    const { x, y, align } = templateLayout.blocks[key];
+    return {
+      transform: `translate(${x}px, ${y}px)`,
+      textAlign: align ?? 'left',
+      cursor: editorMode ? 'move' : 'default',
+      position: 'relative',
+      zIndex: 10,
+    };
+  };
+
+  const toSafeNumber = (value: unknown, fallback = 0): number => {
+    if (typeof value === 'number' && Number.isFinite(value)) {
+      return value;
+    }
+    if (typeof value === 'string') {
+      const parsed = Number(value);
+      if (Number.isFinite(parsed)) {
+        return parsed;
+      }
+    }
+    return fallback;
+  };
+
+  const formatNumber = (value: unknown, digits = 2): string => {
+    return toSafeNumber(value).toFixed(digits);
+  };
+
+  // Fetch grades when a student is selected
+  useEffect(() => {
+    if (!selectedStudent) {
+      setStudentGrades([]);
+      return;
+    }
+
+    const fetchGrades = async () => {
+      setLoadingGrades(true);
+      try {
+        console.log('[Transcripts] Fetching grades for student:', selectedStudent.id);
+        const response = await getStudentGrades(selectedStudent.id);
+        
+        if (response.success && response.data) {
+          console.log('[Transcripts] Grades fetched:', response.data.items);
+          setStudentGrades(response.data.items);
+        } else {
+          console.warn('[Transcripts] No grades found or error:', response.error);
+          setStudentGrades([]);
+        }
+      } catch (error) {
+        console.error('[Transcripts] Error fetching grades:', error);
+        setStudentGrades([]);
+      } finally {
+        setLoadingGrades(false);
+      }
+    };
+
+    fetchGrades();
+  }, [selectedStudent]);
 
   const handleZoomIn = () => setZoomLevel(prev => prev + 10);
   const handleZoomOut = () => setZoomLevel(prev => Math.max(prev - 10, 10));
@@ -68,6 +233,48 @@ export const Transcripts: React.FC<TranscriptsProps> = ({ students, courses, log
     window.addEventListener('wheel', handleWheel, { passive: false });
     return () => window.removeEventListener('wheel', handleWheel);
   }, [showTranscript]);
+
+  React.useEffect(() => {
+    if (!editorMode || !selectedBlock) return;
+    const handleEditorKeys = (e: KeyboardEvent) => {
+      const step = e.shiftKey ? 10 : 2;
+      if (e.key === 'ArrowUp') {
+        e.preventDefault();
+        updateBlockPosition(selectedBlock, { y: templateLayout.blocks[selectedBlock].y - step });
+      } else if (e.key === 'ArrowDown') {
+        e.preventDefault();
+        updateBlockPosition(selectedBlock, { y: templateLayout.blocks[selectedBlock].y + step });
+      } else if (e.key === 'ArrowLeft') {
+        e.preventDefault();
+        updateBlockPosition(selectedBlock, { x: templateLayout.blocks[selectedBlock].x - step });
+      } else if (e.key === 'ArrowRight') {
+        e.preventDefault();
+        updateBlockPosition(selectedBlock, { x: templateLayout.blocks[selectedBlock].x + step });
+      }
+    };
+    window.addEventListener('keydown', handleEditorKeys);
+    return () => window.removeEventListener('keydown', handleEditorKeys);
+  }, [editorMode, selectedBlock, templateLayout.blocks]);
+
+  React.useEffect(() => {
+    if (!editorMode) return;
+    const onMove = (event: MouseEvent) => {
+      const drag = dragRef.current;
+      if (!drag) return;
+      const dx = event.clientX - drag.startX;
+      const dy = event.clientY - drag.startY;
+      updateBlockPosition(drag.key, { x: drag.originX + dx, y: drag.originY + dy });
+    };
+    const onUp = () => {
+      dragRef.current = null;
+    };
+    window.addEventListener('mousemove', onMove);
+    window.addEventListener('mouseup', onUp);
+    return () => {
+      window.removeEventListener('mousemove', onMove);
+      window.removeEventListener('mouseup', onUp);
+    };
+  }, [editorMode]);
 
   // Click and hold zoom
   const zoomIntervalRef = React.useRef<NodeJS.Timeout | null>(null);
@@ -129,7 +336,7 @@ export const Transcripts: React.FC<TranscriptsProps> = ({ students, courses, log
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, [showTranscript]);
 
-  const getDeanName = (faculty: string) => {
+  const getDeanName = (program_code: string) => {
     // All faculties now use the unified Dean of Faculty & Academics
     return 'Dr. Joseph Kiai';
   };
@@ -137,76 +344,66 @@ export const Transcripts: React.FC<TranscriptsProps> = ({ students, courses, log
   const filteredStudents = useMemo(() => {
     return students.filter(s => {
       const q = searchTerm.toLowerCase();
-      const matchesSearch = `${s.firstName} ${s.lastName} ${s.id}`.toLowerCase().includes(q);
-      const matchesFaculty = facultyFilter === 'All Faculty' || s.faculty === facultyFilter;
-      return matchesSearch && matchesFaculty;
+      const matchesSearch = `${s.first_name} ${s.last_name} ${s.id}`.toLowerCase().includes(q);
+      const matchesProgram = programFilter === 'All Programs' || s.program_code === programFilter;
+      return matchesSearch && matchesProgram;
     });
-  }, [students, searchTerm, facultyFilter]);
+  }, [students, searchTerm, programFilter]);
 
   const getPerformanceRecords = (student: Student): PerformanceRecord[] => {
-    const facultyCourses = courses.filter(c => c.faculty === student.faculty || c.faculty === 'General');
-
-    // Pad with generated courses if fewer than 25 real ones exist
-    const paddingCourses = [
-      { code: 'GEN-101', name: 'Research Methods & Academic Writing', credits: 3, faculty: 'General' },
-      { code: 'GEN-102', name: 'Christian Ethics & Moral Philosophy', credits: 3, faculty: 'General' },
-      { code: 'GEN-103', name: 'Introduction to Hermeneutics', credits: 3, faculty: 'General' },
-      { code: 'GEN-104', name: 'Church History I', credits: 3, faculty: 'General' },
-      { code: 'GEN-105', name: 'Church History II', credits: 3, faculty: 'General' },
-      { code: 'GEN-106', name: 'Old Testament Survey', credits: 3, faculty: 'General' },
-      { code: 'GEN-107', name: 'New Testament Survey', credits: 3, faculty: 'General' },
-      { code: 'GEN-108', name: 'Homiletics & Preaching', credits: 3, faculty: 'General' },
-      { code: 'GEN-109', name: 'Systematic Theology II', credits: 3, faculty: 'General' },
-      { code: 'GEN-110', name: 'Pastoral Counselling', credits: 3, faculty: 'General' },
-      { code: 'GEN-111', name: 'Missiology & World Religions', credits: 3, faculty: 'General' },
-      { code: 'GEN-112', name: 'Biblical Languages: Greek I', credits: 3, faculty: 'General' },
-      { code: 'GEN-113', name: 'Biblical Languages: Hebrew I', credits: 3, faculty: 'General' },
-      { code: 'GEN-114', name: 'Eschatology & Prophetic Studies', credits: 3, faculty: 'General' },
-      { code: 'GEN-115', name: 'Pneumatology & Charismatic Studies', credits: 3, faculty: 'General' },
-    ];
-
-    // Merge real courses with padding, deduplicate by code, take first 25
-    const allAvailable = [...facultyCourses];
-    for (const p of paddingCourses) {
-      if (allAvailable.length >= 25) break;
-      if (!allAvailable.find(c => c.code === p.code)) {
-        allAvailable.push(p as any);
-      }
+    // Use real grades from database instead of mock data
+    if (studentGrades.length === 0) {
+      console.log('[Transcripts] No grades available for student');
+      return [];
     }
-    const selected = allAvailable.slice(0, 25);
 
-    return selected.map((c, idx) => {
-      const seed = (student.id.length + c.code.length + student.firstName.length + idx) % 30;
-      const score = 85 + (seed % 15) - (idx % 2 === 0 && student.id.includes('7') ? 50 : 0);
-      let grade = 'F';
-      let points = 0;
+    console.log('[Transcripts] Converting grades to performance records:', studentGrades.length);
 
-      if (score >= 70) { grade = 'A'; points = 4.0; }
-      else if (score >= 60) { grade = 'B'; points = 3.0; }
-      else if (score >= 50) { grade = 'C'; points = 2.0; }
-      else if (score >= 40) { grade = 'D'; points = 1.0; }
+    return studentGrades.map((grade) => {
+      const raw = grade as Grade & { credits?: number; creditHours?: number; hours?: number };
+      const score = toSafeNumber(grade.numericGrade ?? grade.percentage ?? grade.grade ?? grade.total ?? 0);
+      const credits = toSafeNumber(raw.credits ?? raw.creditHours ?? raw.hours ?? 0);
 
-      const termIdx = Math.floor(idx / 5);
-      const term = terms[termIdx % terms.length];
-
+      // Map database grade to performance record format
       return {
-        courseCode: c.code,
-        courseName: c.name,
-        credits: c.credits * 15,
+        courseCode: grade.courseCode || 'N/A',
+        courseName: grade.courseName || 'Untitled Course',
+        credits,
         score,
-        grade,
-        points,
-        term: term
+        grade: grade.letterGrade || 'F',
+        points: toSafeNumber(grade.gpa, 0),
+        term: grade.semester && grade.academicYear ? `${grade.semester} ${grade.academicYear}` : (grade.semester || grade.academicYear || "Fall 2023"),
       };
     });
   };
 
-  const allRecords = useMemo(() => selectedStudent ? getPerformanceRecords(selectedStudent) : [], [selectedStudent]);
+  const allRecords = useMemo(() => selectedStudent ? getPerformanceRecords(selectedStudent) : [], [selectedStudent, studentGrades]);
   
   const currentRecords = useMemo(() => {
     if (transcriptType === 'Official') return allRecords;
     return allRecords.filter(r => r.term === selectedTerm);
   }, [allRecords, transcriptType, selectedTerm]);
+
+  // Single-page A4 layout model (mm): fixed zones + computed table capacity.
+  const A4_HEIGHT_MM = 297;
+  const PAGE_PADDING_MM = 8;
+  const FIXED_TOP_MM = 92;
+  const FIXED_BOTTOM_MM = 50;
+  const TABLE_HEADER_MM = 10;
+  const FIXED_ROWS_PER_PAGE = Math.max(1, Math.min(60, templateLayout.rows || 25));
+  // Keep rows compact so all 25 are always visible in the single-page frame.
+  const TABLE_ROW_MM = 4.6;
+  const availableTableMm = Math.max(
+    0,
+    A4_HEIGHT_MM - PAGE_PADDING_MM * 2 - FIXED_TOP_MM - FIXED_BOTTOM_MM - TABLE_HEADER_MM
+  );
+  const rowsPerPage = FIXED_ROWS_PER_PAGE;
+  const transcriptRecords = useMemo(() => currentRecords.slice(0, rowsPerPage), [currentRecords, rowsPerPage]);
+  const hiddenCourseCount = Math.max(0, currentRecords.length - transcriptRecords.length);
+  const fixedRows = useMemo<(PerformanceRecord | null)[]>(
+    () => Array.from({ length: rowsPerPage }, (_, idx) => transcriptRecords[idx] ?? null),
+    [rowsPerPage, transcriptRecords]
+  );
 
   const stats = useMemo(() => {
     const calculateAvg = (recs: PerformanceRecord[]) => {
@@ -237,10 +434,10 @@ export const Transcripts: React.FC<TranscriptsProps> = ({ students, courses, log
       else if (avg >= 60) honors = "SECOND CLASS HONOURS, UPPER DIVISION";
       else if (avg >= 50) honors = "SECOND CLASS HONOURS, LOWER DIVISION";
       
-      const isDegree = ['Degree', 'Masters', 'PhD'].includes(selectedStudent.academicLevel);
+      const isDegree = ['Degree', 'Masters', 'PhD'].includes(selectedStudent.program_code);
       const awardPrefix = isDegree ? "AWARDED THE DEGREE OF" : "AWARDED THE";
       
-      return `HAVING SATISFIED THE BOARD OF EXAMINERS AND THE UNIVERSITY SENATE, IS HEREBY ${awardPrefix} ${selectedStudent.careerPath.toUpperCase()} WITH ${honors}.`;
+      return `HAVING SATISFIED THE BOARD OF EXAMINERS AND THE UNIVERSITY SENATE, IS HEREBY ${awardPrefix} ${selectedStudent.program_code.toUpperCase()} WITH ${honors}.`;
     } else {
       if (hasRetakes) {
         return `REQUIRED TO SIT FOR SUPPLEMENTARY EXAMINATIONS IN THE FAILED MODULES (${failedModules.join(', ')}) BEFORE PROCEEDING TO THE NEXT ACADEMIC LEVEL.`;
@@ -335,7 +532,7 @@ export const Transcripts: React.FC<TranscriptsProps> = ({ students, courses, log
     if (!selectedStudent) return;
     const element = document.getElementById('official-transcript-root');
     if (!element) return;
-    const fileName = `${transcriptType}_TRANSCRIPT_${selectedStudent.id}_${selectedStudent.lastName}`.toUpperCase();
+    const fileName = `${transcriptType}_TRANSCRIPT_${selectedStudent.id}_${selectedStudent.last_name}`.toUpperCase();
 
     // Shared: inline all computed styles so the clone is a pixel-perfect replica
     const inlineStyles = (source: HTMLElement): HTMLElement => {
@@ -364,8 +561,7 @@ export const Transcripts: React.FC<TranscriptsProps> = ({ students, courses, log
     if (mode === 'download') {
       try {
         // Real PDF Download: Using html2pdf.js for better layout preservation and vector-like quality
-        const html2pdfModule = await import('html2pdf.js');
-        const html2pdf = html2pdfModule.default;
+        const html2pdf = await getHtml2Pdf();
 
         const opt = {
           margin: [10, 10, 10, 10], // Top, Right, Bottom, Left margins in mm
@@ -397,7 +593,7 @@ export const Transcripts: React.FC<TranscriptsProps> = ({ students, courses, log
         const worker = html2pdf().set(opt).from(element).toPdf().get('pdf').then((pdf: any) => {
           // Add metadata to the real PDF
           pdf.setProperties({
-            title: `Official Transcript - ${selectedStudent.firstName} ${selectedStudent.lastName}`,
+            title: `Official Transcript - ${selectedStudent.first_name} ${selectedStudent.last_name}`,
             subject: 'Official Academic Record',
             author: 'BMI University Systems',
             keywords: 'transcript, academic, record, BMI',
@@ -498,8 +694,7 @@ export const Transcripts: React.FC<TranscriptsProps> = ({ students, courses, log
     if (!element) return;
     if (platform === 'whatsapp') {
        try {
-          const html2pdfModule = await import('https://esm.sh/html2pdf.js@0.10.1?bundle');
-          const html2pdf = html2pdfModule.default;
+          const html2pdf = await getHtml2Pdf();
           const pdfBlob = await html2pdf().from(element).set({
             margin: 0,
             jsPDF: { unit: 'mm', format: 'a4', orientation: 'portrait' }
@@ -509,10 +704,10 @@ export const Transcripts: React.FC<TranscriptsProps> = ({ students, courses, log
              await navigator.share({
                 files: [file],
                 title: `${transcriptType} Academic Transcript`,
-                text: `${transcriptType} transcript for ${selectedStudent.firstName} ${selectedStudent.lastName} (${selectedStudent.id})`
+                text: `${transcriptType} transcript for ${selectedStudent.first_name} ${selectedStudent.last_name} (${selectedStudent.id})`
              });
           } else {
-             const waUrl = `https://api.whatsapp.com/send?text=${encodeURIComponent(transcriptType + " Academic Transcript for " + selectedStudent.firstName + " " + selectedStudent.lastName + " (" + selectedStudent.id + ")")}`;
+             const waUrl = `https://api.whatsapp.com/send?text=${encodeURIComponent(transcriptType + " Academic Transcript for " + selectedStudent.first_name + " " + selectedStudent.last_name + " (" + selectedStudent.id + ")")}`;
              window.open(waUrl, '_blank');
           }
        } catch (err) {
@@ -531,7 +726,7 @@ export const Transcripts: React.FC<TranscriptsProps> = ({ students, courses, log
       const { Document, Paragraph, TextRun, Table, TableRow, TableCell, AlignmentType, HeadingLevel, BorderStyle, WidthType, convertInchesToTwip, ImageRun, VerticalAlign, ShadingType } = await import('docx');
       const { saveAs } = await import('file-saver');
 
-      const fileName = `${transcriptType}_TRANSCRIPT_${selectedStudent.id}_${selectedStudent.lastName}`.toUpperCase();
+      const fileName = `${transcriptType}_TRANSCRIPT_${selectedStudent.id}_${selectedStudent.last_name}`.toUpperCase();
 
       // Fetch logo as base64
       let logoBase64 = '';
@@ -618,11 +813,11 @@ export const Transcripts: React.FC<TranscriptsProps> = ({ students, courses, log
           ],
         }),
         // Data rows
-        ...currentRecords.map(rec => new TableRow({
+        ...fixedRows.map(rec => new TableRow({
           children: [
             new TableCell({ 
               children: [new Paragraph({ 
-                children: [new TextRun({ text: rec.courseCode, font: 'Courier New', bold: true, size: 18, color: '4B0082' })],
+                children: [new TextRun({ text: rec?.courseCode ?? '', font: 'Courier New', bold: true, size: 18, color: '4B0082' })],
                 alignment: AlignmentType.LEFT
               })],
               borders: {
@@ -635,7 +830,7 @@ export const Transcripts: React.FC<TranscriptsProps> = ({ students, courses, log
             }),
             new TableCell({ 
               children: [new Paragraph({ 
-                children: [new TextRun({ text: rec.courseName.toUpperCase(), bold: true, size: 18 })],
+                children: [new TextRun({ text: (rec?.courseName ?? '').toUpperCase(), bold: true, size: 18 })],
                 alignment: AlignmentType.LEFT
               })],
               borders: {
@@ -648,7 +843,7 @@ export const Transcripts: React.FC<TranscriptsProps> = ({ students, courses, log
             }),
             new TableCell({ 
               children: [new Paragraph({ 
-                children: [new TextRun({ text: rec.credits.toFixed(2), bold: true, size: 18 })],
+                children: [new TextRun({ text: rec ? formatNumber(rec.credits, 2) : '', bold: true, size: 18 })],
                 alignment: AlignmentType.CENTER
               })],
               borders: {
@@ -662,10 +857,10 @@ export const Transcripts: React.FC<TranscriptsProps> = ({ students, courses, log
             new TableCell({ 
               children: [new Paragraph({ 
                 children: [new TextRun({ 
-                  text: rec.grade, 
+                  text: rec?.grade ?? '', 
                   bold: true, 
                   size: 22,
-                  color: rec.score >= 70 ? '10B981' : rec.score < 40 ? 'DC2626' : '4B0082'
+                  color: rec ? (rec.score >= 70 ? '10B981' : rec.score < 40 ? 'DC2626' : '4B0082') : '4B0082'
                 })],
                 alignment: AlignmentType.CENTER
               })],
@@ -798,7 +993,7 @@ export const Transcripts: React.FC<TranscriptsProps> = ({ students, courses, log
                   color: '999999'
                 }),
                 new TextRun({ 
-                  text: `${selectedStudent.firstName.toUpperCase()} ${selectedStudent.lastName.toUpperCase()}`, 
+                  text: `${selectedStudent.first_name.toUpperCase()} ${selectedStudent.last_name.toUpperCase()}`, 
                   size: 24, 
                   bold: true, 
                   font: 'Georgia',
@@ -837,7 +1032,7 @@ export const Transcripts: React.FC<TranscriptsProps> = ({ students, courses, log
                       children: [new Paragraph({
                         children: [
                           new TextRun({ text: 'Prog. of Study: ', size: 16, color: '666666', font: 'Arial' }),
-                          new TextRun({ text: selectedStudent.careerPath.toUpperCase(), size: 18, bold: true, font: 'Arial' }),
+                          new TextRun({ text: selectedStudent.program_code.toUpperCase(), size: 18, bold: true, font: 'Arial' }),
                         ],
                       })],
                       borders: {
@@ -853,7 +1048,7 @@ export const Transcripts: React.FC<TranscriptsProps> = ({ students, courses, log
                       children: [new Paragraph({
                         children: [
                           new TextRun({ text: 'FACULTY OF: ', size: 16, color: '666666', font: 'Arial' }),
-                          new TextRun({ text: selectedStudent.faculty.toUpperCase(), size: 18, bold: true, font: 'Arial' }),
+                          new TextRun({ text: selectedStudent.program_code.toUpperCase(), size: 18, bold: true, font: 'Arial' }),
                         ],
                       })],
                       borders: {
@@ -1029,7 +1224,7 @@ export const Transcripts: React.FC<TranscriptsProps> = ({ students, courses, log
                           spacing: { after: 50 },
                         }),
                         new Paragraph({
-                          text: getDeanName(selectedStudent.faculty),
+                          text: getDeanName(selectedStudent.program_code),
                           alignment: AlignmentType.CENTER,
                           spacing: { after: 50 },
                           run: {
@@ -1183,7 +1378,7 @@ export const Transcripts: React.FC<TranscriptsProps> = ({ students, courses, log
     if (!selectedStudent) return;
 
     try {
-      const fileName = `${transcriptType}_TRANSCRIPT_${selectedStudent.id}_${selectedStudent.lastName}`.toUpperCase();
+      const fileName = `${transcriptType}_TRANSCRIPT_${selectedStudent.id}_${selectedStudent.last_name}`.toUpperCase();
       
       // A4 dimensions at 96 DPI
       const width = 794;
@@ -1212,23 +1407,24 @@ export const Transcripts: React.FC<TranscriptsProps> = ({ students, courses, log
       const recommendationLines = wrapText(getAcademicRecommendation(), 95);
       
       // Build course table rows
-      const courseRows = currentRecords.map((rec, idx) => {
+      const courseRows = fixedRows.map((rec, idx) => {
         const y = 430 + (idx * 22);
-        const gradeColor = rec.score >= 70 ? '#10B981' : rec.score < 40 ? '#DC2626' : '#4B0082';
-        const courseName = rec.courseName.length > 45 ? rec.courseName.substring(0, 42) + '...' : rec.courseName;
+        const gradeColor = rec ? (rec.score >= 70 ? '#10B981' : rec.score < 40 ? '#DC2626' : '#4B0082') : '#4B0082';
+        const rawName = rec?.courseName ?? '';
+        const courseName = rawName.length > 45 ? rawName.substring(0, 42) + '...' : rawName;
         
         return `
     <!-- Row ${idx + 1} -->
     <rect x="50" y="${y - 15}" width="694" height="22" fill="${idx % 2 === 0 ? '#FFFFFF' : '#F9FAFB'}" />
-    <text x="60" y="${y}" font-family="Courier New, monospace" font-size="9" font-weight="bold" fill="#4B0082">${rec.courseCode}</text>
+    <text x="60" y="${y}" font-family="Courier New, monospace" font-size="9" font-weight="bold" fill="#4B0082">${rec?.courseCode ?? ''}</text>
     <text x="140" y="${y}" font-family="Arial, sans-serif" font-size="9" font-weight="bold" fill="#1F2937">${courseName.toUpperCase()}</text>
-    <text x="520" y="${y}" font-family="Arial, sans-serif" font-size="9" fill="#374151" text-anchor="middle">${rec.credits}</text>
-    <text x="600" y="${y}" font-family="Arial, sans-serif" font-size="10" font-weight="bold" fill="${gradeColor}" text-anchor="middle">${rec.score}%</text>
-    <text x="670" y="${y}" font-family="Arial, sans-serif" font-size="12" font-weight="bold" fill="${gradeColor}" text-anchor="middle">${rec.grade}</text>
-    <text x="720" y="${y}" font-family="Arial, sans-serif" font-size="8" fill="#6B7280" text-anchor="end">${rec.term}</text>`;
+    <text x="520" y="${y}" font-family="Arial, sans-serif" font-size="9" fill="#374151" text-anchor="middle">${rec ? formatNumber(rec.credits, 2) : ''}</text>
+    <text x="600" y="${y}" font-family="Arial, sans-serif" font-size="10" font-weight="bold" fill="${gradeColor}" text-anchor="middle">${rec ? `${rec.score}%` : ''}</text>
+    <text x="670" y="${y}" font-family="Arial, sans-serif" font-size="12" font-weight="bold" fill="${gradeColor}" text-anchor="middle">${rec?.grade ?? ''}</text>
+    <text x="720" y="${y}" font-family="Arial, sans-serif" font-size="8" fill="#6B7280" text-anchor="end">${rec?.term ?? ''}</text>`;
       }).join('');
       
-      const tableEndY = 430 + (currentRecords.length * 22);
+      const tableEndY = 430 + (fixedRows.length * 22);
       const statsY = tableEndY + 40;
       const recommendationY = statsY + 80;
       const signaturesY = height - 200;
@@ -1293,7 +1489,7 @@ export const Transcripts: React.FC<TranscriptsProps> = ({ students, courses, log
   <!-- Student Name (large and prominent) -->
   <text x="60" y="270" font-family="Arial, sans-serif" font-size="10" font-weight="bold" fill="#9CA3AF">Name:</text>
   <text x="60" y="290" font-family="Georgia, serif" font-size="20" font-weight="bold" fill="#000000" letter-spacing="0.5">
-    ${selectedStudent.firstName.toUpperCase()} ${selectedStudent.lastName.toUpperCase()}
+    ${selectedStudent.first_name.toUpperCase()} ${selectedStudent.last_name.toUpperCase()}
   </text>
   <line x1="60" y1="295" x2="400" y2="295" stroke="#CCCCCC" stroke-width="1"/>
   
@@ -1304,16 +1500,16 @@ export const Transcripts: React.FC<TranscriptsProps> = ({ students, courses, log
   <line x1="60" y1="325" x2="350" y2="325" stroke="#E5E7EB" stroke-width="0.5"/>
   
   <text x="60" y="345" font-family="Arial, sans-serif" font-size="9" fill="#6B7280">FACULTY OF:</text>
-  <text x="150" y="345" font-family="Arial, sans-serif" font-size="10" font-weight="bold" fill="#000000">${selectedStudent.faculty.toUpperCase()}</text>
+  <text x="150" y="345" font-family="Arial, sans-serif" font-size="10" font-weight="bold" fill="#000000">${selectedStudent.program_code.toUpperCase()}</text>
   <line x1="60" y1="350" x2="350" y2="350" stroke="#E5E7EB" stroke-width="0.5"/>
   
   <text x="60" y="370" font-family="Arial, sans-serif" font-size="9" fill="#6B7280">Admission:</text>
-  <text x="150" y="370" font-family="Arial, sans-serif" font-size="10" font-weight="bold" fill="#000000">${selectedStudent.admissionYear}</text>
+  <text x="150" y="370" font-family="Arial, sans-serif" font-size="10" font-weight="bold" fill="#000000">${selectedStudent.admission_date}</text>
   <line x1="60" y1="375" x2="350" y2="375" stroke="#E5E7EB" stroke-width="0.5"/>
   
   <!-- Right Column -->
   <text x="400" y="320" font-family="Arial, sans-serif" font-size="9" fill="#6B7280">Program:</text>
-  <text x="470" y="320" font-family="Arial, sans-serif" font-size="10" font-weight="bold" fill="#000000">${selectedStudent.careerPath.substring(0, 30).toUpperCase()}</text>
+  <text x="470" y="320" font-family="Arial, sans-serif" font-size="10" font-weight="bold" fill="#000000">${selectedStudent.program_code.substring(0, 30).toUpperCase()}</text>
   <line x1="400" y1="325" x2="730" y2="325" stroke="#E5E7EB" stroke-width="0.5"/>
   
   <text x="400" y="345" font-family="Arial, sans-serif" font-size="9" fill="#6B7280">Student ID:</text>
@@ -1321,7 +1517,7 @@ export const Transcripts: React.FC<TranscriptsProps> = ({ students, courses, log
   <line x1="400" y1="350" x2="730" y2="350" stroke="#E5E7EB" stroke-width="0.5"/>
   
   <text x="400" y="370" font-family="Arial, sans-serif" font-size="9" fill="#6B7280">Graduation:</text>
-  <text x="470" y="370" font-family="Arial, sans-serif" font-size="10" font-weight="bold" fill="#000000">${parseInt(selectedStudent.admissionYear) + 4}</text>
+  <text x="470" y="370" font-family="Arial, sans-serif" font-size="10" font-weight="bold" fill="#000000">${parseInt(selectedStudent.admission_date) + 4}</text>
   <line x1="400" y1="375" x2="730" y2="375" stroke="#E5E7EB" stroke-width="0.5"/>
   
   <!-- Academic Performance Section -->
@@ -1370,7 +1566,7 @@ export const Transcripts: React.FC<TranscriptsProps> = ({ students, courses, log
   <text x="200" y="${signaturesY}" font-family="Arial, sans-serif" font-size="10" fill="#000000">_________________________</text>
   <text x="550" y="${signaturesY}" font-family="Arial, sans-serif" font-size="10" fill="#000000">_________________________</text>
   
-  <text x="200" y="${signaturesY + 20}" font-family="Arial, sans-serif" font-size="10" font-weight="bold" fill="#000000" text-anchor="middle">${getDeanName(selectedStudent.faculty)}</text>
+  <text x="200" y="${signaturesY + 20}" font-family="Arial, sans-serif" font-size="10" font-weight="bold" fill="#000000" text-anchor="middle">${getDeanName(selectedStudent.program_code)}</text>
   <text x="550" y="${signaturesY + 20}" font-family="Arial, sans-serif" font-size="10" font-weight="bold" fill="#000000" text-anchor="middle">Dean of Students</text>
   
   <text x="200" y="${signaturesY + 35}" font-family="Arial, sans-serif" font-size="8" font-style="italic" fill="#6B7280" text-anchor="middle">Dean of Faculty &amp; Academics</text>
@@ -1425,6 +1621,27 @@ export const Transcripts: React.FC<TranscriptsProps> = ({ students, courses, log
     </div>
   );
 
+  const startBlockDrag = (key: EditableBlockKey, e: React.MouseEvent<HTMLDivElement>) => {
+    if (!editorMode) return;
+    e.preventDefault();
+    e.stopPropagation();
+    setSelectedBlock(key);
+    dragRef.current = {
+      key,
+      startX: e.clientX,
+      startY: e.clientY,
+      originX: templateLayout.blocks[key].x,
+      originY: templateLayout.blocks[key].y,
+    };
+  };
+
+  const editorOutlineClass = (key: EditableBlockKey) =>
+    editorMode
+      ? selectedBlock === key
+        ? 'outline outline-2 outline-amber-500/90'
+        : 'outline outline-1 outline-cyan-500/60'
+      : '';
+
   return (
     <div className="h-full flex flex-col animate-fade-in relative">
       {/* Sticky Header */}
@@ -1476,13 +1693,16 @@ export const Transcripts: React.FC<TranscriptsProps> = ({ students, courses, log
                 </div>
                 <div className="space-y-4">
                    <div className="space-y-1">
-                      <label className="text-[10px] font-black uppercase text-gray-400 tracking-widest">Target Faculty</label>
+                      <label className="text-[10px] font-black uppercase text-gray-400 tracking-widest">Target Program</label>
                       <select 
-                        value={facultyFilter}
-                        onChange={e => setFacultyFilter(e.target.value)}
+                        value={programFilter}
+                        onChange={(e) => setProgramFilter(e.target.value)}
                         className="w-full px-4 py-3 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-600 rounded-none text-[10px] font-black uppercase outline-none focus:ring-1 focus:ring-[#4B0082] cursor-pointer dark:text-gray-200"
                       >
-                         {faculties.map(f => <option key={f} value={f}>{f}</option>)}
+                         <option value="All Programs">All Programs</option>
+                         {programOptions.map((p) => (
+                           <option key={p.id} value={p.id}>{p.label}</option>
+                         ))}
                       </select>
                    </div>
                 </div>
@@ -1495,7 +1715,7 @@ export const Transcripts: React.FC<TranscriptsProps> = ({ students, courses, log
                           className={`w-full text-left p-3 rounded-none transition-all flex items-center justify-between group ${selectedStudent?.id === student.id ? 'bg-[#4B0082] text-white shadow-lg' : 'hover:bg-purple-50 dark:hover:bg-gray-700'}`}
                         >
                            <div>
-                              <p className="text-[11px] font-black uppercase tracking-tight leading-none">{student.firstName} {student.lastName}</p>
+                              <p className="text-[11px] font-black uppercase tracking-tight leading-none">{student.first_name} {student.last_name}</p>
                               <p className={`text-[9px] font-bold uppercase mt-1 ${selectedStudent?.id === student.id ? 'text-purple-200' : 'text-gray-400'}`}>{student.id}</p>
                            </div>
                            <ChevronRight size={14} className={selectedStudent?.id === student.id ? 'text-[#FFD700]' : 'text-gray-300'} />
@@ -1514,11 +1734,11 @@ export const Transcripts: React.FC<TranscriptsProps> = ({ students, courses, log
                      <div className="p-8 flex flex-col md:flex-row justify-between items-center gap-8">
                         <div className="flex items-center gap-8">
                            <div className={`w-28 h-28 rounded-none ${selectedStudent.avatarColor} border-2 border-[#FFD700] p-1 shadow-2xl overflow-hidden`}>
-                              {selectedStudent.photo ? <img src={selectedStudent.photo} className="w-full h-full object-cover" style={{ transform: `scale(${selectedStudent.photoZoom})` }} /> : <div className="w-full h-full flex items-center justify-center text-3xl font-black text-white">{selectedStudent.firstName[0]}</div>}
+                              {selectedStudent.photo ? <img src={selectedStudent.photo} className="w-full h-full object-cover" style={{ transform: `scale(${selectedStudent.photoZoom})` }} /> : <div className="w-full h-full flex items-center justify-center text-3xl font-black text-white">{selectedStudent.first_name[0]}</div>}
                            </div>
                            <div>
-                              <h3 className="text-3xl font-black text-gray-900 dark:text-white uppercase tracking-tighter leading-none">{selectedStudent.firstName} {selectedStudent.lastName}</h3>
-                              <p className="text-xs font-bold text-[#4B0082] dark:text-[#FFD700] uppercase tracking-widest mt-3">{selectedStudent.careerPath} • {selectedStudent.id}</p>
+                              <h3 className="text-3xl font-black text-gray-900 dark:text-white uppercase tracking-tighter leading-none">{selectedStudent.first_name} {selectedStudent.last_name}</h3>
+                              <p className="text-xs font-bold text-[#4B0082] dark:text-[#FFD700] uppercase tracking-widest mt-3">{selectedStudent.program_code} • {selectedStudent.id}</p>
                            </div>
                         </div>
                         <button 
@@ -1552,7 +1772,7 @@ export const Transcripts: React.FC<TranscriptsProps> = ({ students, courses, log
                               </tr>
                            </thead>
                            <tbody className="divide-y divide-gray-50 dark:divide-gray-800">
-                              {currentRecords.map((rec, i) => (
+                              {transcriptRecords.map((rec, i) => (
                                 <tr key={i} className="hover:bg-purple-50/20 dark:hover:bg-gray-700/20 transition-all group">
                                    <td className="px-6 py-4 font-mono text-xs font-bold text-[#4B0082] dark:text-purple-300">{rec.courseCode}</td>
                                    <td className="px-6 py-4 text-xs font-black text-gray-900 dark:text-white uppercase tracking-tight leading-none">{rec.courseName}</td>
@@ -1628,6 +1848,43 @@ export const Transcripts: React.FC<TranscriptsProps> = ({ students, courses, log
                         <ZoomIn size={16} />
                       </button>
                     </div>
+
+                    {!TRANSCRIPT_TEMPLATE_LOCKED && (
+                      <div className="flex items-center gap-2 bg-gray-800 px-3 py-2 rounded-lg border border-white/10">
+                        <button
+                          onClick={() => setEditorMode((prev) => !prev)}
+                          className={`px-3 py-2 text-[10px] font-black uppercase tracking-widest transition-all rounded ${editorMode ? 'bg-amber-500 text-black' : 'bg-gray-700 text-white hover:bg-gray-600'}`}
+                        >
+                          {editorMode ? 'Editor On' : 'Edit Template'}
+                        </button>
+                        <label className="text-[9px] font-black uppercase text-gray-300">Rows</label>
+                        <input
+                          type="number"
+                          min={1}
+                          max={60}
+                          value={templateLayout.rows}
+                          onChange={(e) => {
+                            const value = Number(e.target.value);
+                            if (Number.isFinite(value)) {
+                              setTemplateLayout((prev) => ({ ...prev, rows: Math.max(1, Math.min(60, value)) }));
+                            }
+                          }}
+                          className="w-16 px-2 py-1 bg-gray-700 border border-white/20 text-white text-[10px] font-black"
+                        />
+                        {editorMode && (
+                          <span className="text-[9px] font-black uppercase text-amber-300">
+                            {selectedBlock ? `Selected: ${selectedBlock}` : 'Click block to select'}
+                          </span>
+                        )}
+                        {editorMode && selectedBlock && (
+                          <div className="flex items-center gap-1">
+                            <button onClick={() => updateBlockPosition(selectedBlock, { align: 'left' })} className="px-2 py-1 text-[9px] font-black bg-gray-700 text-white border border-white/20">L</button>
+                            <button onClick={() => updateBlockPosition(selectedBlock, { align: 'center' })} className="px-2 py-1 text-[9px] font-black bg-gray-700 text-white border border-white/20">C</button>
+                            <button onClick={() => updateBlockPosition(selectedBlock, { align: 'right' })} className="px-2 py-1 text-[9px] font-black bg-gray-700 text-white border border-white/20">R</button>
+                          </div>
+                        )}
+                      </div>
+                    )}
                     
                     <button onClick={() => handlePrint('print')} className="flex items-center gap-2 px-8 py-3.5 bg-[#4B0082] text-white text-[10px] font-black uppercase tracking-widest hover:bg-black transition-all shadow-lg border border-white/10"><Printer size={18} /> Print Record</button>
                     <button onClick={() => handlePrint('download')} className="flex items-center gap-2 px-8 py-3.5 bg-emerald-600 text-white text-[10px] font-black uppercase tracking-widest hover:bg-emerald-700 transition-all shadow-lg border border-white/10"><Download size={18} /> PDF Archive</button>
@@ -1655,7 +1912,11 @@ export const Transcripts: React.FC<TranscriptsProps> = ({ students, courses, log
                 id="official-transcript-root" 
                 className="bg-white shadow-2xl relative flex flex-col font-serif p-6 text-gray-950 print:m-0 print:shadow-none border-[6px] border-gray-100 border-double"
                 style={{ 
-                  width: '210mm'
+                  width: '210mm',
+                  height: '297mm',
+                  padding: '8mm',
+                  boxSizing: 'border-box',
+                  overflow: 'hidden'
                 }}
               >
                  
@@ -1748,13 +2009,14 @@ export const Transcripts: React.FC<TranscriptsProps> = ({ students, courses, log
                          }} />
 
                     {/* Large Center Logo Watermark */}
-                    <div className="absolute inset-0 flex items-center justify-center opacity-[0.12] pointer-events-none">
+                    <div className="absolute inset-0 flex items-center justify-center opacity-[0.08] pointer-events-none">
                       <img
                         src={logo || "/BMI.svg"}
-                        className="h-[85%] w-auto object-contain"
+                        className="h-[32%] w-auto object-contain"
                         alt=""
                         style={{ 
-                          filter: 'grayscale(100%) contrast(0.7)'
+                          filter: 'grayscale(100%) contrast(0.7)',
+                          transform: 'translateY(18%)'
                         }}
                         onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }}
                       />
@@ -1778,7 +2040,14 @@ export const Transcripts: React.FC<TranscriptsProps> = ({ students, courses, log
                     </div>
                  </div>
 
-                 <MicroText text="BMI UNIVERSITY OFFICIAL ACADEMIC TRANSCRIPT • SECURITY VALIDATED RECORD • DO NOT REPRODUCE • UV PROTECTED INK • ANTI-FORGERY" />
+                 <div
+                   className={`-mt-1 mb-1 ${editorOutlineClass('microTop')}`}
+                   style={getBlockStyle('microTop')}
+                   onClick={() => editorMode && setSelectedBlock('microTop')}
+                   onMouseDown={(e) => startBlockDrag('microTop', e)}
+                 >
+                   <MicroText text="BMI UNIVERSITY OFFICIAL ACADEMIC TRANSCRIPT • SECURITY VALIDATED RECORD • DO NOT REPRODUCE • UV PROTECTED INK • ANTI-FORGERY" />
+                 </div>
 
                  {/* Seal — top left, mirrors the QR code on the right */}
                  <div className="absolute top-8 left-8 flex flex-col items-center gap-1 z-20">
@@ -1793,7 +2062,7 @@ export const Transcripts: React.FC<TranscriptsProps> = ({ students, courses, log
                  <div className="absolute top-8 right-8 flex flex-col items-center gap-1 group z-20">
                     <div className="p-1 bg-white border border-gray-900 shadow-sm relative">
                        <img 
-                          src={`https://api.qrserver.com/v1/create-qr-code/?size=150x150&ecc=H&margin=1&data=${encodeURIComponent(`BMI UNIVERSITY - OFFICIAL ACADEMIC RECORD\nSTUDENT: ${selectedStudent.firstName} ${selectedStudent.lastName}\nID: ${selectedStudent.id}\nSERIAL: BMI-TR-${selectedStudent.id.split('-').pop()}\nSTATUS: VERIFIED`)}`}
+                          src={`https://api.qrserver.com/v1/create-qr-code/?size=150x150&ecc=H&margin=1&data=${encodeURIComponent(`BMI UNIVERSITY - OFFICIAL ACADEMIC RECORD\nSTUDENT: ${selectedStudent.first_name} ${selectedStudent.last_name}\nID: ${selectedStudent.id}\nSERIAL: BMI-TR-${selectedStudent.id.split('-').pop()}\nSTATUS: VERIFIED`)}`}
                           className="w-16 h-16"
                           alt="Security QR"
                        />
@@ -1803,40 +2072,66 @@ export const Transcripts: React.FC<TranscriptsProps> = ({ students, courses, log
                     </span>
                  </div>
 
-                 <div className="flex flex-col items-center border-b-2 border-gray-900 pb-3 mb-4 relative z-10">
+                 <div
+                   className={`flex flex-col items-center border-b-2 border-gray-900 pb-2 mb-3 relative z-10 ${editorOutlineClass('headerTitle')}`}
+                   style={getBlockStyle('headerTitle')}
+                   onClick={() => editorMode && setSelectedBlock('headerTitle')}
+                   onMouseDown={(e) => startBlockDrag('headerTitle', e)}
+                 >
                     <img 
                       src={logo || "/BMI.svg"} 
-                      className="h-16 mb-2 object-contain filter contrast-125" 
+                      className="h-14 mb-1.5 object-contain filter contrast-125" 
                       alt="BMI Logo"
                       onError={(e) => { (e.target as HTMLImageElement).src = "/BMI.svg" }}
                     />
-                    <h1 className="text-2xl font-serif font-black tracking-tight text-gray-900 uppercase">BMI UNIVERSITY</h1>
-                    <p className="text-[9px] font-sans font-black text-gray-600 uppercase tracking-[0.4em]">OFFICE OF THE REGISTRAR</p>
-                    <div className="mt-2 px-8 py-1 border-y border-gray-900 bg-gradient-to-r from-purple-50/80 via-white to-purple-50/80">
-                      <h2 className="text-sm font-serif font-black uppercase tracking-[0.3em]">
+                    <h1 className="text-[30px] leading-none font-serif font-black tracking-tight text-gray-900 uppercase">BMI UNIVERSITY</h1>
+                    <p className="text-[8px] font-sans font-black text-gray-600 uppercase tracking-[0.35em] mt-0.5">OFFICE OF THE REGISTRAR</p>
+                    <div className="mt-1.5 px-7 py-0.5 border-y border-gray-900 bg-gradient-to-r from-purple-50/80 via-white to-purple-50/80">
+                      <h2 className="text-[13px] font-serif font-black uppercase tracking-[0.26em] leading-tight">
                         {transcriptType} Academic Transcript
                         {transcriptType === 'Provisional' && <span className="ml-3 bg-red-600 px-2 py-0.5 text-[10px] text-white">| PERIOD: {selectedTerm.toUpperCase()}</span>}
                       </h2>
                     </div>
                  </div>
                  
-                 <div className="mb-4 px-4 relative z-10">
-                    <div className="flex items-baseline gap-4 border-b border-gray-300 pb-1">
-                       <span className="text-[9px] font-sans font-black text-gray-400 uppercase tracking-[0.2em]">Student Name:</span>
-                       <span className="text-lg font-serif font-black text-gray-900 uppercase tracking-tight">{selectedStudent.firstName} {selectedStudent.lastName}</span>
+                 <div
+                   className={`mb-3 px-4 relative z-10 ${editorOutlineClass('studentName')}`}
+                   style={getBlockStyle('studentName')}
+                   onClick={() => editorMode && setSelectedBlock('studentName')}
+                   onMouseDown={(e) => startBlockDrag('studentName', e)}
+                 >
+                    <div className="border-b border-gray-300 pb-1">
+                      <div className="flex items-baseline justify-start">
+                        <span className="text-[8px] font-sans font-black text-gray-400 uppercase tracking-[0.18em]">Student Name:</span>
+                      </div>
+                      <div className="mt-0.5 text-center">
+                        <span className="text-[18px] leading-none font-serif font-black text-[#4B0082] uppercase tracking-[0.12em]">
+                          {selectedStudent.first_name} {selectedStudent.last_name}
+                        </span>
+                      </div>
                     </div>
                  </div>
 
-                 <div className="grid grid-cols-2 gap-x-12 gap-y-1.5 mb-4 text-[11px] font-bold relative z-10 px-4">
+                 <div
+                   className={`grid grid-cols-2 gap-x-10 gap-y-1 mb-3 text-[10px] font-bold relative z-10 px-4 ${editorOutlineClass('studentMeta')}`}
+                   style={getBlockStyle('studentMeta')}
+                   onClick={() => editorMode && setSelectedBlock('studentMeta')}
+                   onMouseDown={(e) => startBlockDrag('studentMeta', e)}
+                 >
                     <div className="flex justify-between border-b border-gray-100 pb-0.5"><span className="text-gray-500 font-sans text-[8px] uppercase">Year of study:</span><span>4 (FOUR)</span></div>
-                    <div className="flex justify-between border-b border-gray-100 pb-0.5"><span className="text-gray-500 font-sans text-[8px] uppercase">Prog. of Study:</span><span className="uppercase text-gray-900 whitespace-nowrap">{selectedStudent.careerPath}</span></div>
-                    <div className="flex justify-between border-b border-gray-100 pb-0.5"><span className="text-gray-500 font-sans text-[8px] uppercase">FACULTY OF:</span><span className="uppercase text-gray-900 font-black">{selectedStudent.faculty}</span></div>
+                    <div className="flex justify-between border-b border-gray-100 pb-0.5"><span className="text-gray-500 font-sans text-[8px] uppercase">Prog. of Study:</span><span className="uppercase text-gray-900 whitespace-nowrap">{selectedStudent.program_code}</span></div>
+                    <div className="flex justify-between border-b border-gray-100 pb-0.5"><span className="text-gray-500 font-sans text-[8px] uppercase">FACULTY OF:</span><span className="uppercase text-gray-900 font-black">{selectedStudent.program_code}</span></div>
                     <div className="flex justify-between border-b border-gray-100 pb-0.5"><span className="text-gray-500 font-sans text-[8px] uppercase">Student ID:</span><span className="font-mono text-red-700">{selectedStudent.id}</span></div>
                     <div className="flex justify-between border-b border-gray-100 pb-0.5"><span className="text-gray-500 font-sans text-[8px] uppercase">Admission:</span><span>27/08/2022</span></div>
                     <div className="flex justify-between border-b border-gray-100 pb-0.5"><span className="text-gray-500 font-sans text-[8px] uppercase">Graduation:</span><span>21/12/2026</span></div>
                  </div>
 
-                 <div className="border border-gray-900 mb-3 relative z-10 shadow-sm overflow-hidden">
+                 <div
+                   className={`border border-gray-900 mb-3 relative z-10 shadow-sm overflow-hidden ${editorOutlineClass('table')}`}
+                   style={getBlockStyle('table')}
+                   onClick={() => editorMode && setSelectedBlock('table')}
+                   onMouseDown={(e) => startBlockDrag('table', e)}
+                 >
                    <table className="w-full text-left text-[10px] border-collapse">
                       <thead>
                          <tr className="border-b border-gray-900 font-black uppercase bg-gray-50">
@@ -1847,34 +2142,55 @@ export const Transcripts: React.FC<TranscriptsProps> = ({ students, courses, log
                          </tr>
                       </thead>
                       <tbody className="bg-white/80">
-                         {currentRecords.map((rec, i) => (
-                           <tr key={i} className="border-b border-gray-200 hover:bg-purple-50/20 transition-colors">
-                              <td className="py-1 px-3 border-r border-gray-900 font-mono font-bold text-gray-700">{rec.courseCode}</td>
-                              <td className="py-1 px-3 border-r border-gray-900 uppercase font-bold text-gray-800">{rec.courseName}</td>
-                              <td className="py-1 px-3 border-r border-gray-900 text-center font-bold">{(rec.credits).toFixed(2)}</td>
-                              <td className="py-1 px-3 text-center font-black text-gray-900">{rec.grade}</td>
+                         {fixedRows.map((rec, i) => (
+                           <tr key={i} className="border-b border-gray-200 hover:bg-purple-50/20 transition-colors" style={{ height: `${TABLE_ROW_MM}mm` }}>
+                              <td className="py-0.5 px-3 border-r border-gray-900 font-mono font-bold text-gray-700 leading-none">{rec?.courseCode ?? ''}</td>
+                              <td className="py-0.5 px-3 border-r border-gray-900 uppercase font-bold text-gray-800 leading-none">{rec?.courseName ?? ''}</td>
+                              <td className="py-0.5 px-3 border-r border-gray-900 text-center font-bold leading-none">{rec ? formatNumber(rec.credits, 2) : ''}</td>
+                              <td className="py-0.5 px-3 text-center font-black text-gray-900 leading-none">{rec?.grade ?? ''}</td>
                            </tr>
                          ))}
                       </tbody>
                    </table>
                  </div>
 
-                 <div className="border-b border-gray-900 py-2 text-[11px] font-black relative z-10 px-4 bg-gray-50/20">
-                    <div className="flex gap-8 justify-center items-center">
-                       <span className="text-gray-600 font-sans text-[9px]">PERFORMANCE METRICS:</span>
+                 {hiddenCourseCount > 0 && (
+                   <div className="mt-1 mb-2 text-center text-[8px] font-black uppercase tracking-widest text-red-600 relative z-10">
+                     {hiddenCourseCount} course{hiddenCourseCount > 1 ? 's' : ''} omitted to preserve single-page A4 format
+                   </div>
+                 )}
+
+                 <div
+                   className={`border-b border-gray-900 mt-2 py-1 text-[10px] font-black relative z-10 px-3 bg-gray-50/20 ${editorOutlineClass('metrics')}`}
+                   style={getBlockStyle('metrics')}
+                   onClick={() => editorMode && setSelectedBlock('metrics')}
+                   onMouseDown={(e) => startBlockDrag('metrics', e)}
+                 >
+                    <div className="flex gap-6 justify-center items-center">
+                       <span className="text-gray-600 font-sans text-[8px]">PERFORMANCE METRICS:</span>
                        <span>Current Avg: <span className="text-[#4B0082]">{stats.current}%</span></span>
                        <span>| Cumulative Avg: <span className="text-[#4B0082]">{stats.cumulative}%</span></span>
                     </div>
                  </div>
 
-                 <div className="py-3 text-[11px] font-bold border-b border-gray-900 mb-4 relative z-10 px-4">
-                    <div className="flex gap-4">
-                       <span className="flex-shrink-0 text-[9px] font-black uppercase text-gray-400 tracking-widest">Recommendation:</span>
-                       <p className="uppercase leading-tight text-gray-950 font-black tracking-tight border-l-2 border-[#4B0082] pl-3">{getAcademicRecommendation()}</p>
+                 <div
+                   className={`py-2 text-[10px] font-bold border-b border-gray-900 mb-3 relative z-10 px-3 ${editorOutlineClass('recommendation')}`}
+                   style={getBlockStyle('recommendation')}
+                   onClick={() => editorMode && setSelectedBlock('recommendation')}
+                   onMouseDown={(e) => startBlockDrag('recommendation', e)}
+                 >
+                    <div className="flex gap-3 items-start">
+                       <span className="flex-shrink-0 text-[8px] font-black uppercase text-gray-400 tracking-widest pt-0.5">Recommendation:</span>
+                       <p className="uppercase leading-snug text-gray-950 font-black tracking-tight border-l-2 border-[#4B0082] pl-2.5">{getAcademicRecommendation()}</p>
                     </div>
                  </div>
 
-                 <div className="border border-gray-300 px-3 py-1.5 text-[7px] font-black relative z-10 bg-gray-50/30 mb-2 text-center">
+                 <div
+                   className={`border border-gray-300 px-3 py-1.5 text-[7px] font-black relative z-10 bg-gray-50/30 mb-2 text-center ${editorOutlineClass('grading')}`}
+                   style={getBlockStyle('grading')}
+                   onClick={() => editorMode && setSelectedBlock('grading')}
+                   onMouseDown={(e) => startBlockDrag('grading', e)}
+                 >
                     <span className="underline uppercase text-gray-500 mr-3">Grading:</span>
                     <span className="opacity-70 tracking-wide">A (70–100%) &nbsp;|&nbsp; B (60–69%) &nbsp;|&nbsp; C (50–59%) &nbsp;|&nbsp; D (40–49%) &nbsp;|&nbsp; <span className="text-red-600">F (&lt;40%)</span></span>
                  </div>
@@ -1888,12 +2204,17 @@ export const Transcripts: React.FC<TranscriptsProps> = ({ students, courses, log
                     </div>
                  </div>
 
-                 <div className="flex justify-between mt-4 relative z-10 mb-3 px-6">
+                 <div
+                   className={`flex justify-between mt-4 relative z-10 mb-3 px-6 ${editorOutlineClass('signatures')}`}
+                   style={getBlockStyle('signatures')}
+                   onClick={() => editorMode && setSelectedBlock('signatures')}
+                   onMouseDown={(e) => startBlockDrag('signatures', e)}
+                 >
                     {/* Dean of Faculty & Academics — pushed to left */}
                     <div className="flex flex-col items-center w-[28%]">
                        <div className="w-full h-14 mb-0" />
                        <div className="w-full border-b border-gray-900" />
-                       <span className="font-serif italic text-sm text-gray-800 whitespace-nowrap mt-1">{getDeanName(selectedStudent.faculty)}</span>
+                       <span className="font-serif italic text-sm text-gray-800 whitespace-nowrap mt-1">{getDeanName(selectedStudent.program_code)}</span>
                        <span className="text-[7px] font-black uppercase tracking-widest mt-0.5 text-gray-500">Dean of Faculty &amp; Academics</span>
                     </div>
                     {/* Centre space — for official seal */}
@@ -1907,10 +2228,15 @@ export const Transcripts: React.FC<TranscriptsProps> = ({ students, courses, log
                     </div>
                  </div>
 
-                 <div className="mt-3 flex justify-between items-baseline px-2 relative z-10">
-                    <div className="flex items-center gap-4 text-[8px] text-gray-500 font-black uppercase tracking-widest">
+                 <div
+                   className={`mt-3 flex justify-between items-end px-2 relative z-10 ${editorOutlineClass('footer')}`}
+                   style={getBlockStyle('footer')}
+                   onClick={() => editorMode && setSelectedBlock('footer')}
+                   onMouseDown={(e) => startBlockDrag('footer', e)}
+                 >
+                    <div className="flex flex-col text-[8px] text-gray-500 font-black uppercase tracking-widest leading-tight">
                        <span>Issued: 1st May 2026</span>
-                       <span>ID: BMI-TR-{selectedStudent.id.split('-').pop()}</span>
+                       <span className="mt-1">ID: BMI-TR-{selectedStudent.id.split('-').pop()}</span>
                     </div>
                     <div className="flex items-center gap-2">
                         <ShieldCheck size={12} className="text-[#4B0082]" />

@@ -3,21 +3,10 @@ import { Hono } from 'hono';
 import { getPocketBase } from '../services/pocketbase.js';
 import { authMiddleware } from '../middleware/auth.js';
 import { logger } from '../utils/logger.js';
-import type { ApiResponse, Student, StaffMember, Course, Certificate, Transaction, LibraryItem } from '../types/index.js';
+import { cache } from '../services/cacheService.js';
+import type { ApiResponse } from '../types/index.js';
 
 const dashboardRouter = new Hono();
-
-// Simple in-memory cache — prevents full table scans on every dashboard load
-interface CacheEntry { data: unknown; expiresAt: number; }
-const cache = new Map<string, CacheEntry>();
-function getCached<T>(key: string): T | null {
-  const entry = cache.get(key);
-  if (!entry || entry.expiresAt < Date.now()) return null;
-  return entry.data as T;
-}
-function setCached(key: string, data: unknown, ttlMs = 30_000): void {
-  cache.set(key, { data, expiresAt: Date.now() + ttlMs });
-}
 
 // Apply auth middleware
 dashboardRouter.use('*', authMiddleware);
@@ -27,111 +16,107 @@ dashboardRouter.use('*', authMiddleware);
  * Get comprehensive dashboard statistics — uses paginated counts, not full table scans
  */
 dashboardRouter.get('/stats', async (c) => {
-  const CACHE_KEY = 'dashboard_stats';
-  const cached = getCached<object>(CACHE_KEY);
-  if (cached) return c.json<ApiResponse<object>>({ success: true, data: cached });
-
   try {
-    const pb = getPocketBase();
+    const stats = await cache.getOrSet('dashboard:stats', async () => {
+      const pb = getPocketBase();
 
-    // Use getList with perPage=1 to get totalItems counts — no full table scan
-    const [
-      studentsAll, studentsActive, studentsApplicant, studentsGraduated,
-      studentsTheology, studentsICT, studentsBusiness, studentsEducation,
-      staffAll, staffAcademic, staffAdmin, staffMgmt,
-      coursesAll, coursesPublished, coursesUG, coursesPG, coursesDip, coursesCert,
-      certsAll, certsIssued, certsRevoked,
-      txAll, txPaid, txPending,
-      libAll, libDigital, libAvailable, libBorrowed,
-    ] = await Promise.all([
-      pb.collection('students').getList(1, 1),
-      pb.collection('students').getList(1, 1, { filter: 'status = "Active"' }),
-      pb.collection('students').getList(1, 1, { filter: 'status = "Applicant"' }),
-      pb.collection('students').getList(1, 1, { filter: 'status = "Graduated"' }),
-      pb.collection('students').getList(1, 1, { filter: 'faculty = "Theology"' }),
-      pb.collection('students').getList(1, 1, { filter: 'faculty = "ICT"' }),
-      pb.collection('students').getList(1, 1, { filter: 'faculty = "Business"' }),
-      pb.collection('students').getList(1, 1, { filter: 'faculty = "Education"' }),
-      pb.collection('staff').getList(1, 1),
-      pb.collection('staff').getList(1, 1, { filter: 'category = "Academic"' }),
-      pb.collection('staff').getList(1, 1, { filter: 'category = "Administrative"' }),
-      pb.collection('staff').getList(1, 1, { filter: 'category = "Management"' }),
-      pb.collection('courses').getList(1, 1),
-      pb.collection('courses').getList(1, 1, { filter: 'status = "Published"' }),
-      pb.collection('courses').getList(1, 1, { filter: 'level = "Undergraduate"' }),
-      pb.collection('courses').getList(1, 1, { filter: 'level = "Postgraduate"' }),
-      pb.collection('courses').getList(1, 1, { filter: 'level = "Diploma"' }),
-      pb.collection('courses').getList(1, 1, { filter: 'level = "Certificate"' }),
-      pb.collection('certificates').getList(1, 1),
-      pb.collection('certificates').getList(1, 1, { filter: 'status = "ISSUED"' }),
-      pb.collection('certificates').getList(1, 1, { filter: 'status = "REVOKED"' }),
-      pb.collection('transactions').getList(1, 1),
-      pb.collection('transactions').getList(1, 1, { filter: 'status = "Paid"' }),
-      pb.collection('transactions').getList(1, 1, { filter: 'status = "Pending"' }),
-      pb.collection('library_items').getList(1, 1),
-      pb.collection('library_items').getList(1, 1, { filter: 'status = "Digital"' }),
-      pb.collection('library_items').getList(1, 1, { filter: 'status = "Available"' }),
-      pb.collection('library_items').getList(1, 1, { filter: 'status = "Borrowed"' }),
-    ]);
+      // Use getList with perPage=1 to get totalItems counts — no full table scan
+      const [
+        studentsAll, studentsActive, studentsApplicant, studentsGraduated,
+        studentsTheology, studentsICT, studentsBusiness, studentsEducation,
+        staffAll, staffAcademic, staffAdmin, staffMgmt,
+        coursesAll, coursesPublished, coursesUG, coursesPG, coursesDip, coursesCert,
+        certsAll, certsIssued, certsRevoked,
+        txAll, txPaid, txPending,
+        libAll, libDigital, libAvailable, libBorrowed,
+      ] = await Promise.all([
+        pb.collection('students').getList(1, 1),
+        pb.collection('students').getList(1, 1, { filter: 'status = "Active"' }),
+        pb.collection('students').getList(1, 1, { filter: 'status = "Applicant"' }),
+        pb.collection('students').getList(1, 1, { filter: 'status = "Graduated"' }),
+        pb.collection('students').getList(1, 1, { filter: 'faculty = "Theology"' }),
+        pb.collection('students').getList(1, 1, { filter: 'faculty = "ICT"' }),
+        pb.collection('students').getList(1, 1, { filter: 'faculty = "Business"' }),
+        pb.collection('students').getList(1, 1, { filter: 'faculty = "Education"' }),
+        pb.collection('staff').getList(1, 1),
+        pb.collection('staff').getList(1, 1, { filter: 'category = "Academic"' }),
+        pb.collection('staff').getList(1, 1, { filter: 'category = "Administrative"' }),
+        pb.collection('staff').getList(1, 1, { filter: 'category = "Management"' }),
+        pb.collection('courses').getList(1, 1),
+        pb.collection('courses').getList(1, 1, { filter: 'status = "Published"' }),
+        pb.collection('courses').getList(1, 1, { filter: 'level = "Undergraduate"' }),
+        pb.collection('courses').getList(1, 1, { filter: 'level = "Postgraduate"' }),
+        pb.collection('courses').getList(1, 1, { filter: 'level = "Diploma"' }),
+        pb.collection('courses').getList(1, 1, { filter: 'level = "Certificate"' }),
+        pb.collection('certificates').getList(1, 1),
+        pb.collection('certificates').getList(1, 1, { filter: 'status = "ISSUED"' }),
+        pb.collection('certificates').getList(1, 1, { filter: 'status = "REVOKED"' }),
+        pb.collection('transactions').getList(1, 1),
+        pb.collection('transactions').getList(1, 1, { filter: 'status = "Paid"' }),
+        pb.collection('transactions').getList(1, 1, { filter: 'status = "Pending"' }),
+        pb.collection('library_items').getList(1, 1),
+        pb.collection('library_items').getList(1, 1, { filter: 'status = "Digital"' }),
+        pb.collection('library_items').getList(1, 1, { filter: 'status = "Available"' }),
+        pb.collection('library_items').getList(1, 1, { filter: 'status = "Borrowed"' }),
+      ]);
 
-    // Revenue: fetch only paid transactions (limited to last 1000 for performance)
-    const paidTxRecords = await pb.collection('transactions').getList(1, 1000, {
-      filter: 'status = "Paid"',
-      fields: 'amt',
-    });
-    const totalRevenue = paidTxRecords.items.reduce((sum: number, t: any) => sum + (t.amt || 0), 0);
+      // Revenue: fetch only paid transactions (limited to last 1000 for performance)
+      const paidTxRecords = await pb.collection('transactions').getList(1, 1000, {
+        filter: 'status = "Paid"',
+        fields: 'amt',
+      });
+      const totalRevenue = paidTxRecords.items.reduce((sum: number, t: any) => sum + (t.amt || 0), 0);
 
-    const stats = {
-      students: {
-        total: studentsAll.totalItems,
-        active: studentsActive.totalItems,
-        applicants: studentsApplicant.totalItems,
-        graduated: studentsGraduated.totalItems,
-        byFaculty: {
-          Theology: studentsTheology.totalItems,
-          ICT: studentsICT.totalItems,
-          Business: studentsBusiness.totalItems,
-          Education: studentsEducation.totalItems,
+      return {
+        students: {
+          total: studentsAll.totalItems,
+          active: studentsActive.totalItems,
+          applicants: studentsApplicant.totalItems,
+          graduated: studentsGraduated.totalItems,
+          byFaculty: {
+            Theology: studentsTheology.totalItems,
+            ICT: studentsICT.totalItems,
+            Business: studentsBusiness.totalItems,
+            Education: studentsEducation.totalItems,
+          },
         },
-      },
-      staff: {
-        total: staffAll.totalItems,
-        byCategory: {
-          Academic: staffAcademic.totalItems,
-          Administrative: staffAdmin.totalItems,
-          Management: staffMgmt.totalItems,
+        staff: {
+          total: staffAll.totalItems,
+          byCategory: {
+            Academic: staffAcademic.totalItems,
+            Administrative: staffAdmin.totalItems,
+            Management: staffMgmt.totalItems,
+          },
         },
-      },
-      courses: {
-        total: coursesAll.totalItems,
-        published: coursesPublished.totalItems,
-        byLevel: {
-          Undergraduate: coursesUG.totalItems,
-          Postgraduate: coursesPG.totalItems,
-          Diploma: coursesDip.totalItems,
-          Certificate: coursesCert.totalItems,
+        courses: {
+          total: coursesAll.totalItems,
+          published: coursesPublished.totalItems,
+          byLevel: {
+            Undergraduate: coursesUG.totalItems,
+            Postgraduate: coursesPG.totalItems,
+            Diploma: coursesDip.totalItems,
+            Certificate: coursesCert.totalItems,
+          },
         },
-      },
-      certificates: {
-        total: certsAll.totalItems,
-        issued: certsIssued.totalItems,
-        revoked: certsRevoked.totalItems,
-      },
-      finance: {
-        totalRevenue,
-        transactions: txAll.totalItems,
-        paid: txPaid.totalItems,
-        pending: txPending.totalItems,
-      },
-      library: {
-        total: libAll.totalItems,
-        digital: libDigital.totalItems,
-        available: libAvailable.totalItems,
-        borrowed: libBorrowed.totalItems,
-      },
-    };
-
-    setCached(CACHE_KEY, stats, 30_000); // cache 30 seconds
+        certificates: {
+          total: certsAll.totalItems,
+          issued: certsIssued.totalItems,
+          revoked: certsRevoked.totalItems,
+        },
+        finance: {
+          totalRevenue,
+          transactions: txAll.totalItems,
+          paid: txPaid.totalItems,
+          pending: txPending.totalItems,
+        },
+        library: {
+          total: libAll.totalItems,
+          digital: libDigital.totalItems,
+          available: libAvailable.totalItems,
+          borrowed: libBorrowed.totalItems,
+        },
+      };
+    }, 30_000); // Cache for 30 seconds
 
     return c.json<ApiResponse<typeof stats>>({ success: true, data: stats });
 

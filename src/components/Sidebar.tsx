@@ -1,5 +1,6 @@
 
 import React from 'react';
+import { useNavigate, useLocation } from 'react-router-dom';
 import { 
   LayoutDashboard, 
   Users, 
@@ -21,9 +22,11 @@ import {
   Award, 
   FileText,
   Scroll,
-  X
+  X,
+  GraduationCap
 } from 'lucide-react';
 import { NavItem } from '../types';
+import { useUIStore } from '../stores/uiStore';
 
 interface SidebarProps {
   currentView: string;
@@ -34,7 +37,34 @@ interface SidebarProps {
   onClose: () => void;
 }
 
+// Map view IDs to route paths
+const viewToRoute: Record<string, string> = {
+  'dashboard': '/dashboard',
+  'students': '/students',
+  'staff': '/staff',
+  'attendance': '/attendance',
+  'finance': '/finance',
+  'courses': '/courses',
+  'exams': '/exams',
+  'grades': '/grades',
+  'transcripts': '/transcripts',
+  'certificates': '/certificates',
+  'library': '/library',
+  'hostels': '/hostels',
+  'medical': '/medical',
+  'inventory': '/inventory',
+  'alumni': '/alumni',
+  'sms': '/communications',
+  'visitors': '/visitors',
+  'reports': '/reports',
+  'settings': '/settings',
+};
+
 const Sidebar: React.FC<SidebarProps> = ({ currentView, onChangeView, onLogout, logo, isOpen, onClose }) => {
+  const navigate = useNavigate();
+  const location = useLocation();
+  const openAIModal = useUIStore((s) => s.openAIModal);
+
   const menuItems: NavItem[] = [
     { id: 'dashboard', label: 'Dashboard', icon: LayoutDashboard },
     { id: 'students', label: 'Students', icon: Users },
@@ -43,6 +73,7 @@ const Sidebar: React.FC<SidebarProps> = ({ currentView, onChangeView, onLogout, 
     { id: 'finance', label: 'Finance', icon: CreditCard },
     { id: 'courses', label: 'Courses', icon: MonitorPlay },
     { id: 'exams', label: 'Exams & Grading', icon: FileSpreadsheet },
+    { id: 'grades', label: 'Grade Management', icon: GraduationCap },
     { id: 'transcripts', label: 'Transcripts', icon: FileText },
     { id: 'certificates', label: 'Certificates', icon: Scroll },
     { id: 'library', label: 'Library', icon: Book },
@@ -56,6 +87,28 @@ const Sidebar: React.FC<SidebarProps> = ({ currentView, onChangeView, onLogout, 
     { id: 'ai', label: 'AI Assistant', icon: Bot },
     { id: 'settings', label: 'Settings', icon: Settings },
   ];
+
+  const handleNavigate = (viewId: string) => {
+    if (viewId === 'ai') {
+      openAIModal();
+    } else {
+      const route = viewToRoute[viewId] || `/${viewId}`;
+      navigate(route);
+    }
+    onClose();
+  };
+
+  // Determine active item from current URL path
+  const getActiveView = (itemId: string): boolean => {
+    const currentPath = location.pathname;
+    if (itemId === 'dashboard') {
+      return currentPath === '/' || currentPath === '/dashboard';
+    }
+    if (itemId === 'sms') {
+      return currentPath === '/communications';
+    }
+    return currentPath === `/${itemId}`;
+  };
 
   return (
     <>
@@ -91,19 +144,20 @@ const Sidebar: React.FC<SidebarProps> = ({ currentView, onChangeView, onLogout, 
         </div>
 
         {/* Navigation */}
-        <nav className="flex-1 overflow-y-auto no-scrollbar py-4 px-3 space-y-1">
+        <nav className="flex-1 overflow-y-auto no-scrollbar py-4 px-3 space-y-1" aria-label="Main navigation">
           {menuItems.map((item) => {
             const Icon = item.icon;
-            const isActive = currentView === item.id;
+            const isActive = getActiveView(item.id);
             return (
               <button
                 key={item.id}
-                onClick={() => { onChangeView(item.id); onClose(); }}
+                onClick={() => handleNavigate(item.id)}
                 className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-xl transition-all duration-300 group ${
                   isActive 
                     ? 'bg-gradient-to-r from-[#FFD700]/20 to-transparent border-l-4 border-[#FFD700] text-white shadow-lg backdrop-blur-md' 
                     : 'text-purple-200 hover:bg-white/10 hover:text-[#FFD700]'
                 }`}
+                aria-current={isActive ? 'page' : undefined}
               >
                 <Icon size={18} className={`transition-colors duration-300 ${isActive ? 'text-[#FFD700]' : 'text-purple-300 group-hover:text-[#FFD700]'}`} />
                 <span className={`text-[11px] tracking-wide font-medium ${isActive ? 'translate-x-1 font-bold' : ''} transition-transform`}>{item.label}</span>

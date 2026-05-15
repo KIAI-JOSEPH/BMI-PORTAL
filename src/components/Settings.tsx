@@ -1,6 +1,7 @@
 
 import React, { useState, useEffect } from 'react';
 import { Save, Bell, Shield, Globe, Moon, Sun, Smartphone, Mail, Upload, ImageIcon, Check, AlertTriangle, Database } from 'lucide-react';
+import { authFetch } from '../services/authService';
 
 interface SettingsProps {
   currentLogo: string;
@@ -81,29 +82,50 @@ const Settings: React.FC<SettingsProps> = ({ currentLogo, onUpdateLogo, currentT
     }, 1000);
   };
 
-  const handlePasswordUpdate = () => {
+  const handlePasswordUpdate = async () => {
     if (!passwordData.current || !passwordData.newPass || !passwordData.confirm) {
-        alert("Security Protocol: All password fields are mandatory.");
+        setToastMessage('Please fill in all password fields');
+        setShowToast(true);
+        setTimeout(() => setShowToast(false), 3000);
         return;
     }
     if (passwordData.newPass !== passwordData.confirm) {
-        alert("Security Protocol: New password confirmation mismatch.");
+        setToastMessage('Passwords do not match');
+        setShowToast(true);
+        setTimeout(() => setShowToast(false), 3000);
         return;
     }
     if (passwordData.newPass.length < 8) {
-        alert("Security Protocol: Password must satisfy minimum length (8 chars).");
+        setToastMessage('Password must be at least 8 characters');
+        setShowToast(true);
+        setTimeout(() => setShowToast(false), 3000);
         return;
     }
 
     setIsLoading(true);
-    // Simulate API call delay
-    setTimeout(() => {
+    try {
+        const response = await authFetch('/api/v1/auth/change-password', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                currentPassword: passwordData.current,
+                newPassword: passwordData.newPass,
+            }),
+        });
+        const data = await response.json();
+        if (data.success) {
+            setToastMessage('Password updated successfully');
+            setPasswordData({ current: '', newPass: '', confirm: '' });
+        } else {
+            setToastMessage(data.error || 'Failed to update password');
+        }
+    } catch (error) {
+        setToastMessage('Failed to update password. Please try again.');
+    } finally {
         setIsLoading(false);
-        setPasswordData({ current: '', newPass: '', confirm: '' }); // Reset form
-        setToastMessage('Credential Update Authorized');
         setShowToast(true);
         setTimeout(() => setShowToast(false), 3000);
-    }, 1500);
+    }
   };
 
   const handleResetSystem = () => {

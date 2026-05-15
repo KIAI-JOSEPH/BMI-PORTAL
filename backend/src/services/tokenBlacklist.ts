@@ -1,43 +1,156 @@
 /**
- * BMI UMS - Token Blacklist
- * In-memory blacklist for revoked JWT tokens.
- * Entries are auto-expired after the token's natural TTL to prevent unbounded growth.
+ * BMI UMS - Token Blacklist (Redis + In-Memory Fallback)
  *
- * For multi-instance deployments, replace with Redis:
- *   await redis.setex(`blacklist:${jti}`, ttlSeconds, '1');
+ * Architecture:
+ * - Primary: Redis (works across multiple API instances)
+ * - Fallback: In-memory Map (for single-instance / development)
+ *
+ * Redis keys: `blacklist:{jti}` with TTL = remaining token lifetime
+ * Automatically falls back to in-memory when Redis is unavailable.
+ *
+ * Migration from Sprint 1-2: The in-memory blacklist is replaced with
+ * a dual-mode blacklist that uses Redis when available.
  */
+import { logger } from '../utils/logger.js';
 
+// ── In-Memory Fallback ────────────────────────────────────────────────
 interface BlacklistEntry {
-  expiresAt: number; // Unix ms — when the token itself expires
+  expiresAt: number;
 }
 
-const blacklist = new Map<string, BlacklistEntry>();
+const inMemoryBlacklist = new Map<string, BlacklistEntry>();
 
 // Clean up expired entries every 5 minutes
 setInterval(() => {
   const now = Date.now();
-  for (const [token, entry] of blacklist.entries()) {
+  for (const [token, entry] of inMemoryBlacklist.entries()) {
     if (entry.expiresAt <= now) {
-      blacklist.delete(token);
+      inMemoryBlacklist.delete(token);
     }
   }
 }, 5 * 60 * 1000);
 
+// ── Redis Client (lazy init) ──────────────────────────────────────────
+let redis: any = null;
+let redisAvailable = false;
+let redisInitAttempted = false;
+
+async function getRedis(): Promise<any> {
+  if (redis && redisAvailable) return redis;
+  if (redisInitAttempted && !redisAvailable) return null;
+
+  redisInitAttempted = true;
+
+  if (process.env.REDIS_ENABLED !== 'true') return null;
+
+  try {
+    const Redis = (await import('ioredis')).default;
+    const redisUrl = process.env.REDIS_URL || 'redis://localhost:6379';
+
+    redis = new Redis(redisUrl, {
+      maxRetriesPerRequest: 2,
+      connectTimeout: 3000,
+      lazyConnect: true,
+      retryStrategy(times) {
+        if (times > 3) {
+          logger.warn('Redis connection failed after 3 retries, using in-memory blacklist');
+          return null; // Stop retrying
+        }
+        return Math.min(times * 200, 2000);
+      },
+    });
+
+    await redis.connect();
+    redisAvailable = true;
+
+    redis.on('error', (err: Error) => {
+      logger.warn('Redis error:', err.message);
+      redisAvailable = false;
+    });
+
+    redis.on('ready', () => {
+      redisAvailable = true;
+      logger.info('Redis connected — token blacklist using Redis');
+    });
+
+    redis.on('close', () => {
+      redisAvailable = false;
+      logger.warn('Redis connection closed — falling back to in-memory blacklist');
+    });
+
+    logger.info('Token blacklist: Redis mode enabled');
+    return redis;
+  } catch (error) {
+    logger.warn('Redis unavailable, using in-memory token blacklist:', (error as Error).message);
+    redisAvailable = false;
+    return null;
+  }
+}
+
+// ── Public API ────────────────────────────────────────────────────────
+
 /**
- * Add a token to the blacklist until it naturally expires
+ * Add a token to the blacklist until it naturally expires.
+ * Uses Redis when available, otherwise falls back to in-memory.
  */
-export function revokeToken(token: string, expiresAtMs: number): void {
-  blacklist.set(token, { expiresAt: expiresAtMs });
+export async function revokeToken(token: string, expiresAtMs: number): Promise<void> {
+  const ttlSeconds = Math.max(1, Math.floor((expiresAtMs - Date.now()) / 1000));
+
+  // Try Redis first
+  const client = await getRedis();
+  if (client && redisAvailable) {
+    try {
+      // Use a hash of the token as the key (avoid storing full token in Redis)
+      const key = `blacklist:${hashToken(token)}`;
+      await client.setex(key, ttlSeconds, '1');
+      logger.debug(`Token revoked in Redis, TTL=${ttlSeconds}s`);
+      return;
+    } catch (error) {
+      logger.warn('Redis revoke failed, falling back to in-memory:', (error as Error).message);
+    }
+  }
+
+  // In-memory fallback
+  inMemoryBlacklist.set(token, { expiresAt: expiresAtMs });
 }
 
 /**
- * Check if a token has been revoked
+ * Check if a token has been revoked.
+ * Uses Redis when available, otherwise falls back to in-memory.
  */
-export function isTokenRevoked(token: string): boolean {
-  const entry = blacklist.get(token);
+export async function isTokenRevoked(token: string): Promise<boolean> {
+  // Try Redis first
+  const client = await getRedis();
+  if (client && redisAvailable) {
+    try {
+      const key = `blacklist:${hashToken(token)}`;
+      const result = await client.get(key);
+      return result === '1';
+    } catch (error) {
+      logger.warn('Redis check failed, falling back to in-memory:', (error as Error).message);
+    }
+  }
+
+  // In-memory fallback
+  const entry = inMemoryBlacklist.get(token);
   if (!entry) return false;
   if (entry.expiresAt <= Date.now()) {
-    blacklist.delete(token);
+    inMemoryBlacklist.delete(token);
+    return false;
+  }
+  return true;
+}
+
+/**
+ * Synchronous version of isTokenRevoked for backward compatibility.
+ * Only checks the in-memory blacklist (not Redis).
+ * Use the async version for full Redis-backed checks.
+ */
+export function isTokenRevokedSync(token: string): boolean {
+  const entry = inMemoryBlacklist.get(token);
+  if (!entry) return false;
+  if (entry.expiresAt <= Date.now()) {
+    inMemoryBlacklist.delete(token);
     return false;
   }
   return true;
@@ -47,5 +160,27 @@ export function isTokenRevoked(token: string): boolean {
  * Get current blacklist size (for monitoring)
  */
 export function getBlacklistSize(): number {
-  return blacklist.size;
+  return inMemoryBlacklist.size;
+}
+
+/**
+ * Check if Redis is currently available
+ */
+export function isRedisAvailable(): boolean {
+  return redisAvailable;
+}
+
+// ── Helpers ────────────────────────────────────────────────────────────
+
+/**
+ * Simple hash of token for Redis key (avoid storing full JWT in Redis)
+ */
+function hashToken(token: string): string {
+  let hash = 0;
+  for (let i = 0; i < token.length; i++) {
+    const char = token.charCodeAt(i);
+    hash = ((hash << 5) - hash) + char;
+    hash = hash & hash; // Convert to 32-bit int
+  }
+  return Math.abs(hash).toString(36);
 }

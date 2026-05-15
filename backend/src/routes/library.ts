@@ -6,7 +6,7 @@ import { getPocketBase } from '../services/pocketbase.js';
 import { authMiddleware, requireRole } from '../middleware/auth.js';
 import { auditMiddleware, logAction } from '../middleware/audit.js';
 import { logger } from '../utils/logger.js';
-import { parsePagination } from '../utils/helpers.js';
+import { parsePagination, sanitizeFilter } from '../utils/helpers.js';
 import type { ApiResponse, LibraryItem } from '../types/index.js';
 
 const libraryRouter = new Hono();
@@ -42,7 +42,7 @@ libraryRouter.get('/', async (c) => {
     const { page, perPage } = parsePagination(
       c.req.query('page'),
       c.req.query('perPage'),
-      { page: 1, perPage: 20, maxPerPage: 100 }
+      { page: 1, perPage: 20, maxPerPage: 500 }
     );
     
     const category = c.req.query('category');
@@ -50,20 +50,19 @@ libraryRouter.get('/', async (c) => {
     const status = c.req.query('status');
     const search = c.req.query('search');
 
-    const safe = (v: string) => v.replace(/["'\\]/g, '').substring(0, 100);
     const filters: string[] = [];
-    if (category) filters.push(`category = "${safe(category)}"`);
-    if (type) filters.push(`type = "${safe(type)}"`);
-    if (status) filters.push(`status = "${safe(status)}"`);
+    if (category) filters.push(`category = "${sanitizeFilter(category)}"`);
+    if (type) filters.push(`type = "${sanitizeFilter(type)}"`);
+    if (status) filters.push(`status = "${sanitizeFilter(status)}"`);
     if (search) {
-      const s = safe(search);
+      const s = sanitizeFilter(search);
       filters.push(`(title ~ "${s}" || author ~ "${s}" || isbn ~ "${s}")`);
     }
     
-    const filterString = filters.join(' && ') || undefined;
+    const filterString = filters.join(' && ');
     
     const result = await pb.collection('library_items').getList(page, perPage, {
-      filter: filterString,
+      ...(filterString ? { filter: filterString } : {}),
       sort: '-created',
     });
     

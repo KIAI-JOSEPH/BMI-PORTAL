@@ -2,6 +2,15 @@ import React, { useState, useEffect } from 'react';
 import { X, UserPlus, Upload, User, CheckCircle2, Loader2 } from 'lucide-react';
 import { Student } from '../types';
 import { createStudent, updateStudent } from '../services/studentService';
+import { authFetch } from '../services/authService';
+import { API_URL } from '../services/config';
+
+interface Program {
+  id: string;
+  program_code: string;
+  name: string;
+  degree_level: string;
+}
 
 interface StudentRegistrationModalProps {
   isOpen: boolean;
@@ -11,28 +20,50 @@ interface StudentRegistrationModalProps {
 }
 
 const StudentRegistrationModal: React.FC<StudentRegistrationModalProps> = ({ isOpen, onClose, onSuccess, initialData }) => {
+  const [programs, setPrograms] = useState<Program[]>([]);
+  const [loadingPrograms, setLoadingPrograms] = useState(false);
+
   const [formData, setFormData] = useState<Partial<Student>>({
-    firstName: '',
-    lastName: '',
+    first_name: '',
+    last_name: '',
     email: '',
     phone: '',
-    faculty: 'Theology',
-    department: 'Biblical Studies',
+    program_code: '',
     status: 'Applicant',
-    academicLevel: 'Degree',
     gender: 'Male',
-    admissionYear: new Date().getFullYear().toString(),
-    enrollmentTerm: 'Fall ' + new Date().getFullYear(),
-    careerPath: 'Degree in Theology',
-    standing: 'Good',
-    gpa: 0.0,
-    avatarColor: 'bg-purple-600',
-    photoZoom: 1
+    admission_date: new Date().toISOString().split('T')[0],
+    avatar_color: 'bg-purple-600',
+    photo_zoom: 1
   });
   
   const [photoPreview, setPhotoPreview] = useState<string | undefined>(undefined);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  // Fetch programs from the catalog API
+  useEffect(() => {
+    if (!isOpen) return;
+    let cancelled = false;
+    setLoadingPrograms(true);
+    authFetch(`${API_URL}/catalog/programs`, {}, 5000)
+      .then(res => res.json())
+      .then((data: { success: boolean; data?: Program[] }) => {
+        if (!cancelled && data.success && data.data) {
+          setPrograms(data.data);
+          // Auto-select first program if none selected
+          if (!formData.program_code && data.data.length > 0) {
+            setFormData(prev => ({ ...prev, program_code: data.data![0].id }));
+          }
+        }
+      })
+      .catch(() => {
+        // If catalog fetch fails, leave empty — user can still type
+      })
+      .finally(() => {
+        if (!cancelled) setLoadingPrograms(false);
+      });
+    return () => { cancelled = true; };
+  }, [isOpen]);
 
   useEffect(() => {
     if (initialData) {
@@ -40,22 +71,16 @@ const StudentRegistrationModal: React.FC<StudentRegistrationModalProps> = ({ isO
       setPhotoPreview(initialData.photo);
     } else if (isOpen) {
       setFormData({
-        firstName: '',
-        lastName: '',
+        first_name: '',
+        last_name: '',
         email: '',
         phone: '',
-        faculty: 'Theology',
-        department: 'Biblical Studies',
+        program_code: programs.length > 0 ? programs[0].id : '',
         status: 'Applicant',
-        academicLevel: 'Degree',
         gender: 'Male',
-        admissionYear: new Date().getFullYear().toString(),
-        enrollmentTerm: 'Fall ' + new Date().getFullYear(),
-        careerPath: 'Degree in Theology',
-        standing: 'Good',
-        gpa: 0.0,
-        avatarColor: 'bg-purple-600',
-        photoZoom: 1
+        admission_date: new Date().toISOString().split('T')[0],
+        avatar_color: 'bg-purple-600',
+        photo_zoom: 1
       });
       setPhotoPreview(undefined);
       setError(null);
@@ -81,8 +106,13 @@ const StudentRegistrationModal: React.FC<StudentRegistrationModalProps> = ({ isO
 
   const handleSubmit = async () => {
     // Validate required fields (only First Name and Last Name are required)
-    if (!formData.firstName || !formData.lastName) {
+    if (!formData.first_name || !formData.last_name) {
       setError('Please fill in all required fields (First Name, Last Name)');
+      return;
+    }
+
+    if (!formData.program_code) {
+      setError('Please select an academic program');
       return;
     }
 
@@ -175,20 +205,20 @@ const StudentRegistrationModal: React.FC<StudentRegistrationModalProps> = ({ isO
               
               <div className="flex-1 w-full grid grid-cols-1 md:grid-cols-2 gap-6">
                  <div className="space-y-1">
-                    <label className="text-[10px] font-bold uppercase text-gray-500 tracking-widest">First Name</label>
+                    <label className="text-[10px] font-bold uppercase text-gray-500 tracking-widest">First Name *</label>
                     <input 
                       type="text" 
-                      value={formData.firstName} 
-                      onChange={(e) => handleChange('firstName', e.target.value)}
+                      value={formData.first_name} 
+                      onChange={(e) => handleChange('first_name', e.target.value)}
                       className="w-full p-3 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 outline-none font-bold text-sm focus:border-[#4B0082]"
                     />
                  </div>
                  <div className="space-y-1">
-                    <label className="text-[10px] font-bold uppercase text-gray-500 tracking-widest">Last Name</label>
+                    <label className="text-[10px] font-bold uppercase text-gray-500 tracking-widest">Last Name *</label>
                     <input 
                       type="text" 
-                      value={formData.lastName} 
-                      onChange={(e) => handleChange('lastName', e.target.value)}
+                      value={formData.last_name} 
+                      onChange={(e) => handleChange('last_name', e.target.value)}
                       className="w-full p-3 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 outline-none font-bold text-sm focus:border-[#4B0082]"
                     />
                  </div>
@@ -246,41 +276,33 @@ const StudentRegistrationModal: React.FC<StudentRegistrationModalProps> = ({ isO
            <div className="bg-purple-50/50 dark:bg-purple-900/10 p-6 border border-purple-100 dark:border-purple-900/30 space-y-6">
               <h4 className="text-[10px] font-black uppercase text-[#4B0082] dark:text-purple-300 tracking-[0.25em]">Academic Placement</h4>
               <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                 <div className="space-y-1">
-                    <label className="text-[9px] font-bold uppercase text-gray-500 tracking-widest">Faculty</label>
-                    <select 
-                      value={formData.faculty} 
-                      onChange={(e) => handleChange('faculty', e.target.value)}
-                      className="w-full p-3 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 outline-none font-bold text-xs uppercase cursor-pointer"
-                    >
-                       {['Theology', 'ICT', 'Business', 'Education'].map(f => <option key={f} value={f}>{f}</option>)}
-                    </select>
+                 <div className="space-y-1 md:col-span-2">
+                    <label className="text-[9px] font-bold uppercase text-gray-500 tracking-widest">Program *</label>
+                    {loadingPrograms ? (
+                      <div className="w-full p-3 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 flex items-center gap-2 text-xs text-gray-400">
+                        <Loader2 size={14} className="animate-spin" /> Loading programs...
+                      </div>
+                    ) : (
+                      <select 
+                        value={formData.program_code} 
+                        onChange={(e) => handleChange('program_code', e.target.value)}
+                        className="w-full p-3 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 outline-none font-bold text-xs uppercase cursor-pointer"
+                      >
+                         <option value="">— Select Program —</option>
+                         {programs.map(p => (
+                           <option key={p.id} value={p.id}>
+                             {p.name} ({p.program_code}) — {p.degree_level}
+                           </option>
+                         ))}
+                      </select>
+                    )}
                  </div>
                  <div className="space-y-1">
-                    <label className="text-[9px] font-bold uppercase text-gray-500 tracking-widest">Department</label>
+                    <label className="text-[9px] font-bold uppercase text-gray-500 tracking-widest">Admission Date</label>
                     <input 
-                      type="text" 
-                      value={formData.department} 
-                      onChange={(e) => handleChange('department', e.target.value)}
-                      className="w-full p-3 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 outline-none font-bold text-xs uppercase"
-                    />
-                 </div>
-                 <div className="space-y-1">
-                    <label className="text-[9px] font-bold uppercase text-gray-500 tracking-widest">Academic Level</label>
-                    <select 
-                      value={formData.academicLevel} 
-                      onChange={(e) => handleChange('academicLevel', e.target.value)}
-                      className="w-full p-3 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 outline-none font-bold text-xs uppercase cursor-pointer"
-                    >
-                       {['Certificate', 'Diploma', 'Degree', 'Masters', 'PhD'].map(l => <option key={l} value={l}>{l}</option>)}
-                    </select>
-                 </div>
-                 <div className="space-y-1">
-                    <label className="text-[9px] font-bold uppercase text-gray-500 tracking-widest">Career Path / Major</label>
-                    <input 
-                      type="text" 
-                      value={formData.careerPath} 
-                      onChange={(e) => handleChange('careerPath', e.target.value)}
+                      type="date" 
+                      value={formData.admission_date} 
+                      onChange={(e) => handleChange('admission_date', e.target.value)}
                       className="w-full p-3 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 outline-none font-bold text-xs uppercase"
                     />
                  </div>

@@ -29,6 +29,17 @@ import {
 import { LibraryItem, Course } from '../types';
 import { getAIResponse } from '../services/aiService';
 
+function extractMetadataFromDoc(base64String: string, fileName: string): Record<string, string> {
+    const metadata: Record<string, string> = {
+        fileName,
+        uploadDate: new Date().toISOString(),
+        fileSize: Math.round((base64String.length * 3) / 4 / 1024) + ' KB',
+    };
+    const ext = fileName.split('.').pop()?.toLowerCase();
+    if (ext) metadata.fileType = ext.toUpperCase();
+    return metadata;
+}
+
 interface LibraryProps {
   library: LibraryItem[];
   setLibrary: React.Dispatch<React.SetStateAction<LibraryItem[]>>;

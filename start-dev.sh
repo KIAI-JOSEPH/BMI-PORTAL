@@ -107,6 +107,8 @@ else
         echo -e "  ${YELLOW}⚠${NC} Ollama not installed (optional for AI features)"
         echo "  Install from: https://ollama.com/download"
     else
+        export OLLAMA_MODELS="${OLLAMA_MODELS:-$(pwd)/.ollama/models}"
+        mkdir -p "$OLLAMA_MODELS"
         nohup ollama serve > logs/ollama.log 2>&1 &
         echo $! > logs/ollama.pid
         sleep 2
@@ -115,7 +117,10 @@ else
         # Pull Llama model if not exists
         if ! ollama list | grep -q "llama3.2"; then
             echo "  Pulling llama3.2 model (this may take a few minutes)..."
-            ollama pull llama3.2:latest
+            if ! ollama pull llama3.2:latest; then
+                echo -e "  ${YELLOW}⚠${NC} Failed to pull llama3.2 model. Continuing without local model."
+                echo "  AI endpoints may be limited until model pull succeeds."
+            fi
         fi
     fi
 fi
@@ -161,7 +166,7 @@ echo "  PocketBase Admin: http://localhost:8090/_/"
 echo ""
 echo "📋 Useful commands:"
 echo "  View logs:        tail -f logs/*.log"
-echo "  Stop services:    ./stop-dev.sh"
+echo "  Stop services:    make stop"
 echo "  Check status:     ./check-services.sh"
 echo ""
 echo "🎉 Ready to develop!"

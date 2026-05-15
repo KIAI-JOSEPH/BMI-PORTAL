@@ -2,6 +2,7 @@ import React from 'react';
 import { createRoot } from 'react-dom/client';
 import './index.css';
 import App from './App';
+import { AccessibilityProvider } from './components/AccessibilityProvider';
 
 /**
  * BMI UNIVERSITY MANAGEMENT SYSTEM
@@ -39,7 +40,7 @@ const initializeInstitutionalStyles = () => {
         display: block !important; 
         width: 100% !important; 
         position: static !important; 
-        clear: both !important; 
+        clear: both !important;
       }
       
       /* Ensure grid items take full width and spacing */
@@ -62,8 +63,8 @@ const initializeInstitutionalStyles = () => {
         height: 400px !important;
         min-height: 400px !important;
         width: 100% !important;
-        overflow: visible !important; /* Ensure the line is seen (unclipped) */
-        padding-right: 20px !important; /* Buffer for chart tips */
+        overflow: visible !important;
+        padding-right: 20px !important;
       }
       
       /* Constrain inner chart width to prevent right-side bleed */
@@ -83,25 +84,11 @@ const initializeInstitutionalStyles = () => {
       .absolute, .fixed, .opacity-0, .hover\:opacity-100 { 
         position: static !important; 
         opacity: 1 !important; 
-        visibility: visible !important; 
+        visibility: visible !important;
       }
       
       /* Hide modal overlays during print */
       .fixed.inset-0 { display: none !important; }
-    }
-
-    /* Core System Animations */
-    .animate-fade-in { animation: fadeIn 0.4s ease-out forwards; }
-    .animate-slide-up { animation: slideUp 0.5s cubic-bezier(0.16, 1, 0.3, 1) forwards; }
-
-    @keyframes fadeIn {
-      from { opacity: 0; }
-      to { opacity: 1; }
-    }
-
-    @keyframes slideUp {
-      from { transform: translateY(20px); opacity: 0; }
-      to { transform: translateY(0); opacity: 1; }
     }
   `;
   document.head.appendChild(style);
@@ -131,7 +118,7 @@ const removePreloader = () => {
 
 // Institutional Metadata Console Log
 console.log(
-  "%c BMI UNIVERSITY ERP %c v2.4.1 %c Unclipped View Protocol Active ",
+  "%c BMI UNIVERSITY ERP %c v3.0.0 %c Router + Zustand + Accessibility ",
   "background:#4B0082; color:#FFD700; font-weight:bold; padding:4px 8px; border-radius:4px 0 0 4px;",
   "background:#1a0033; color:white; font-weight:bold; padding:4px 8px;",
   "background:#FFD700; color:#4B0082; font-weight:bold; padding:4px 8px; border-radius:0 4px 4px 0;"
@@ -139,7 +126,9 @@ console.log(
 
 root.render(
   <React.StrictMode>
-    <App />
+    <AccessibilityProvider>
+      <App />
+    </AccessibilityProvider>
   </React.StrictMode>
 );
 

@@ -1,12 +1,76 @@
-// BMI UMS - Authentication Middleware
+// BMI UMS - Authentication Middleware (RS256 / HS256 dual-mode)
 
 import type { Context, Next } from 'hono';
-import { jwtVerify } from 'jose';
+import { jwtVerify, importSPKI, importPKCS8, SignJWT } from 'jose';
 import { CONFIG } from '../config/index.js';
 import { logger } from '../utils/logger.js';
 import { isTokenRevoked } from '../services/tokenBlacklist.js';
 
-const SECRET = new TextEncoder().encode(CONFIG.JWT_SECRET);
+// ── Key Management (RS256 with HS256 fallback) ────────────────────────
+// RS256 uses public/private key pairs — much more secure than HS256:
+// - The signing key (private) never leaves the server
+// - The verification key (public) can be shared with other services
+// - Compromising the public key doesn't allow token forgery
+
+let publicKey: CryptoKey | null = null;
+let privateKey: CryptoKey | null = null;
+let hs256Secret: Uint8Array | null = null;
+let useRS256 = false;
+
+/**
+ * Initialize JWT keys based on configuration.
+ * If JWT_PRIVATE_KEY and JWT_PUBLIC_KEY are provided, use RS256.
+ * Otherwise fall back to HS256 with the shared secret.
+ */
+export async function initJWTKeys(): Promise<void> {
+  // Check for RSA keys in environment
+  const privateKeyPem = process.env.JWT_PRIVATE_KEY;
+  const publicKeyPem = process.env.JWT_PUBLIC_KEY;
+
+  if (privateKeyPem && publicKeyPem) {
+    try {
+      privateKey = await importPKCS8(privateKeyPem, 'RS256');
+      publicKey = await importSPKI(publicKeyPem, 'RS256');
+      useRS256 = true;
+      logger.info('JWT: RS256 mode enabled (asymmetric key pair)');
+      return;
+    } catch (error) {
+      logger.error('Failed to import RSA keys, falling back to HS256:', (error as Error).message);
+    }
+  }
+
+  // Fall back to HS256
+  hs256Secret = new TextEncoder().encode(CONFIG.JWT_SECRET);
+  useRS256 = false;
+  logger.info('JWT: HS256 mode enabled (shared secret) — set JWT_PRIVATE_KEY/JWT_PUBLIC_KEY for RS256');
+}
+
+/**
+ * Get the verification key (public key for RS256, secret for HS256)
+ */
+function getVerificationKey(): Uint8Array | CryptoKey {
+  if (useRS256 && publicKey) {
+    return publicKey;
+  }
+  return hs256Secret || new TextEncoder().encode(CONFIG.JWT_SECRET);
+}
+
+/**
+ * Get the signing key (private key for RS256, secret for HS256)
+ */
+export function getSigningKey(): Uint8Array | CryptoKey {
+  if (useRS256 && privateKey) {
+    return privateKey;
+  }
+  return hs256Secret || new TextEncoder().encode(CONFIG.JWT_SECRET);
+}
+
+/**
+ * Get the JWT algorithm being used
+ */
+export function getJWTAlgorithm(): string {
+  return useRS256 ? 'RS256' : 'HS256';
+}
 
 // Store user data in a WeakMap attached to context
 const userContext = new WeakMap<Context, { sub: string; email: string; role: string }>();
@@ -16,7 +80,7 @@ const userContext = new WeakMap<Context, { sub: string; email: string; role: str
  */
 async function verifyToken(token: string) {
   try {
-    const { payload } = await jwtVerify(token, SECRET);
+    const { payload } = await jwtVerify(token, getVerificationKey());
     return payload as { sub: string; email: string; role: string };
   } catch {
     return null;
@@ -40,7 +104,7 @@ export async function authMiddleware(c: Context, next: Next) {
   const token = authHeader.substring(7);
 
   // Check blacklist before verifying signature (fast path)
-  if (isTokenRevoked(token)) {
+  if (await isTokenRevoked(token)) {
     return c.json({
       success: false,
       error: 'Token has been revoked',
@@ -60,7 +124,7 @@ export async function authMiddleware(c: Context, next: Next) {
   userContext.set(c, payload);
   c.set('user', payload); // also set on context for audit middleware compatibility
   
-  await next();
+  return await next();
 }
 
 /**
@@ -76,7 +140,9 @@ export function getUser(c: Context) {
  */
 export function requireRole(...allowedRoles: string[]) {
   return async (c: Context, next: Next) => {
-    const user = getUser(c);
+    // Prefer the verified user payload from WeakMap, but fall back to
+    // context storage for compatibility with tests/middleware composition.
+    const user = getUser(c) ?? c.get('user');
 
     if (!user) {
       return c.json({
@@ -93,7 +159,7 @@ export function requireRole(...allowedRoles: string[]) {
       }, 403);
     }
 
-    await next();
+    return await next();
   };
 }
 

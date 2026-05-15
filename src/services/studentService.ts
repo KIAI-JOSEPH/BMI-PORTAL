@@ -5,8 +5,9 @@
 
 import { authFetch } from './authService';
 import { Student } from '../types';
+import { parseJsonSafe } from './apiClient';
 
-const API_URL = '/api/v1';
+import { API_URL } from './config';
 
 export interface StudentResponse {
   success: boolean;
@@ -34,18 +35,55 @@ export interface StudentFilters {
   search?: string;
 }
 
+type StudentLike = Partial<Student> & Record<string, any>;
+
+function normalizeStudent(student: StudentLike): Student {
+  const first_name = student.first_name ?? student.firstName ?? '';
+  const last_name = student.last_name ?? student.lastName ?? '';
+  const program_code = student.program_code ?? student.programCode ?? '';
+  const admission_date = student.admission_date ?? student.admissionDate ?? '';
+  const avatar_color = student.avatar_color ?? student.avatarColor ?? 'bg-purple-600';
+  const photo_zoom = student.photo_zoom ?? student.photoZoom ?? 1;
+  const photo_position = student.photo_position ?? student.photoPosition ?? { x: 0, y: 0 };
+
+  return {
+    ...student,
+    first_name,
+    last_name,
+    program_code,
+    admission_date,
+    avatar_color,
+    photo_zoom,
+    photo_position,
+    // Compatibility aliases for components still using camelCase.
+    firstName: first_name,
+    lastName: last_name,
+    programCode: program_code,
+    admissionDate: admission_date,
+    avatarColor: avatar_color,
+    photoZoom: photo_zoom,
+    photoPosition: photo_position,
+  } as Student;
+}
+
+function toStudentApiPayload(studentData: StudentLike): Record<string, any> {
+  return {
+    ...studentData,
+    first_name: studentData.first_name ?? studentData.firstName,
+    last_name: studentData.last_name ?? studentData.lastName,
+    program_code: studentData.program_code ?? studentData.programCode,
+    admission_date: studentData.admission_date ?? studentData.admissionDate,
+    avatar_color: studentData.avatar_color ?? studentData.avatarColor,
+    photo_zoom: studentData.photo_zoom ?? studentData.photoZoom,
+    photo_position: studentData.photo_position ?? studentData.photoPosition,
+  };
+}
+
 /**
  * Get all students with optional filters
  */
 export async function getStudents(filters?: StudentFilters): Promise<StudentsListResponse> {
   try {
-    console.log('[StudentService] getStudents called with filters:', filters);
-    
-    // Check if we have a token
-    const { getToken } = await import('./authService');
-    const token = getToken();
-    console.log('[StudentService] Current token:', token ? `${token.substring(0, 20)}...` : 'NULL');
-    
     const params = new URLSearchParams();
     if (filters?.page) params.append('page', filters.page.toString());
     if (filters?.perPage) params.append('perPage', filters.perPage.toString());
@@ -55,19 +93,17 @@ export async function getStudents(filters?: StudentFilters): Promise<StudentsLis
 
     const queryString = params.toString();
     const url = `${API_URL}/students${queryString ? `?${queryString}` : ''}`;
-    
-    console.log('[StudentService] Fetching from URL:', url);
 
     const response = await authFetch(url, {}, 8000);
-    console.log('[StudentService] Response status:', response.status);
-    console.log('[StudentService] Response ok:', response.ok);
-    
-    const data: StudentsListResponse = await response.json();
-    console.log('[StudentService] Parsed response data:', data);
-    
-    return data;
+    const data = await parseJsonSafe<StudentsListResponse>(response);
+    if (!data) {
+      return { success: false, error: 'Invalid API response from students endpoint' };
+    }
+    return {
+      ...data,
+      data: data.data?.map(normalizeStudent),
+    };
   } catch (error) {
-    console.error('[StudentService] Error in getStudents:', error);
     return {
       success: false,
       error: error instanceof Error ? error.message : 'Failed to fetch students',
@@ -81,8 +117,12 @@ export async function getStudents(filters?: StudentFilters): Promise<StudentsLis
 export async function getStudent(id: string): Promise<StudentResponse> {
   try {
     const response = await authFetch(`${API_URL}/students/${id}`, {}, 5000);
-    const data: StudentResponse = await response.json();
-    return data;
+    const data = await parseJsonSafe<StudentResponse>(response);
+    if (!data) return { success: false, error: 'Invalid API response from student endpoint' };
+    return {
+      ...data,
+      data: data.data ? normalizeStudent(data.data as StudentLike) : undefined,
+    };
   } catch (error) {
     return {
       success: false,
@@ -100,13 +140,17 @@ export async function createStudent(studentData: Partial<Student>): Promise<Stud
       `${API_URL}/students`,
       {
         method: 'POST',
-        body: JSON.stringify(studentData),
+        body: JSON.stringify(toStudentApiPayload(studentData as StudentLike)),
       },
       10000
     );
 
-    const data: StudentResponse = await response.json();
-    return data;
+    const data = await parseJsonSafe<StudentResponse>(response);
+    if (!data) return { success: false, error: 'Invalid API response from create student endpoint' };
+    return {
+      ...data,
+      data: data.data ? normalizeStudent(data.data as StudentLike) : undefined,
+    };
   } catch (error) {
     return {
       success: false,
@@ -124,13 +168,17 @@ export async function updateStudent(id: string, studentData: Partial<Student>): 
       `${API_URL}/students/${id}`,
       {
         method: 'PATCH',
-        body: JSON.stringify(studentData),
+        body: JSON.stringify(toStudentApiPayload(studentData as StudentLike)),
       },
       10000
     );
 
-    const data: StudentResponse = await response.json();
-    return data;
+    const data = await parseJsonSafe<StudentResponse>(response);
+    if (!data) return { success: false, error: 'Invalid API response from update student endpoint' };
+    return {
+      ...data,
+      data: data.data ? normalizeStudent(data.data as StudentLike) : undefined,
+    };
   } catch (error) {
     return {
       success: false,
@@ -152,8 +200,8 @@ export async function deleteStudent(id: string): Promise<StudentResponse> {
       5000
     );
 
-    const data: StudentResponse = await response.json();
-    return data;
+    const data = await parseJsonSafe<StudentResponse>(response);
+    return data ?? { success: false, error: 'Invalid API response from delete student endpoint' };
   } catch (error) {
     return {
       success: false,
@@ -168,8 +216,8 @@ export async function deleteStudent(id: string): Promise<StudentResponse> {
 export async function getStudentStats(): Promise<any> {
   try {
     const response = await authFetch(`${API_URL}/students/stats/overview`, {}, 5000);
-    const data = await response.json();
-    return data;
+    const data = await parseJsonSafe<any>(response);
+    return data ?? { success: false, error: 'Invalid API response from student stats endpoint' };
   } catch (error) {
     return {
       success: false,

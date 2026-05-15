@@ -37,8 +37,18 @@ stop:
 
 # Development mode
 dev:
-	@echo "Starting development server..."
+	@echo "Starting development stack..."
+	./start-dev.sh
+
+# Backend development
+dev-backend:
+	@echo "Starting backend development server..."
 	cd backend && npm run dev
+
+# Frontend development
+dev-frontend:
+	@echo "Starting frontend development server..."
+	npm run dev
 
 # Docker Compose
 docker-up:

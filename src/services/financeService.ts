@@ -4,8 +4,8 @@
 
 import { authFetch } from './authService';
 import { Transaction } from '../types';
-
-const API_URL = '/api/v1';
+import { API_URL } from './config';
+import { parseJsonSafe } from './apiClient';
 
 export interface TransactionResponse {
   success: boolean;
@@ -35,7 +35,8 @@ export async function getTransactions(filters?: any): Promise<TransactionListRes
     const queryString = params.toString();
     const url = `${API_URL}/finance/transactions${queryString ? `?${queryString}` : ''}`;
     const response = await authFetch(url);
-    return await response.json();
+    const data = await parseJsonSafe<TransactionListResponse>(response);
+    return data ?? { success: false, error: 'Failed to parse transactions response' };
   } catch (error) {
     return { success: false, error: 'Failed to fetch transactions' };
   }
@@ -47,7 +48,8 @@ export async function createTransaction(data: Partial<Transaction>): Promise<Tra
       method: 'POST',
       body: JSON.stringify(data),
     });
-    return await response.json();
+    const result = await parseJsonSafe<TransactionResponse>(response);
+    return result ?? { success: false, error: 'Failed to parse create transaction response' };
   } catch (error) {
     return { success: false, error: 'Failed to create transaction' };
   }
@@ -59,7 +61,8 @@ export async function updateTransaction(id: string, data: Partial<Transaction>):
       method: 'PATCH',
       body: JSON.stringify(data),
     });
-    return await response.json();
+    const result = await parseJsonSafe<TransactionResponse>(response);
+    return result ?? { success: false, error: 'Failed to parse update transaction response' };
   } catch (error) {
     return { success: false, error: 'Failed to update transaction' };
   }
@@ -68,7 +71,8 @@ export async function updateTransaction(id: string, data: Partial<Transaction>):
 export async function deleteTransaction(id: string): Promise<TransactionResponse> {
   try {
     const response = await authFetch(`${API_URL}/finance/transactions/${id}`, { method: 'DELETE' });
-    return await response.json();
+    const result = await parseJsonSafe<TransactionResponse>(response);
+    return result ?? { success: false, error: 'Failed to parse delete transaction response' };
   } catch (error) {
     return { success: false, error: 'Failed to delete transaction' };
   }
@@ -77,7 +81,8 @@ export async function deleteTransaction(id: string): Promise<TransactionResponse
 export async function getFinanceStats(): Promise<any> {
   try {
     const response = await authFetch(`${API_URL}/finance/stats`);
-    return await response.json();
+    const data = await parseJsonSafe<any>(response);
+    return data ?? { success: false, error: 'Failed to parse finance statistics response' };
   } catch (error) {
     return { success: false, error: 'Failed to fetch finance statistics' };
   }

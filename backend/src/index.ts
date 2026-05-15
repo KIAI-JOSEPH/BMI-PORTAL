@@ -10,7 +10,9 @@ import { rateLimiter } from 'hono-rate-limiter';
 import { CONFIG, validateConfig } from './config/index.js';
 import { logger } from './utils/logger.js';
 import { getPocketBase, setupCollections, healthCheck as pbHealthCheck, authenticateAdmin, createDefaultAdminIfNeeded, scheduleAdminTokenRefresh } from './services/pocketbase.js';
+import { seedAcademicReferenceDataIfEmpty } from './services/academicSeed.js';
 import { checkOllamaHealth } from './services/ollama.js';
+import { initJWTKeys } from './middleware/auth.js';
 
 // Import routes
 import authRouter from './routes/auth.js';
@@ -23,6 +25,16 @@ import financeRouter from './routes/finance.js';
 import libraryRouter from './routes/library.js';
 import dashboardRouter from './routes/dashboard.js';
 import importRouter from './routes/import.js';
+import { gradeRouter } from './routes/grades.js';
+import { gradingScalesRouter } from './routes/grading-scales.js';
+import { gradeAppealsRouter } from './routes/grade-appeals.js';
+import catalogRouter from './routes/catalog.js';
+import batchRouter from './routes/batch.js';
+import hostelRouter from './routes/hostels.js';
+import medicalRouter from './routes/medical.js';
+import inventoryRouter from './routes/inventory.js';
+import visitorRouter from './routes/visitors.js';
+import attendanceRouter from './routes/attendance.js';
 
 // Validate configuration
 validateConfig();
@@ -52,9 +64,11 @@ app.use('*', cors({
 // Rate limiting
 app.use('*', rateLimiter({
   windowMs: CONFIG.RATE_LIMIT_WINDOW_MS,
-  limit: CONFIG.RATE_LIMIT_MAX_REQUESTS,
+  limit: CONFIG.NODE_ENV === 'development' ? 10000 : CONFIG.RATE_LIMIT_MAX_REQUESTS,
   standardHeaders: true,
   keyGenerator: (c) => c.req.header('x-forwarded-for') || c.req.header('x-real-ip') || 'unknown',
+  message: { success: false, error: 'Too many requests. Please try again later.', code: 'RATE_LIMITED' },
+  skip: (c) => c.req.path === '/health' || c.req.path === '/api/v1/health',
 }));
 
 // Health check endpoint (no auth required)
@@ -108,6 +122,16 @@ app.route('/api/v1/finance', financeRouter);
 app.route('/api/v1/library', libraryRouter);
 app.route('/api/v1/dashboard', dashboardRouter);
 app.route('/api/v1/import', importRouter);
+app.route('/api/v1/grades', gradeRouter);
+app.route('/api/v1/grading-scales', gradingScalesRouter);
+app.route('/api/v1/grade-appeals', gradeAppealsRouter);
+app.route('/api/v1/catalog', catalogRouter);
+app.route('/api/v1/batch', batchRouter);
+app.route('/api/v1/hostels', hostelRouter);
+app.route('/api/v1/medical', medicalRouter);
+app.route('/api/v1/inventory', inventoryRouter);
+app.route('/api/v1/visitors', visitorRouter);
+app.route('/api/v1/attendance', attendanceRouter);
 
 // 404 handler
 app.notFound((c) => {
@@ -134,6 +158,10 @@ async function startServer() {
     logger.info('Initializing BMI UMS API Server...');
     logger.info(`Environment: ${CONFIG.NODE_ENV}`);
     
+    // Initialize JWT keys (RS256 or HS256)
+    await initJWTKeys();
+    logger.info(`✓ JWT initialized (${process.env.JWT_PRIVATE_KEY ? 'RS256' : 'HS256'} mode)`);
+
     // Initialize PocketBase
     logger.info('Connecting to PocketBase...');
     getPocketBase(); // Initialize connection
@@ -162,6 +190,13 @@ async function startServer() {
       logger.info('✓ Database schema verified');
     } catch (error) {
       logger.warn('Database schema setup failed (may already exist):', error);
+    }
+
+    try {
+      await seedAcademicReferenceDataIfEmpty();
+      logger.info('✓ Academic reference seed checked');
+    } catch (error) {
+      logger.warn('Academic seed skipped:', error);
     }
 
     // Create default admin user if no users exist

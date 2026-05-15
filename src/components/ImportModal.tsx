@@ -1,458 +1,192 @@
-import React, { useState, useRef } from 'react';
-import { Upload, X, FileSpreadsheet, AlertCircle, CheckCircle, Download, Loader2, Info } from 'lucide-react';
-import {
-  parseFile,
-  mapStudentRows,
-  mapExamRows,
-  processStudentImport,
-  processExamImport,
-  downloadTemplate,
-  ImportResult,
-  ExamImportRow,
-  importFromGoogle,
-} from '../services/importService';
-import { Student, Course } from '../types';
+import React, { useState } from 'react';
+import { Upload, X, FileSpreadsheet, CheckCircle, AlertTriangle, Download } from 'lucide-react';
+import { parseV2Template, V2ImportData } from '../services/importService';
+import { authFetch } from '../services/authService';
 
 interface ImportModalProps {
   isOpen: boolean;
   onClose: () => void;
-  type: 'students' | 'exams';
-  existingStudents: Student[];
-  existingCourses: Course[];
-  onImportStudents?: (students: Student[], newCourses: Partial<Course>[]) => void;
-  onImportExams?: (
-    exams: ExamImportRow[],
-    newStudents: Partial<Student>[],
-    newCourses: Partial<Course>[],
-    dynamicFields: string[],
-    collectionName: string
-  ) => void;
+  onSuccess?: () => void;
 }
 
-type Step = 'upload' | 'preview' | 'importing' | 'done';
-
-const ImportModal: React.FC<ImportModalProps> = ({
-  isOpen, onClose, type,
-  existingStudents, existingCourses,
-  onImportStudents, onImportExams,
-}) => {
-  const [step, setStep] = useState<Step>('upload');
-  const [dragOver, setDragOver] = useState(false);
-  const [fileName, setFileName] = useState('');
-  const [collectionName, setCollectionName] = useState(`exams_${new Date().getFullYear()}`);
-  const [result, setResult] = useState<ImportResult<any> | null>(null);
-  const [importErrors, setImportErrors] = useState<string[]>([]);
-  const fileRef = useRef<HTMLInputElement>(null);
+export function ImportModal({ isOpen, onClose, onSuccess }: ImportModalProps) {
+  const [step, setStep] = useState<'upload' | 'preview' | 'importing' | 'done'>('upload');
+  const [file, setFile] = useState<File | null>(null);
+  const [parsedData, setParsedData] = useState<V2ImportData | null>(null);
+  const [importResults, setImportResults] = useState<any>(null);
+  const [error, setError] = useState<string | null>(null);
 
   if (!isOpen) return null;
 
   const reset = () => {
     setStep('upload');
-    setFileName('');
-    setResult(null);
-    setImportErrors([]);
+    setFile(null);
+    setParsedData(null);
+    setImportResults(null);
+    setError(null);
   };
 
   const handleClose = () => { reset(); onClose(); };
 
-/*
-      const handleGoogleImport = async () => {
-      // Simple prompt UI – in a real app you'd use a proper modal/form
-      const sheetId = window.prompt('Enter Google Sheet ID (leave blank to use server‑side default)');
-      const sheetName = window.prompt('Enter sheet/tab name (default "Students" or "Exams")');
-      const payload:any = {};
-      if (sheetId) payload.spreadsheetId = sheetId;
-      if (sheetName) payload.sheetName = sheetName;
-      if (type === 'exams') {
-        const collectionName = window.prompt('Target collection name (optional)');
-        if (collectionName) payload.collectionName = collectionName;
-      }
-      setStep('importing');
-      try {
-        const fetchResult = await importFromGoogle(type, payload);
-        // The server returns data in the same shape as the bulk JSON import
-        if (type === 'students') {
-          const { imported = [], errors = [] } = fetchResult.data || {};
-          setResult({
-            success: true,
-            imported,
-            skipped: 0,
-            errors,
-            newStudents: imported,
-            newCourses: [],
-            newFields: [],
-          });
-        } else {
-          const { imported = [], errors = [], collectionName: coll } = fetchResult.data || {};
-          setResult({
-            success: true,
-            imported,
-            skipped: 0,
-            errors,
-            newStudents: [],
-            newCourses: [],
-            newFields: [],
-            collectionName: coll,
-          } as any);
-        }
-        setStep('preview');
-      } catch (e:any) {
-        setImportErrors([e.message || 'Google import failed']);
-        setStep('upload');
-      }
-*/
+  const handleFile = async (selectedFile: File) => {
+    setFile(selectedFile);
+    setError(null);
+    setStep('importing'); // Show loading state while parsing
 
-/*
     try {
-      const rows = await parseFile(file);
-      if (rows.length === 0) {
-        setImportErrors(['File is empty or has no data rows.']);
-        return;
-      }
-
-      if (type === 'students') {
-        const { mapped } = mapStudentRows(rows);
-        const res = processStudentImport(mapped, existingStudents);
-        setResult(res);
-      } else {
-        const { mapped, dynamicColumns, isTranscriptFormat } = mapExamRows(rows);
-        const res = processExamImport(mapped, dynamicColumns, existingStudents, existingCourses, isTranscriptFormat);
-        setResult(res);
-      }
+      const data = await parseV2Template(selectedFile);
+      setParsedData(data);
       setStep('preview');
     } catch (err: any) {
-      setImportErrors([err.message]);
+      setError(err.message || 'Failed to parse file');
+      setStep('upload');
     }
-  };
-*/
-
-  const handleFile = async (file: File) => {
-    setFileName(file.name);
-    try {
-      const rows = await parseFile(file);
-      if (rows.length === 0) {
-        setImportErrors(['File is empty or has no data rows.']);
-        return;
-      }
-
-      if (type === 'students') {
-        const { mapped } = mapStudentRows(rows);
-        const res = processStudentImport(mapped, existingStudents);
-        setResult(res);
-      } else {
-        const { mapped, dynamicColumns, isTranscriptFormat } = mapExamRows(rows);
-        const res = processExamImport(mapped, dynamicColumns, existingStudents, existingCourses, isTranscriptFormat);
-        setResult(res);
-      }
-      setStep('preview');
-    } catch (err: any) {
-      setImportErrors([err.message]);
-    }
-  };
-
-  const handleDrop = (e: React.DragEvent) => {
-    e.preventDefault();
-    setDragOver(false);
-    const file = e.dataTransfer.files[0];
-    if (file) handleFile(file);
   };
 
   const handleConfirmImport = async () => {
-    if (!result) return;
+    if (!parsedData) return;
     setStep('importing');
+    setError(null);
 
     try {
-      if (type === 'students') {
-        onImportStudents?.(result.imported as Student[], result.newCourses);
-      } else {
-        onImportExams?.(
-          result.imported as ExamImportRow[],
-          result.newStudents,
-          result.newCourses,
-          result.newFields,
-          collectionName
-        );
-      }
+      // POST to backend
+      const response = await authFetch('/api/v1/import/v2', {
+        method: 'POST',
+        body: JSON.stringify(parsedData)
+      });
+      const data = await response.json();
+      if (!response.ok) throw new Error(data.error || 'Import failed');
+      
+      setImportResults(data.results);
       setStep('done');
+      if (onSuccess) onSuccess();
     } catch (err: any) {
-      setImportErrors([err.message]);
+      setError(err.response?.data?.error || err.message || 'Import failed');
       setStep('preview');
     }
   };
 
-  const totalNew = (result?.newStudents.length || 0) + (result?.newCourses.length || 0);
-
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4">
-      <div className="bg-white dark:bg-gray-900 w-full max-w-2xl rounded-none shadow-2xl border border-gray-200 dark:border-gray-700 flex flex-col max-h-[90vh]">
-
+      <div className="bg-white dark:bg-gray-900 w-full max-w-2xl rounded-none shadow-2xl border border-gray-200 dark:border-gray-700 flex flex-col overflow-hidden">
+        
         {/* Header */}
-        <div className="flex items-center justify-between px-6 py-4 border-b border-gray-100 dark:border-gray-700 bg-gray-900 text-white flex-shrink-0">
-          <div className="flex items-center gap-3">
-            <FileSpreadsheet size={18} className="text-[#FFD700]" />
-            <div>
-              <h3 className="text-sm font-black uppercase tracking-widest">
-                Import {type === 'students' ? 'Students / Admissions' : 'Exams & Grades'}
-              </h3>
-              <p className="text-[10px] text-gray-400 mt-0.5">Excel (.xlsx), CSV, or Google Sheets export</p>
-            </div>
+        <div className="flex items-center justify-between p-4 border-b border-gray-100 dark:border-gray-800 bg-gray-50/50 dark:bg-gray-900/50">
+          <div className="flex flex-col">
+            <h2 className="text-lg font-black text-gray-900 dark:text-white uppercase tracking-widest">
+              Import System Data
+            </h2>
+            <span className="text-[10px] uppercase tracking-widest text-gray-500 font-bold mt-1">
+              V2 Relational Architecture
+            </span>
           </div>
-          <button onClick={handleClose} className="text-gray-400 hover:text-white transition-colors">
-            <X size={18} />
+          <button onClick={handleClose} className="p-2 hover:bg-gray-200 dark:hover:bg-gray-800 transition-colors">
+            <X size={20} className="text-gray-500" />
           </button>
         </div>
 
-        {/* Body */}
-        <div className="flex-1 overflow-y-auto p-6 space-y-5">
-
-          {/* Step: Upload */}
-          {step === 'upload' && (
-            <>
-              {/* Template download */}
-              <div className="flex items-center justify-between bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 p-4">
-                <div className="flex items-start gap-3">
-                  <Info size={16} className="text-blue-500 mt-0.5 flex-shrink-0" />
-                  <div>
-                    <p className="text-xs font-bold text-blue-800 dark:text-blue-300">Download the template first</p>
-                    <p className="text-[11px] text-blue-600 dark:text-blue-400 mt-0.5">
-                      Use the template to ensure correct column names. Unknown columns are auto-detected.
-                    </p>
-                  </div>
-                </div>
-                <button
-                  onClick={() => downloadTemplate(type)}
-                  className="flex items-center gap-2 px-3 py-2 bg-blue-600 text-white text-[10px] font-black uppercase tracking-widest hover:bg-blue-700 transition-colors whitespace-nowrap ml-4"
-                >
-                  <Download size={12} /> Template
-                </button>
-              </div>
-
-              <button
-                onClick={handleGoogleImport}
-                className="mt-3 flex items-center gap-2 px-4 py-2 bg-green-600 text-white text-[10px] font-black uppercase tracking-widest hover:bg-green-700 transition-colors"
-              >
-                <Upload size={12} className="text-[#FFD700]" /> Import from Google Sheet
-              </button>
-              {type === 'exams' && (
-                <div className="space-y-1">
-                  <label className="text-[10px] font-black uppercase text-gray-500 tracking-widest">
-                    Exam Collection Name (used as database table name)
-                  </label>
-                  <input
-                    type="text"
-                    value={collectionName}
-                    onChange={e => setCollectionName(e.target.value.replace(/[^a-zA-Z0-9_]/g, '_'))}
-                    className="w-full px-4 py-2 bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-600 text-sm font-mono outline-none focus:ring-2 focus:ring-[#4B0082] dark:text-white"
-                    placeholder="e.g. exams_2024_sem1"
-                  />
-                  <p className="text-[10px] text-gray-400">A new database collection will be auto-created if it doesn't exist.</p>
-                </div>
-              )}
-
-              {/* Drop zone */}
-              <div
-                onDragOver={e => { e.preventDefault(); setDragOver(true); }}
-                onDragLeave={() => setDragOver(false)}
-                onDrop={handleDrop}
-                onClick={() => fileRef.current?.click()}
-                className={`border-2 border-dashed rounded-none p-12 text-center cursor-pointer transition-all ${
-                  dragOver
-                    ? 'border-[#4B0082] bg-purple-50 dark:bg-purple-900/20'
-                    : 'border-gray-300 dark:border-gray-600 hover:border-[#4B0082] hover:bg-gray-50 dark:hover:bg-gray-800'
-                }`}
-              >
-                <Upload size={32} className="mx-auto mb-3 text-gray-400" />
-                <p className="text-sm font-bold text-gray-700 dark:text-gray-300">
-                  Drop your file here or <span className="text-[#4B0082] dark:text-purple-400">click to browse</span>
-                </p>
-                <p className="text-[11px] text-gray-400 mt-1">Supports .xlsx, .xls, .csv</p>
-                <input
-                  ref={fileRef}
-                  type="file"
-                  accept=".xlsx,.xls,.csv"
-                  className="hidden"
-                  onChange={e => { if (e.target.files?.[0]) handleFile(e.target.files[0]); }}
-                />
-              </div>
-
-              {importErrors.length > 0 && (
-                <div className="bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 p-4 flex items-start gap-3">
-                  <AlertCircle size={16} className="text-red-500 mt-0.5 flex-shrink-0" />
-                  <div className="space-y-1">
-                    {importErrors.map((e, i) => (
-                      <p key={i} className="text-xs text-red-700 dark:text-red-400">{e}</p>
-                    ))}
-                  </div>
-                </div>
-              )}
-            </>
+        {/* Content */}
+        <div className="p-6">
+          {error && (
+            <div className="mb-6 p-4 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 flex items-start gap-3">
+              <AlertTriangle className="text-red-500 shrink-0 mt-0.5" size={16} />
+              <p className="text-sm text-red-700 dark:text-red-400">{error}</p>
+            </div>
           )}
 
-          {/* Step: Preview */}
-          {step === 'preview' && result && (
-            <>
-              <div className="flex items-center gap-2 text-xs text-gray-500 dark:text-gray-400">
-                <FileSpreadsheet size={14} className="text-[#4B0082]" />
-                <span className="font-bold">{fileName}</span>
+          {step === 'upload' && (
+            <div className="space-y-6">
+              <div className="flex justify-between items-center p-4 bg-blue-50 dark:bg-blue-900/10 border border-blue-100 dark:border-blue-900">
+                <div>
+                  <h4 className="text-xs font-black uppercase tracking-widest text-blue-800 dark:text-blue-400">Download Master Template</h4>
+                  <p className="text-[11px] text-blue-600 dark:text-blue-300 mt-1">Ensure your data matches the exact V2 column structure.</p>
+                </div>
+                <a 
+                  href="/UMS_Import_Template_BMI_V2.xlsx" 
+                  download 
+                  className="flex items-center gap-2 px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white text-xs font-black uppercase tracking-widest transition-colors"
+                >
+                  <Download size={14} /> Download
+                </a>
               </div>
 
-              {/* Summary cards */}
-              <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-                {[
-                  { label: 'Records Found', value: result.imported.length + result.skipped, color: 'bg-gray-100 dark:bg-gray-800' },
-                  { label: 'Will Import', value: result.imported.length, color: 'bg-emerald-50 dark:bg-emerald-900/20 text-emerald-700' },
-                  { label: 'Skipped (exist)', value: result.skipped, color: 'bg-amber-50 dark:bg-amber-900/20 text-amber-700' },
-                  { label: 'Auto-Created', value: totalNew, color: 'bg-blue-50 dark:bg-blue-900/20 text-blue-700' },
-                ].map(card => (
-                  <div key={card.label} className={`p-4 border border-gray-100 dark:border-gray-700 ${card.color}`}>
-                    <p className="text-2xl font-black">{card.value}</p>
-                    <p className="text-[10px] font-bold uppercase tracking-widest text-gray-500 mt-1">{card.label}</p>
+              <div 
+                className="border-2 border-dashed border-gray-300 dark:border-gray-700 p-12 text-center hover:border-blue-500 transition-colors cursor-pointer"
+                onDragOver={e => e.preventDefault()}
+                onDrop={e => {
+                  e.preventDefault();
+                  if (e.dataTransfer.files[0]) handleFile(e.dataTransfer.files[0]);
+                }}
+                onClick={() => document.getElementById('file-upload')?.click()}
+              >
+                <FileSpreadsheet className="mx-auto text-gray-400 mb-4" size={48} />
+                <p className="text-sm font-bold text-gray-700 dark:text-gray-300">Drag & Drop your .xlsx file here</p>
+                <p className="text-xs text-gray-500 mt-2">or click to browse</p>
+                <input 
+                  id="file-upload" 
+                  type="file" 
+                  className="hidden" 
+                  accept=".xlsx, .xls"
+                  onChange={e => {
+                    if (e.target.files?.[0]) handleFile(e.target.files[0]);
+                  }}
+                />
+              </div>
+            </div>
+          )}
+
+          {step === 'preview' && parsedData && (
+            <div className="space-y-6">
+              <h3 className="text-sm font-black uppercase tracking-widest text-gray-900 dark:text-white">Data Preview</h3>
+              <div className="grid grid-cols-3 gap-4">
+                {Object.entries(parsedData).map(([key, dataArray]) => (
+                  <div key={key} className="p-4 bg-gray-50 dark:bg-gray-800 border border-gray-100 dark:border-gray-700">
+                    <span className="block text-[10px] uppercase font-black tracking-widest text-gray-500">{key}</span>
+                    <span className="block text-2xl font-black text-gray-900 dark:text-white mt-1">{dataArray.length}</span>
                   </div>
                 ))}
               </div>
-
-              {/* New students to be created */}
-              {result.newStudents.length > 0 && (
-                <div className="border border-blue-200 dark:border-blue-800 bg-blue-50 dark:bg-blue-900/10 p-4">
-                  <p className="text-xs font-black text-blue-700 dark:text-blue-400 uppercase tracking-widest mb-2">
-                    {result.newStudents.length} New Students Will Be Auto-Created
-                  </p>
-                  <div className="space-y-1 max-h-28 overflow-y-auto">
-                    {result.newStudents.map((s, i) => (
-                      <p key={i} className="text-[11px] text-blue-600 dark:text-blue-400">
-                        + {s.firstName} {s.lastName} ({s.email})
-                      </p>
-                    ))}
-                  </div>
-                </div>
-              )}
-
-              {/* New courses to be created */}
-              {result.newCourses.length > 0 && (
-                <div className="border border-purple-200 dark:border-purple-800 bg-purple-50 dark:bg-purple-900/10 p-4">
-                  <p className="text-xs font-black text-purple-700 dark:text-purple-400 uppercase tracking-widest mb-2">
-                    {result.newCourses.length} New Courses Will Be Auto-Created
-                  </p>
-                  <div className="space-y-1 max-h-28 overflow-y-auto">
-                    {result.newCourses.map((c, i) => (
-                      <p key={i} className="text-[11px] text-purple-600 dark:text-purple-400">
-                        + {c.name} ({c.code})
-                      </p>
-                    ))}
-                  </div>
-                </div>
-              )}
-
-              {/* Dynamic fields */}
-              {result.newFields.length > 0 && (
-                <div className="border border-amber-200 dark:border-amber-800 bg-amber-50 dark:bg-amber-900/10 p-4">
-                  <p className="text-xs font-black text-amber-700 dark:text-amber-400 uppercase tracking-widest mb-2">
-                    {result.newFields.length} New Dynamic Fields Detected
-                  </p>
-                  <div className="flex flex-wrap gap-2">
-                    {result.newFields.map((f, i) => (
-                      <span key={i} className="px-2 py-0.5 bg-amber-100 dark:bg-amber-900/30 text-amber-700 dark:text-amber-400 text-[11px] font-bold border border-amber-200 dark:border-amber-700">
-                        {f}
-                      </span>
-                    ))}
-                  </div>
-                  <p className="text-[10px] text-amber-600 dark:text-amber-500 mt-2">
-                    These will be added as new columns in the database schema automatically.
-                  </p>
-                </div>
-              )}
-
-              {/* Parse errors */}
-              {result.errors.length > 0 && (
-                <div className="border border-red-200 dark:border-red-800 bg-red-50 dark:bg-red-900/10 p-4">
-                  <p className="text-xs font-black text-red-700 dark:text-red-400 uppercase tracking-widest mb-2">
-                    {result.errors.length} Row Errors (will be skipped)
-                  </p>
-                  <div className="space-y-1 max-h-24 overflow-y-auto">
-                    {result.errors.map((e, i) => (
-                      <p key={i} className="text-[11px] text-red-600 dark:text-red-400">{e}</p>
-                    ))}
-                  </div>
-                </div>
-              )}
-            </>
+              <div className="flex justify-end gap-3 pt-4 border-t border-gray-100 dark:border-gray-800">
+                <button onClick={() => setStep('upload')} className="px-6 py-2 text-xs font-black uppercase tracking-widest text-gray-500 hover:text-gray-900">Cancel</button>
+                <button onClick={handleConfirmImport} className="px-6 py-2 bg-black dark:bg-white text-white dark:text-black text-xs font-black uppercase tracking-widest hover:bg-gray-800 transition-colors">
+                  Confirm & Sync to Database
+                </button>
+              </div>
+            </div>
           )}
 
-          {/* Step: Importing */}
           {step === 'importing' && (
-            <div className="flex flex-col items-center justify-center py-16 gap-4">
-              <Loader2 size={40} className="animate-spin text-[#4B0082]" />
-              <p className="text-sm font-black uppercase tracking-widest text-gray-700 dark:text-gray-300">
-                Importing data...
-              </p>
-              <p className="text-xs text-gray-400">Auto-creating missing records and schema fields</p>
+            <div className="py-12 text-center space-y-4">
+              <div className="inline-block animate-spin rounded-full h-8 w-8 border-b-2 border-black dark:border-white"></div>
+              <p className="text-xs font-black uppercase tracking-widest text-gray-600 dark:text-gray-400">Processing Import...</p>
             </div>
           )}
 
-          {/* Step: Done */}
-          {step === 'done' && result && (
-            <div className="flex flex-col items-center justify-center py-12 gap-4">
-              <div className="w-16 h-16 bg-emerald-100 dark:bg-emerald-900/30 rounded-full flex items-center justify-center">
-                <CheckCircle size={32} className="text-emerald-600" />
+          {step === 'done' && importResults && (
+            <div className="space-y-6 text-center py-8">
+              <CheckCircle className="mx-auto text-green-500 mb-4" size={48} />
+              <h3 className="text-xl font-black uppercase tracking-widest text-gray-900 dark:text-white">Import Successful</h3>
+              <div className="text-sm text-gray-600 dark:text-gray-400 bg-gray-50 dark:bg-gray-800 p-4 inline-block text-left">
+                <ul className="space-y-1">
+                  {Object.entries(importResults).map(([key, count]) => (
+                    <li key={key} className="flex justify-between gap-8 border-b border-gray-200 dark:border-gray-700 pb-1">
+                      <span className="text-xs uppercase font-bold text-gray-500">{key}</span>
+                      <span className="font-black text-gray-900 dark:text-white">{count as number} Added</span>
+                    </li>
+                  ))}
+                </ul>
               </div>
-              <p className="text-lg font-black uppercase tracking-widest text-gray-900 dark:text-white">Import Complete</p>
-              <div className="text-center space-y-1">
-                <p className="text-sm text-gray-600 dark:text-gray-400">
-                  <span className="font-bold text-emerald-600">{result.imported.length}</span> records imported successfully
-                </p>
-                {totalNew > 0 && (
-                  <p className="text-sm text-gray-600 dark:text-gray-400">
-                    <span className="font-bold text-blue-600">{totalNew}</span> new records auto-created
-                  </p>
-                )}
-                {result.skipped > 0 && (
-                  <p className="text-sm text-gray-500">
-                    <span className="font-bold">{result.skipped}</span> duplicates skipped
-                  </p>
-                )}
+              <div className="pt-6">
+                <button onClick={handleClose} className="px-8 py-3 bg-black dark:bg-white text-white dark:text-black text-xs font-black uppercase tracking-widest hover:bg-gray-800 transition-colors">
+                  Close Window
+                </button>
               </div>
             </div>
           )}
-        </div>
-
-        {/* Footer */}
-        <div className="flex-shrink-0 px-6 py-4 border-t border-gray-100 dark:border-gray-700 flex justify-between items-center bg-gray-50 dark:bg-gray-800/50">
-          {step === 'done' ? (
-            <button
-              onClick={handleClose}
-              className="w-full py-3 bg-[#4B0082] text-white font-black text-[10px] uppercase tracking-widest hover:bg-black transition-colors"
-            >
-              Close
-            </button>
-          ) : step === 'preview' ? (
-            <>
-              <button
-                onClick={reset}
-                className="px-6 py-2.5 border border-gray-300 dark:border-gray-600 text-gray-600 dark:text-gray-400 font-black text-[10px] uppercase tracking-widest hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors"
-              >
-                Back
-              </button>
-              <button
-                onClick={handleConfirmImport}
-                disabled={result?.imported.length === 0}
-                className="px-8 py-2.5 bg-[#4B0082] text-white font-black text-[10px] uppercase tracking-widest hover:bg-black transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
-              >
-                <Upload size={12} className="text-[#FFD700]" />
-                Confirm Import ({result?.imported.length} records)
-              </button>
-            </>
-          ) : step === 'upload' ? (
-            <button
-              onClick={handleClose}
-              className="px-6 py-2.5 border border-gray-300 dark:border-gray-600 text-gray-600 dark:text-gray-400 font-black text-[10px] uppercase tracking-widest hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors"
-            >
-              Cancel
-            </button>
-          ) : null}
         </div>
       </div>
     </div>
   );
-};
+}
 
 export default ImportModal;

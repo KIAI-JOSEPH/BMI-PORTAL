@@ -1,5 +1,5 @@
 
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import { 
   Users, 
   Search, 
@@ -20,19 +20,54 @@ import {
 import { Student, Course } from '../types';
 import StudentRegistrationModal from './StudentRegistrationModal';
 import ImportModal from './ImportModal';
-import { deleteStudent as deleteStudentAPI } from '../services/studentService';
+import { deleteStudent as deleteStudentAPI, getStudents } from '../services/studentService';
+import { getPrograms } from '../services/catalogService';
+import { BulkEntryModal } from './BulkEntryModal';
+import { postStudentBatch } from '../services/batchService';
+
+import { useDataStore } from '../stores/dataStore';
 
 interface StudentsProps {
-  students: Student[];
-  setStudents: React.Dispatch<React.SetStateAction<Student[]>>;
+  students?: Student[];
+  setStudents?: React.Dispatch<React.SetStateAction<Student[]>> | ((students: Student[]) => void);
   courses?: Course[];
   setCourses?: React.Dispatch<React.SetStateAction<Course[]>>;
 }
 
-const Students: React.FC<StudentsProps> = ({ students, setStudents, courses = [], setCourses }) => {
+const Students: React.FC<StudentsProps> = (props) => {
+  const storeStudents = useDataStore((s) => s.students);
+  const storeSetStudents = useDataStore((s) => s.setStudents);
+  const storeCourses = useDataStore((s) => s.courses);
+  
+  const students = props.students ?? storeStudents;
+  const courses = props.courses ?? storeCourses;
+  
+  // Custom setter that supports both React.SetStateAction and simple array
+  const setStudents = (action: React.SetStateAction<Student[]>) => {
+    if (props.setStudents) {
+      // If parent provided setter, use it directly
+      (props.setStudents as any)(action);
+    } else {
+      // Otherwise use store setter
+      if (typeof action === 'function') {
+        storeSetStudents((action as (prev: Student[]) => Student[])(storeStudents));
+      } else {
+        storeSetStudents(action);
+      }
+    }
+  };
+  
+  const setCourses = (action: React.SetStateAction<Course[]>) => {
+    if (props.setCourses) {
+      props.setCourses(action);
+    }
+    // Note: storeSetCourses could be added here if needed, but not heavily used
+  };
   const [viewMode, setViewMode] = useState<'grid' | 'table'>('table');
   const [searchTerm, setSearchTerm] = useState('');
-  const [facultyFilter, setFacultyFilter] = useState('All Faculty');
+  const [programFilter, setProgramFilter] = useState('All Programs');
+  const [programRows, setProgramRows] = useState<Array<{ id: string; label: string }>>([]);
+  const [bulkStudentsOpen, setBulkStudentsOpen] = useState(false);
   const [statusFilter, setStatusFilter] = useState('All Status');
   const [academicLevelFilter, setAcademicLevelFilter] = useState('All Levels');
   const [isModalOpen, setIsModalOpen] = useState(false);
@@ -40,15 +75,32 @@ const Students: React.FC<StudentsProps> = ({ students, setStudents, courses = []
   const [editingStudent, setEditingStudent] = useState<Student | undefined>(undefined);
   const [isSyncing, setIsSyncing] = useState(false);
 
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      const r = await getPrograms();
+      if (cancelled || !r.success || !r.data) return;
+      setProgramRows(
+        r.data.map((p: Record<string, unknown>) => ({
+          id: String(p.id),
+          label: `${String(p.program_code ?? '')} — ${String(p.name ?? '')}`,
+        }))
+      );
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
   const filteredStudents = useMemo(() => {
     return students.filter(student => {
-      const matchesSearch = `${student.firstName} ${student.lastName} ${student.id}`.toLowerCase().includes(searchTerm.toLowerCase());
-      const matchesFaculty = facultyFilter === 'All Faculty' || student.faculty === facultyFilter;
+      const matchesSearch = `${student.first_name} ${student.last_name} ${student.id}`.toLowerCase().includes(searchTerm.toLowerCase());
+      const matchesProgram = programFilter === 'All Programs' || student.program_code === programFilter;
       const matchesStatus = statusFilter === 'All Status' || student.status === statusFilter;
-      const matchesLevel = academicLevelFilter === 'All Levels' || student.academicLevel === academicLevelFilter;
-      return matchesSearch && matchesFaculty && matchesStatus && matchesLevel;
+      const matchesLevel = academicLevelFilter === 'All Levels' || student.program_code === academicLevelFilter;
+      return matchesSearch && matchesProgram && matchesStatus && matchesLevel;
     });
-  }, [students, searchTerm, facultyFilter, statusFilter, academicLevelFilter]);
+  }, [students, searchTerm, programFilter, statusFilter, academicLevelFilter]);
 
   const handleAdd = (student: Student) => {
     if (editingStudent) {
@@ -85,35 +137,15 @@ const Students: React.FC<StudentsProps> = ({ students, setStudents, courses = []
     setIsModalOpen(true);
   };
 
-  const handleSyncApplications = () => {
+  const handleSyncApplications = async () => {
     setIsSyncing(true);
-    setTimeout(() => {
-        const newApplicant: Student = {
-            id: `WEB-${Math.floor(Math.random() * 10000)}`,
-            firstName: 'Emmanuel',
-            lastName: 'Kipkorir',
-            middleName: 'J',
-            gender: 'Male',
-            email: 'e.kipkorir@gmail.com',
-            phone: '+254 722 123 456',
-            nationality: 'Kenya',
-            faculty: 'ICT',
-            department: 'Computer Science',
-            careerPath: 'Applicant',
-            academicLevel: 'Degree',
-            admissionYear: new Date().getFullYear().toString(),
-            enrollmentTerm: 'Fall 2024',
-            status: 'Applicant',
-            standing: 'Good',
-            gpa: 0.0,
-            avatarColor: 'bg-orange-600',
-            photoZoom: 1,
-            photoPosition: { x: 0, y: 0 }
-        };
-        setStudents(prev => [newApplicant, ...prev]);
-        setIsSyncing(false);
-        alert("Sync Complete: 1 New Application retrieved from bmiuniversity.org/apply/");
-    }, 2500);
+    try {
+      const r = await getStudents({ perPage: 1000 });
+      if (r.success && r.data) setStudents(r.data);
+      alert('Student list refreshed from the server.');
+    } finally {
+      setIsSyncing(false);
+    }
   };
 
   const handleImportStudents = (newStudents: Student[], newCourses: Partial<Course>[]) => {
@@ -144,6 +176,12 @@ const Students: React.FC<StudentsProps> = ({ students, setStudents, courses = []
            >
              {isSyncing ? <RefreshCw size={12} className="animate-spin" /> : <Globe size={12} />}
              {isSyncing ? 'Syncing...' : 'Sync Web Apps'}
+           </button>
+           <button
+             onClick={() => setBulkStudentsOpen(true)}
+             className="hidden md:flex items-center gap-2 px-3 py-1.5 bg-indigo-700 text-white rounded-none font-bold text-[9px] uppercase tracking-widest hover:bg-indigo-800 transition-all shadow-sm"
+           >
+             Bulk JSON
            </button>
            <button
              onClick={() => setIsImportOpen(true)}
@@ -201,11 +239,15 @@ const Students: React.FC<StudentsProps> = ({ students, setStudents, courses = []
               />
            </div>
            <select 
-             value={facultyFilter}
-             onChange={(e) => setFacultyFilter(e.target.value)}
-             className="px-4 py-2 bg-gray-50 dark:bg-gray-700 border border-gray-200 dark:border-gray-600 text-[10px] font-black uppercase outline-none cursor-pointer dark:text-white"
+             value={programFilter}
+             onChange={(e) => setProgramFilter(e.target.value)}
+             className="px-4 py-2 bg-gray-50 dark:bg-gray-700 border border-gray-200 dark:border-gray-600 text-[10px] font-black uppercase outline-none cursor-pointer dark:text-white max-w-[220px]"
+             title="Filter by program (from catalog)"
            >
-             {['All Faculty', 'Theology', 'ICT', 'Business', 'Education'].map(f => <option key={f} value={f}>{f}</option>)}
+             <option value="All Programs">All Programs</option>
+             {programRows.map((p) => (
+               <option key={p.id} value={p.id}>{p.label}</option>
+             ))}
            </select>
            <select 
              value={statusFilter}
@@ -224,11 +266,11 @@ const Students: React.FC<StudentsProps> = ({ students, setStudents, courses = []
                  <div className={`absolute top-0 left-0 w-full h-1 ${student.status === 'Applicant' ? 'bg-orange-500' : 'bg-[#4B0082]'}`}></div>
                  
                  <div className="flex justify-between items-start mb-6">
-                    <div className={`w-16 h-16 rounded-none ${student.avatarColor} flex items-center justify-center text-white font-bold text-2xl shadow-lg overflow-hidden border-2 border-white dark:border-gray-700`}>
+                    <div className={`w-16 h-16 rounded-none ${student.avatar_color} flex items-center justify-center text-white font-bold text-2xl shadow-lg overflow-hidden border-2 border-white dark:border-gray-700`}>
                        {student.photo ? (
-                          <img src={student.photo} className="w-full h-full object-cover" style={{ transform: `scale(${student.photoZoom}) translate(${student.photoPosition?.x}px, ${student.photoPosition?.y}px)` }} />
+                          <img src={student.photo} className="w-full h-full object-cover" style={{ transform: `scale(${student.photo_zoom}) translate(${student.photo_position?.x}px, ${student.photo_position?.y}px)` }} />
                        ) : (
-                          student.firstName.charAt(0)
+                          student.first_name.charAt(0)
                        )}
                     </div>
                     <div className="flex flex-col items-end">
@@ -247,9 +289,9 @@ const Students: React.FC<StudentsProps> = ({ students, setStudents, courses = []
                  </div>
 
                  <div className="mb-6">
-                    <h3 className="text-lg font-black text-gray-900 dark:text-white uppercase tracking-tight leading-none group-hover:text-[#4B0082] transition-colors">{student.firstName} {student.lastName}</h3>
+                    <h3 className="text-lg font-black text-gray-900 dark:text-white uppercase tracking-tight leading-none group-hover:text-[#4B0082] transition-colors">{student.first_name} {student.last_name}</h3>
                     <p className="text-xs font-bold text-gray-400 mt-1">{student.id}</p>
-                    <p className="text-[10px] font-black text-[#4B0082] dark:text-purple-300 uppercase tracking-widest mt-2">{student.faculty} • {student.academicLevel}</p>
+                    <p className="text-[10px] font-black text-[#4B0082] dark:text-purple-300 uppercase tracking-widest mt-2">{student.program_code} • {student.program_code}</p>
                  </div>
 
                  <div className="mt-auto space-y-3 pt-4 border-t border-gray-50 dark:border-gray-700">
@@ -282,24 +324,24 @@ const Students: React.FC<StudentsProps> = ({ students, setStudents, courses = []
                          <tr key={student.id} className="hover:bg-purple-50/20 dark:hover:bg-gray-700/20 transition-all group">
                             <td className="px-6 py-5">
                                <div className="flex items-center gap-3">
-                                  <div className={`w-8 h-8 rounded-none ${student.avatarColor} flex items-center justify-center text-white text-xs font-bold overflow-hidden`}>
-                                     {student.photo ? <img src={student.photo} className="w-full h-full object-cover" /> : student.firstName.charAt(0)}
+                                  <div className={`w-8 h-8 rounded-none ${student.avatar_color} flex items-center justify-center text-white text-xs font-bold overflow-hidden`}>
+                                     {student.photo ? <img src={student.photo} className="w-full h-full object-cover" /> : student.first_name.charAt(0)}
                                   </div>
                                   <div>
-                                     <p className="text-sm font-black text-gray-900 dark:text-white uppercase tracking-tight">{student.firstName} {student.lastName}</p>
+                                     <p className="text-sm font-black text-gray-900 dark:text-white uppercase tracking-tight">{student.first_name} {student.last_name}</p>
                                      <p className="text-[9px] font-bold text-gray-400 uppercase tracking-widest">{student.id}</p>
                                   </div>
                                </div>
                             </td>
                             <td className="px-6 py-5">
-                               <p className="text-xs font-bold text-gray-700 dark:text-gray-300 uppercase">{student.careerPath}</p>
-                               <p className="text-[9px] font-black text-[#4B0082] dark:text-purple-300 uppercase tracking-widest mt-0.5">{student.faculty}</p>
+                               <p className="text-xs font-bold text-gray-700 dark:text-gray-300 uppercase">{student.program_code}</p>
+                               <p className="text-[9px] font-black text-[#4B0082] dark:text-purple-300 uppercase tracking-widest mt-0.5">{student.program_code}</p>
                             </td>
                             <td className="px-6 py-5 text-xs text-gray-500 font-medium">
                                <p>{student.email}</p>
                                <p className="mt-0.5">{student.phone}</p>
                             </td>
-                            <td className="px-6 py-5 text-center text-[10px] font-bold text-gray-500 uppercase">{student.enrollmentTerm}</td>
+                            <td className="px-6 py-5 text-center text-[10px] font-bold text-gray-500 uppercase">{student.admission_date}</td>
                             <td className="px-6 py-5 text-center">
                                <span className={`px-2 py-0.5 rounded-none text-[9px] font-black uppercase tracking-widest border ${
                                   student.status === 'Active' ? 'bg-emerald-50 text-emerald-700 border-emerald-200' : 
@@ -334,10 +376,29 @@ const Students: React.FC<StudentsProps> = ({ students, setStudents, courses = []
       <ImportModal
         isOpen={isImportOpen}
         onClose={() => setIsImportOpen(false)}
-        type="students"
-        existingStudents={students}
-        existingCourses={courses}
-        onImportStudents={handleImportStudents}
+        onSuccess={() => window.location.reload()}
+      />
+
+      <BulkEntryModal
+        open={bulkStudentsOpen}
+        onClose={() => setBulkStudentsOpen(false)}
+        title="Bulk students (JSON lines)"
+        entity="students"
+        sampleLine='{"first_name":"Jane","last_name":"Doe","gender":"Female","program_code":"PROGRAM_RECORD_ID","admission_date":"2025-01-01","status":"Active","email":"j@bmi.edu","phone":"+254700000000"}'
+        onSubmit={async (lines) => {
+          try {
+            const items = lines.map((l) => JSON.parse(l) as Record<string, unknown>);
+            const r = await postStudentBatch(items);
+            const list = await getStudents({ perPage: 1000 });
+            if (list.success && list.data) setStudents(list.data);
+            return {
+              ok: (r.data?.failureCount ?? 0) === 0,
+              message: `Created: ${r.data?.successCount ?? 0}, failed: ${r.data?.failureCount ?? 0}.`,
+            };
+          } catch {
+            return { ok: false, message: 'Invalid JSON on one or more lines.' };
+          }
+        }}
       />
     </div>
   );

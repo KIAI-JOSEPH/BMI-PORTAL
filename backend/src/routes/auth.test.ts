@@ -1,4 +1,4 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { describe, it, expect, vi } from 'vitest';
 import authRouter from './auth.js';
 
 // Mock dependencies
@@ -26,7 +26,7 @@ vi.mock('../utils/logger.js', () => ({
 describe('Auth Routes', () => {
   describe('POST /login', () => {
     it('should validate email format', async () => {
-      const req = new Request('http://localhost/api/v1/auth/login', {
+      const req = new Request('http://localhost/login', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -40,7 +40,7 @@ describe('Auth Routes', () => {
     });
 
     it('should require password minimum length', async () => {
-      const req = new Request('http://localhost/api/v1/auth/login', {
+      const req = new Request('http://localhost/login', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -54,7 +54,7 @@ describe('Auth Routes', () => {
     });
 
     it('should accept valid login request', async () => {
-      const req = new Request('http://localhost/api/v1/auth/login', {
+      const req = new Request('http://localhost/login', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -71,7 +71,7 @@ describe('Auth Routes', () => {
 
   describe('POST /forgot-password', () => {
     it('should validate email format', async () => {
-      const req = new Request('http://localhost/api/v1/auth/forgot-password', {
+      const req = new Request('http://localhost/forgot-password', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -84,7 +84,7 @@ describe('Auth Routes', () => {
     });
 
     it('should accept valid email for password reset', async () => {
-      const req = new Request('http://localhost/api/v1/auth/forgot-password', {
+      const req = new Request('http://localhost/forgot-password', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -98,7 +98,7 @@ describe('Auth Routes', () => {
 
   describe('POST /reset-password', () => {
     it('should require token', async () => {
-      const req = new Request('http://localhost/api/v1/auth/reset-password', {
+      const req = new Request('http://localhost/reset-password', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -112,7 +112,7 @@ describe('Auth Routes', () => {
     });
 
     it('should require password minimum length', async () => {
-      const req = new Request('http://localhost/api/v1/auth/reset-password', {
+      const req = new Request('http://localhost/reset-password', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -127,7 +127,7 @@ describe('Auth Routes', () => {
     });
 
     it('should require password confirmation to match', async () => {
-      const req = new Request('http://localhost/api/v1/auth/reset-password', {
+      const req = new Request('http://localhost/reset-password', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
