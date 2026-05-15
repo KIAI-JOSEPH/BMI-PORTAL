@@ -31,6 +31,7 @@ export async function getStaff(filters?: any): Promise<StaffListResponse> {
     if (filters?.perPage) params.append('perPage', filters.perPage.toString());
     if (filters?.department) params.append('department', filters.department);
     if (filters?.search) params.append('search', filters.search);
+    if (filters?.campusId) params.append('campus_id', filters.campusId);
 
     const queryString = params.toString();
     const url = `${API_URL}/staff${queryString ? `?${queryString}` : ''}`;

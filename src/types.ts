@@ -2,19 +2,29 @@ import { ReactNode } from 'react';
 
 export interface Student {
   id: string;
-  student_number?: string;
+  student_code: string;
+  reg_no?: string;
+  full_name: string;
   first_name: string;
   last_name: string;
   gender: 'Male' | 'Female';
+  date_of_birth?: string;
+  nationality?: string;
   email: string;
   phone: string;
-  program_code: string;
+  admission_no?: string;
   admission_date: string;
-  status: 'Active' | 'Applicant' | 'On Leave' | 'Graduated' | 'Suspended';
+  programme: string;
+  status: 'Active' | 'Inactive' | 'Graduated' | 'Suspended';
   avatar_color: string;
   photo?: string;
   photo_zoom: number;
   photo_position?: { x: number; y: number };
+  campus_id?: string;
+  campus_name?: string;
+  expand?: {
+    campus_id?: { name: string };
+  };
 }
 
 export interface NavItem {
@@ -33,19 +43,19 @@ export interface StatCardProps {
 
 export interface StaffMember {
   id: string;
-  name: string;
-  role: string;
-  department: string;
+  staff_number: string;
+  first_name: string;
+  last_name: string;
   email: string;
   phone: string;
-  status: 'Full-time' | 'Part-time' | 'On Leave';
+  role: string;
   category: 'Academic' | 'Administrative' | 'Management';
-  specialization: string;
-  office: string;
-  officeHours: string;
-  avatarColor: string;
-  photo?: string;
-  joinDate: string;
+  status: 'Full-time' | 'Part-time' | 'On Leave';
+  campus_id?: string;
+  campus_name?: string;
+  expand?: {
+    campus_id?: { name: string };
+  };
 }
 
 export interface Transaction {
@@ -60,15 +70,11 @@ export interface Transaction {
 
 export interface Course {
   id: string;
-  name: string;
   code: string;
-  faculty: string;
-  department: string;
-  level: 'Undergraduate' | 'Postgraduate' | 'Diploma' | 'Certificate';
-  credits: number;
-  status: 'Published' | 'Draft' | 'Archived';
-  description: string;
-  syllabus: string;
+  title: string;
+  category?: string;
+  credit_hours: number;
+  module_id?: string;
 }
 
 export interface LibraryItem {

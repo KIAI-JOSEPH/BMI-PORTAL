@@ -35,6 +35,7 @@ import medicalRouter from './routes/medical.js';
 import inventoryRouter from './routes/inventory.js';
 import visitorRouter from './routes/visitors.js';
 import attendanceRouter from './routes/attendance.js';
+import campusesRouter from './routes/campuses.js';
 
 // Validate configuration
 validateConfig();
@@ -132,6 +133,7 @@ app.route('/api/v1/medical', medicalRouter);
 app.route('/api/v1/inventory', inventoryRouter);
 app.route('/api/v1/visitors', visitorRouter);
 app.route('/api/v1/attendance', attendanceRouter);
+app.route('/api/v1/campuses', campusesRouter);
 
 // 404 handler
 app.notFound((c) => {

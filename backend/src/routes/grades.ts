@@ -54,18 +54,17 @@ function mapExpandedGradeToFrontendShape(
     createdBy?: string;
   }
 ) {
-  const enrollment = expanded.expand?.enrollment_id;
-  const student = enrollment?.expand?.student_number;
-  const course = enrollment?.expand?.course_code;
+  const student = expanded.expand?.student_id;
+  const course = expanded.expand?.course_id;
 
-  const percentage = typeof expanded.percentage === 'number' ? expanded.percentage : 0;
+  const percentage = typeof expanded.total_score === 'number' ? expanded.total_score : 0;
   const gradeCalc = calculateGradeResult(percentage);
 
-  const gradePoints = typeof expanded.gpa === 'number' ? expanded.gpa : gradeCalc.gradePoints;
-  const letterGrade = expanded.grade_letter || gradeCalc.letterGrade;
+  const gradePoints = typeof expanded.grade_point === 'number' ? expanded.grade_point : gradeCalc.gradePoints;
+  const letterGrade = expanded.grade || gradeCalc.letterGrade;
 
   const studentName = student
-    ? `${student.first_name || ''} ${student.last_name || ''}`.trim()
+    ? `${student.first_name || ''} ${student.last_name || ''}`.trim() || student.full_name
     : 'Unknown Student';
 
   return {
@@ -76,16 +75,16 @@ function mapExpandedGradeToFrontendShape(
 
     // Student
     studentName,
-    admissionNo: student?.student_number || 'Unknown',
+    admissionNo: student?.student_number || student?.student_code || 'Unknown',
 
     // Course
-    courseCode: course?.course_code || '',
+    courseCode: course?.code || course?.course_code || '',
     courseName: course?.title || 'Unknown Course',
-    credits: typeof course?.credits === 'number' ? course.credits : 0,
+    credits: typeof course?.credit_hours === 'number' ? course.credit_hours : (typeof course?.credits === 'number' ? course.credits : 0),
 
     // Academic period
-    academicYear: enrollment?.academic_year || '',
-    semester: enrollment?.semester || '',
+    academicYear: expanded.academic_year || '',
+    semester: expanded.semester || 'Fall', // Default if missing
 
     // Grading
     numericGrade: percentage,
@@ -98,23 +97,14 @@ function mapExpandedGradeToFrontendShape(
     // Specializations / flags
     isRetake: false,
 
-    // UI status (not persisted in PocketBase `grades` collection today)
+    // UI status
     status: options.status || 'Verified',
 
-    // Timestamps/audit (not persisted in PocketBase `grades` collection today)
+    // Timestamps/audit
     createdAt: expanded.created,
     updatedAt: expanded.updated,
     createdBy: options.createdBy || 'system',
     lastModifiedBy: options.createdBy || 'system',
-
-    // Optional fields expected by UI
-    percentileRank: undefined,
-    retakeAttemptNumber: undefined,
-    replacedGradeId: undefined,
-    specialGrade: undefined,
-    incompleteDeadline: undefined,
-    submittedAt: undefined,
-    finalizedAt: undefined,
   };
 }
 
@@ -317,17 +307,22 @@ gradeRouter.get('/', requireRole('admin', 'registrar', 'faculty', 'staff', 'stud
     
     const page = parseInt(query.page || '1');
     const perPage = Math.min(parseInt(query.perPage || '50'), 500);
+    const studentId = query.studentId;
+
+    let filter = '';
+    if (studentId) {
+      filter = `student_id = "${studentId}"`;
+    }
     
-    // In relational model, we filter by expanded fields if needed
-    // For now, just get all and expand
-    const result = await pb.collection('grades').getList(page, perPage, {
-      expand: 'enrollment_id,enrollment_id.student_number,enrollment_id.course_code',
+    const result = await pb.collection('academic_records').getList(page, perPage, {
+      filter,
+      expand: 'student_id,course_id,course_id.module_id',
       sort: '-created',
     });
 
     // Map the expanded relational data to the frontend Grade shape
-    const items = result.items.map((grade) =>
-      mapExpandedGradeToFrontendShape(grade, {
+    const items = result.items.map((record) =>
+      mapExpandedGradeToFrontendShape(record, {
         status: 'Verified',
         gradingScaleType: 'US_4_0',
         components: [],
@@ -358,8 +353,8 @@ gradeRouter.get('/:id', requireRole('admin', 'registrar', 'faculty', 'staff', 's
     const id = c.req.param('id');
     const pb = getPocketBase();
     
-    const expanded = await pb.collection('grades').getOne(id, {
-      expand: 'enrollment_id.student_number,enrollment_id.course_code',
+    const expanded = await pb.collection('academic_records').getOne(id, {
+      expand: 'student_id,course_id,course_id.module_id',
     });
 
     const responseData = mapExpandedGradeToFrontendShape(expanded, {

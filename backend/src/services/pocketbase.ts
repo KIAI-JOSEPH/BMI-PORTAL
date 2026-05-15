@@ -106,13 +106,12 @@ export async function setupCollections(): Promise<void> {
     
     // Define required collections in dependency order
     const requiredCollections = [
-      'faculties',
-      'departments',
-      'programs',
+      'campuses',
+      'modules',
       'courses',
-      'program_courses',
-      'staff',
       'students',
+      'academic_records',
+      'staff',
       'enrollments',
       'grades',
       'certificates',
@@ -153,40 +152,26 @@ async function createCollection(name: string): Promise<void> {
   type CollectionSchema = { fields: Record<string, FieldSchema> };
 
   const schema: Record<string, CollectionSchema> = {
-    faculties: {
+    campuses: {
       fields: {
-        faculty_code: { type: 'text', required: true },
         name: { type: 'text', required: true },
+        location: { type: 'text' },
       }
     },
-    departments: {
+    modules: {
       fields: {
-        dept_code: { type: 'text', required: true },
         name: { type: 'text', required: true },
-        faculty_code: { type: 'relation', required: true, options: { collectionId: 'faculties', maxSelect: 1 } },
-      }
-    },
-    programs: {
-      fields: {
-        program_code: { type: 'text', required: true },
-        name: { type: 'text', required: true },
-        degree_level: { type: 'text', required: true },
-        total_credits: { type: 'number', required: true },
-        dept_code: { type: 'relation', required: true, options: { collectionId: 'departments', maxSelect: 1 } },
+        semester: { type: 'select', options: { values: ['Semester 1', 'Semester 2'], maxSelect: 1 } },
+        sort_order: { type: 'number' },
       }
     },
     courses: {
       fields: {
-        course_code: { type: 'text', required: true },
+        code: { type: 'text', required: true },
         title: { type: 'text', required: true },
-        credits: { type: 'number', required: true },
-        is_elective: { type: 'bool' },
-        faculty: { type: 'text' },
-        department: { type: 'text' },
-        level: { type: 'select', options: { values: ['Undergraduate', 'Postgraduate', 'Diploma', 'Certificate'], maxSelect: 1 } },
-        status: { type: 'select', options: { values: ['Published', 'Draft', 'Archived'], maxSelect: 1 } },
-        description: { type: 'text' },
-        syllabus: { type: 'text' },
+        category: { type: 'text' },
+        credit_hours: { type: 'number' },
+        module_id: { type: 'relation', options: { collectionId: 'modules', maxSelect: 1 } },
       }
     },
     program_courses: {
@@ -204,33 +189,47 @@ async function createCollection(name: string): Promise<void> {
         last_name: { type: 'text', required: true },
         email: { type: 'email' },
         phone: { type: 'text' },
-        title: { type: 'text' },
         role: { type: 'text', required: true },
-        dept_code: { type: 'relation', required: false, options: { collectionId: 'departments', maxSelect: 1 } },
-        department: { type: 'text' },
         category: { type: 'select', options: { values: ['Academic', 'Administrative', 'Management'], maxSelect: 1 } },
-        specialization: { type: 'text' },
-        office: { type: 'text' },
-        office_hours: { type: 'text' },
         status: { type: 'select', options: { values: ['Full-time', 'Part-time', 'On Leave'], maxSelect: 1 } },
-        join_date: { type: 'text' },
+        campus_id: { type: 'relation', options: { collectionId: 'campuses', maxSelect: 1 } },
         avatar_color: { type: 'text' },
       }
     },
     students: {
       fields: {
-        student_number: { type: 'text' },
-        first_name: { type: 'text', required: true },
-        last_name: { type: 'text', required: true },
-        email: { type: 'email' },
-        phone: { type: 'text' },
+        student_code: { type: 'text', required: true },
+        reg_no: { type: 'text' },
+        full_name: { type: 'text', required: true },
+        first_name: { type: 'text' },
+        last_name: { type: 'text' },
         gender: { type: 'select', options: { values: ['Male', 'Female'], maxSelect: 1 } },
-        admission_date: { type: 'text' },
+        date_of_birth: { type: 'date' },
+        nationality: { type: 'text' },
+        phone: { type: 'text' },
+        email: { type: 'email' },
+        admission_no: { type: 'text' },
+        admission_date: { type: 'date' },
+        programme: { type: 'select', options: { values: ['Diploma in Theology & Christian Ministry'], maxSelect: 1 } },
+        status: { type: 'select', options: { values: ['Active', 'Inactive', 'Graduated', 'Suspended'], maxSelect: 1 } },
+        campus_id: { type: 'relation', options: { collectionId: 'campuses', maxSelect: 1 } },
         avatar_color: { type: 'text' },
         photo_zoom: { type: 'number' },
         photo_position: { type: 'json', options: { maxSize: 2000000 } },
-        status: { type: 'select', required: true, options: { values: ['Active', 'Applicant', 'On Leave', 'Graduated', 'Suspended'], maxSelect: 1 } },
-        program_code: { type: 'relation', required: true, options: { collectionId: 'programs', maxSelect: 1 } },
+      }
+    },
+    academic_records: {
+      fields: {
+        student_id: { type: 'relation', required: true, options: { collectionId: 'students', maxSelect: 1 } },
+        course_id: { type: 'relation', required: true, options: { collectionId: 'courses', maxSelect: 1 } },
+        total_score: { type: 'number' },
+        ca_score: { type: 'number' },
+        exam_score: { type: 'number' },
+        grade: { type: 'text' },
+        grade_point: { type: 'number' },
+        remarks: { type: 'text' },
+        academic_year: { type: 'text' },
+        semester: { type: 'text' },
       }
     },
     enrollments: {
@@ -455,6 +454,11 @@ async function createCollection(name: string): Promise<void> {
         name,
         type: collType,
         schema: fieldsArray,
+        listRule: "@request.auth.id != ''",
+        viewRule: "@request.auth.id != ''",
+        createRule: "@request.auth.id != ''",
+        updateRule: "@request.auth.id != ''",
+        deleteRule: "@request.auth.id != ''",
       });
       logger.info(`Collection '${name}' updated successfully`);
       return;
@@ -464,6 +468,11 @@ async function createCollection(name: string): Promise<void> {
       name,
       type: 'base',
       schema: fieldsArray,
+      listRule: "@request.auth.id != ''",
+      viewRule: "@request.auth.id != ''",
+      createRule: "@request.auth.id != ''",
+      updateRule: "@request.auth.id != ''",
+      deleteRule: "@request.auth.id != ''",
       options: {
         allowEmailAuth: name === 'users',
         allowOAuth2Auth: name === 'users',

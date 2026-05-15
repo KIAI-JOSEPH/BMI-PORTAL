@@ -33,6 +33,7 @@ export interface StudentFilters {
   faculty?: string;
   status?: string;
   search?: string;
+  campusId?: string;
 }
 
 type StudentLike = Partial<Student> & Record<string, any>;
@@ -45,6 +46,7 @@ function normalizeStudent(student: StudentLike): Student {
   const avatar_color = student.avatar_color ?? student.avatarColor ?? 'bg-purple-600';
   const photo_zoom = student.photo_zoom ?? student.photoZoom ?? 1;
   const photo_position = student.photo_position ?? student.photoPosition ?? { x: 0, y: 0 };
+  const campus_name = student.expand?.campus_id?.name || student.campus_name || '';
 
   return {
     ...student,
@@ -55,7 +57,8 @@ function normalizeStudent(student: StudentLike): Student {
     avatar_color,
     photo_zoom,
     photo_position,
-    // Compatibility aliases for components still using camelCase.
+    campus_name,
+    // Compatibility aliases
     firstName: first_name,
     lastName: last_name,
     programCode: program_code,
@@ -63,6 +66,7 @@ function normalizeStudent(student: StudentLike): Student {
     avatarColor: avatar_color,
     photoZoom: photo_zoom,
     photoPosition: photo_position,
+    campusName: campus_name
   } as Student;
 }
 
@@ -90,6 +94,7 @@ export async function getStudents(filters?: StudentFilters): Promise<StudentsLis
     if (filters?.faculty) params.append('faculty', filters.faculty);
     if (filters?.status) params.append('status', filters.status);
     if (filters?.search) params.append('search', filters.search);
+    if (filters?.campusId) params.append('campus_id', filters.campusId);
 
     const queryString = params.toString();
     const url = `${API_URL}/students${queryString ? `?${queryString}` : ''}`;

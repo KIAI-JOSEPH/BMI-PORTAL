@@ -4,6 +4,7 @@ import { Student } from '../types';
 import { createStudent, updateStudent } from '../services/studentService';
 import { authFetch } from '../services/authService';
 import { API_URL } from '../services/config';
+import { CampusSelector } from './CampusSelector';
 
 interface Program {
   id: string;
@@ -33,7 +34,8 @@ const StudentRegistrationModal: React.FC<StudentRegistrationModalProps> = ({ isO
     gender: 'Male',
     admission_date: new Date().toISOString().split('T')[0],
     avatar_color: 'bg-purple-600',
-    photo_zoom: 1
+    photo_zoom: 1,
+    campus_id: ''
   });
   
   const [photoPreview, setPhotoPreview] = useState<string | undefined>(undefined);
@@ -296,6 +298,15 @@ const StudentRegistrationModal: React.FC<StudentRegistrationModalProps> = ({ isO
                          ))}
                       </select>
                     )}
+                 </div>
+                 <div className="space-y-1">
+                    <CampusSelector 
+                      value={formData.campus_id || ''} 
+                      onChange={(id) => handleChange('campus_id', id)}
+                      required
+                      className="w-full"
+                      label="Assigned Campus *"
+                    />
                  </div>
                  <div className="space-y-1">
                     <label className="text-[9px] font-bold uppercase text-gray-500 tracking-widest">Admission Date</label>

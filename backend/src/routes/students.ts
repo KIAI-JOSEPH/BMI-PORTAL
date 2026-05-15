@@ -13,32 +13,20 @@ import type { ApiResponse, Student } from '../types/index.js';
 const studentsRouter = new Hono();
 
 function mapStudentRecord(record: any): Student {
-  const firstName = record.first_name ?? record.firstName ?? '';
-  const lastName = record.last_name ?? record.lastName ?? '';
-  const programCode = record.program_code ?? record.programCode ?? '';
-  const admissionDate = record.admission_date ?? record.admissionDate ?? '';
-  const avatarColor = record.avatar_color ?? record.avatarColor ?? 'bg-purple-600';
-  const photoZoom = record.photo_zoom ?? record.photoZoom ?? 1;
-  const photoPosition = record.photo_position ?? record.photoPosition ?? { x: 0, y: 0 };
-
   return {
     ...record,
-    // Canonical snake_case fields for frontend consumers in this repo.
-    first_name: firstName,
-    last_name: lastName,
-    program_code: programCode,
-    admission_date: admissionDate,
-    avatar_color: avatarColor,
-    photo_zoom: photoZoom,
-    photo_position: photoPosition,
-    // Compatibility aliases for camelCase consumers.
-    firstName,
-    lastName,
-    programCode,
-    admissionDate,
-    avatarColor,
-    photoZoom,
-    photoPosition,
+    student_code: record.student_code || '',
+    reg_no: record.reg_no || '',
+    full_name: record.full_name || '',
+    first_name: record.first_name || '',
+    last_name: record.last_name || '',
+    programme: record.programme || '',
+    admission_no: record.admission_no || '',
+    admission_date: record.admission_date || '',
+    avatar_color: record.avatar_color || 'bg-purple-600',
+    photo_zoom: record.photo_zoom || 1,
+    photo_position: record.photo_position || { x: 0, y: 0 },
+    campus_id: record.campus_id || '',
   } as Student;
 }
 
@@ -48,15 +36,18 @@ studentsRouter.use('*', auditMiddleware);
 
 // Validation schemas
 const studentSchema = z.object({
-  student_number: z.string().optional(),
-  first_name: z.string().min(1),
-  last_name: z.string().min(1),
+  student_code: z.string().min(1),
+  reg_no: z.string().optional(),
+  full_name: z.string().min(1),
+  first_name: z.string().optional(),
+  last_name: z.string().optional(),
   email: z.string().email().optional().or(z.literal('')),
   phone: z.string().optional().or(z.literal('')),
   gender: z.enum(['Male', 'Female']),
-  program_code: z.string().min(1),
+  programme: z.string().min(1),
   admission_date: z.string(),
-  status: z.enum(['Active', 'Applicant', 'On Leave', 'Graduated', 'Suspended']).default('Applicant'),
+  status: z.enum(['Active', 'Inactive', 'Graduated', 'Suspended']).default('Active'),
+  campus_id: z.string().optional(),
 });
 
 const updateStudentSchema = studentSchema.partial();
@@ -84,19 +75,24 @@ studentsRouter.get('/', requireRole('admin', 'registrar', 'faculty', 'staff'), a
     
     const status = c.req.query('status');
     const search = c.req.query('search');
+    const campusId = c.req.query('campus_id');
 
-    // Build filter (no legacy `faculty` field on canonical students — use program/catalog APIs)
+    // Build filter
     const filters: string[] = [];
     if (status) filters.push(`status = "${sanitizeFilter(status)}"`);
+    if (campusId && campusId !== 'all') filters.push(`campus_id = "${sanitizeFilter(campusId)}"`);
     if (search) {
       const s = sanitizeFilter(search);
-      filters.push(`(first_name ~ "${s}" || last_name ~ "${s}" || email ~ "${s}")`);
+      filters.push(`(full_name ~ "${s}" || student_code ~ "${s}" || email ~ "${s}")`);
     }
     
     const filterString = filters.length > 0 ? filters.join(' && ') : '';
     
-    // Fetch students - only include filter if we have one
-    const queryOptions: { sort: string; filter?: string } = { sort: '-created' };
+    // Fetch students
+    const queryOptions: { sort: string; filter?: string; expand?: string } = { 
+      sort: '-created',
+      expand: 'campus_id' 
+    };
     if (filterString) {
       queryOptions.filter = filterString;
     }

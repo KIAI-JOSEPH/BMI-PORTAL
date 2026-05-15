@@ -2106,7 +2106,7 @@ export const Transcripts: React.FC<TranscriptsProps> = (props) => {
                       </div>
                       <div className="mt-0.5 text-center">
                         <span className="text-[18px] leading-none font-serif font-black text-[#4B0082] uppercase tracking-[0.12em]">
-                          {selectedStudent.first_name} {selectedStudent.last_name}
+                          {selectedStudent.full_name || `${selectedStudent.first_name} ${selectedStudent.last_name}`}
                         </span>
                       </div>
                     </div>
@@ -2119,10 +2119,10 @@ export const Transcripts: React.FC<TranscriptsProps> = (props) => {
                    onMouseDown={(e) => startBlockDrag('studentMeta', e)}
                  >
                     <div className="flex justify-between border-b border-gray-100 pb-0.5"><span className="text-gray-500 font-sans text-[8px] uppercase">Year of study:</span><span>4 (FOUR)</span></div>
-                    <div className="flex justify-between border-b border-gray-100 pb-0.5"><span className="text-gray-500 font-sans text-[8px] uppercase">Prog. of Study:</span><span className="uppercase text-gray-900 whitespace-nowrap">{selectedStudent.program_code}</span></div>
-                    <div className="flex justify-between border-b border-gray-100 pb-0.5"><span className="text-gray-500 font-sans text-[8px] uppercase">FACULTY OF:</span><span className="uppercase text-gray-900 font-black">{selectedStudent.program_code}</span></div>
-                    <div className="flex justify-between border-b border-gray-100 pb-0.5"><span className="text-gray-500 font-sans text-[8px] uppercase">Student ID:</span><span className="font-mono text-red-700">{selectedStudent.id}</span></div>
-                    <div className="flex justify-between border-b border-gray-100 pb-0.5"><span className="text-gray-500 font-sans text-[8px] uppercase">Admission:</span><span>27/08/2022</span></div>
+                    <div className="flex justify-between border-b border-gray-100 pb-0.5"><span className="text-gray-500 font-sans text-[8px] uppercase">Prog. of Study:</span><span className="uppercase text-gray-900 whitespace-nowrap">{selectedStudent.programme}</span></div>
+                    <div className="flex justify-between border-b border-gray-100 pb-0.5"><span className="text-gray-500 font-sans text-[8px] uppercase">FACULTY OF:</span><span className="uppercase text-gray-900 font-black">{selectedStudent.programme}</span></div>
+                    <div className="flex justify-between border-b border-gray-100 pb-0.5"><span className="text-gray-500 font-sans text-[8px] uppercase">Student ID:</span><span className="font-mono text-red-700">{selectedStudent.student_code}</span></div>
+                    <div className="flex justify-between border-b border-gray-100 pb-0.5"><span className="text-gray-500 font-sans text-[8px] uppercase">Admission:</span><span>{selectedStudent.admission_date ? new Date(selectedStudent.admission_date).toLocaleDateString('en-GB') : '27/08/2022'}</span></div>
                     <div className="flex justify-between border-b border-gray-100 pb-0.5"><span className="text-gray-500 font-sans text-[8px] uppercase">Graduation:</span><span>21/12/2026</span></div>
                  </div>
 

@@ -24,6 +24,7 @@ import { deleteStudent as deleteStudentAPI, getStudents } from '../services/stud
 import { getPrograms } from '../services/catalogService';
 import { BulkEntryModal } from './BulkEntryModal';
 import { postStudentBatch } from '../services/batchService';
+import { getAllCampuses, Campus } from '../services/campusService';
 
 import { useDataStore } from '../stores/dataStore';
 
@@ -67,6 +68,8 @@ const Students: React.FC<StudentsProps> = (props) => {
   const [searchTerm, setSearchTerm] = useState('');
   const [programFilter, setProgramFilter] = useState('All Programs');
   const [programRows, setProgramRows] = useState<Array<{ id: string; label: string }>>([]);
+  const [campusFilter, setCampusFilter] = useState('All Campuses');
+  const [campuses, setCampuses] = useState<Campus[]>([]);
   const [bulkStudentsOpen, setBulkStudentsOpen] = useState(false);
   const [statusFilter, setStatusFilter] = useState('All Status');
   const [academicLevelFilter, setAcademicLevelFilter] = useState('All Levels');
@@ -92,15 +95,31 @@ const Students: React.FC<StudentsProps> = (props) => {
     };
   }, []);
 
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      try {
+        const data = await getAllCampuses();
+        if (!cancelled) setCampuses(data);
+      } catch (error) {
+        console.error('Failed to load campuses:', error);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
   const filteredStudents = useMemo(() => {
     return students.filter(student => {
-      const matchesSearch = `${student.first_name} ${student.last_name} ${student.id}`.toLowerCase().includes(searchTerm.toLowerCase());
-      const matchesProgram = programFilter === 'All Programs' || student.program_code === programFilter;
+      const matchesSearch = `${student.full_name || `${student.first_name} ${student.last_name}`} ${student.student_code}`.toLowerCase().includes(searchTerm.toLowerCase());
+      const matchesProgram = programFilter === 'All Programs' || student.programme === programFilter;
       const matchesStatus = statusFilter === 'All Status' || student.status === statusFilter;
-      const matchesLevel = academicLevelFilter === 'All Levels' || student.program_code === academicLevelFilter;
-      return matchesSearch && matchesProgram && matchesStatus && matchesLevel;
+      const matchesLevel = academicLevelFilter === 'All Levels' || student.programme === academicLevelFilter;
+      const matchesCampus = campusFilter === 'All Campuses' || student.campus_id === campusFilter;
+      return matchesSearch && matchesProgram && matchesStatus && matchesLevel && matchesCampus;
     });
-  }, [students, searchTerm, programFilter, statusFilter, academicLevelFilter]);
+  }, [students, searchTerm, programFilter, statusFilter, academicLevelFilter, campusFilter]);
 
   const handleAdd = (student: Student) => {
     if (editingStudent) {
@@ -137,16 +156,24 @@ const Students: React.FC<StudentsProps> = (props) => {
     setIsModalOpen(true);
   };
 
-  const handleSyncApplications = async () => {
+  const handleSyncApplications = async (targetCampusId?: string) => {
     setIsSyncing(true);
     try {
-      const r = await getStudents({ perPage: 1000 });
+      const activeCampusId = targetCampusId !== undefined ? targetCampusId : (campusFilter === 'All Campuses' ? undefined : campusFilter);
+      const r = await getStudents({ 
+        perPage: 1000,
+        campusId: activeCampusId
+      });
       if (r.success && r.data) setStudents(r.data);
-      alert('Student list refreshed from the server.');
     } finally {
       setIsSyncing(false);
     }
   };
+
+  useEffect(() => {
+    const activeCampusId = campusFilter === 'All Campuses' ? undefined : campusFilter;
+    handleSyncApplications(activeCampusId);
+  }, [campusFilter]);
 
   const handleImportStudents = (newStudents: Student[], newCourses: Partial<Course>[]) => {
     setStudents(prev => [...newStudents, ...prev]);
@@ -239,6 +266,17 @@ const Students: React.FC<StudentsProps> = (props) => {
               />
            </div>
            <select 
+             value={campusFilter}
+             onChange={(e) => setCampusFilter(e.target.value)}
+             className="px-4 py-2 bg-gray-50 dark:bg-gray-700 border border-gray-200 dark:border-gray-600 text-[10px] font-black uppercase outline-none cursor-pointer dark:text-white max-w-[220px]"
+             title="Filter by campus"
+           >
+             <option value="All Campuses">All Campuses</option>
+             {campuses.map((campus) => (
+               <option key={campus.id} value={campus.id}>{campus.name}</option>
+             ))}
+           </select>
+           <select 
              value={programFilter}
              onChange={(e) => setProgramFilter(e.target.value)}
              className="px-4 py-2 bg-gray-50 dark:bg-gray-700 border border-gray-200 dark:border-gray-600 text-[10px] font-black uppercase outline-none cursor-pointer dark:text-white max-w-[220px]"
@@ -289,9 +327,9 @@ const Students: React.FC<StudentsProps> = (props) => {
                  </div>
 
                  <div className="mb-6">
-                    <h3 className="text-lg font-black text-gray-900 dark:text-white uppercase tracking-tight leading-none group-hover:text-[#4B0082] transition-colors">{student.first_name} {student.last_name}</h3>
-                    <p className="text-xs font-bold text-gray-400 mt-1">{student.id}</p>
-                    <p className="text-[10px] font-black text-[#4B0082] dark:text-purple-300 uppercase tracking-widest mt-2">{student.program_code} • {student.program_code}</p>
+                    <h3 className="text-lg font-black text-gray-900 dark:text-white uppercase tracking-tight leading-none group-hover:text-[#4B0082] transition-colors">{student.full_name || `${student.first_name} ${student.last_name}`}</h3>
+                    <p className="text-xs font-bold text-gray-400 mt-1">{student.student_code}</p>
+                    <p className="text-[10px] font-black text-[#4B0082] dark:text-purple-300 uppercase tracking-widest mt-2">{student.programme}</p>
                  </div>
 
                  <div className="mt-auto space-y-3 pt-4 border-t border-gray-50 dark:border-gray-700">
@@ -328,8 +366,8 @@ const Students: React.FC<StudentsProps> = (props) => {
                                      {student.photo ? <img src={student.photo} className="w-full h-full object-cover" /> : student.first_name.charAt(0)}
                                   </div>
                                   <div>
-                                     <p className="text-sm font-black text-gray-900 dark:text-white uppercase tracking-tight">{student.first_name} {student.last_name}</p>
-                                     <p className="text-[9px] font-bold text-gray-400 uppercase tracking-widest">{student.id}</p>
+                                     <p className="text-sm font-black text-gray-900 dark:text-white uppercase tracking-tight">{student.full_name || `${student.first_name} ${student.last_name}`}</p>
+                                     <p className="text-[9px] font-bold text-gray-400 uppercase tracking-widest">{student.student_code}</p>
                                   </div>
                                </div>
                             </td>

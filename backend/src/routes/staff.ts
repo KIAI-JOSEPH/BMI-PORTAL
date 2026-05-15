@@ -119,11 +119,13 @@ staffRouter.get('/', async (c) => {
     const category = c.req.query('category');
     const status = c.req.query('status');
     const search = c.req.query('search');
+    const campusId = c.req.query('campus_id');
 
     const filters: string[] = [];
     if (department) filters.push(`department = "${sanitizeFilter(department)}"`);
     if (category) filters.push(`category = "${sanitizeFilter(category)}"`);
     if (status) filters.push(`status = "${sanitizeFilter(status)}"`);
+    if (campusId && campusId !== 'all') filters.push(`campus_id = "${sanitizeFilter(campusId)}"`);
     if (search) {
       const s = sanitizeFilter(search);
       filters.push(`(first_name ~ "${s}" || last_name ~ "${s}" || email ~ "${s}" || role ~ "${s}")`);
@@ -134,6 +136,7 @@ staffRouter.get('/', async (c) => {
     const result = await pb.collection('staff').getList(page, perPage, {
       ...(filterString ? { filter: filterString } : {}),
       sort: '-created',
+      expand: 'campus_id'
     });
     
     return c.json<ApiResponse<StaffMember[]>>({

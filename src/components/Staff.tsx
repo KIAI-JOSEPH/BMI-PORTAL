@@ -1,5 +1,5 @@
 
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import { 
   Briefcase, 
   Mail, 
@@ -24,6 +24,7 @@ import {
   CircleUser
 } from 'lucide-react';
 import { StaffMember } from '../types';
+import { getAllCampuses, Campus } from '../services/campusService';
 
 interface StaffProps {
   staff: StaffMember[];
@@ -35,24 +36,59 @@ const departments = ['All Departments', 'School of Theology', 'Dept. of ICT', 'S
 const Staff: React.FC<StaffProps> = ({ staff, setStaff }) => {
   const [searchTerm, setSearchTerm] = useState('');
   const [deptFilter, setDeptFilter] = useState('All Departments');
+  const [campusFilter, setCampusFilter] = useState('All Campuses');
+  const [campuses, setCampuses] = useState<Campus[]>([]);
   const [activeTab, setActiveTab] = useState<'All' | 'Academic' | 'Administrative' | 'Management'>('All');
   const [viewMode, setViewMode] = useState<'grid' | 'table'>('table');
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [imagePreview, setImagePreview] = useState<string | null>(null);
   const [newStaff, setNewStaff] = useState({
-    name: '', role: '', department: 'School of Theology', email: '', phone: '', status: 'Full-time', category: 'Academic', specialization: '', office: '', officeHours: ''
+    staff_number: '', first_name: '', last_name: '', email: '', phone: '', status: 'Full-time', category: 'Academic', role: ''
   });
+
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      try {
+        const data = await getAllCampuses();
+        if (!cancelled) setCampuses(data);
+      } catch (error) {
+        console.error('Failed to load campuses:', error);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  const refreshStaff = async (targetCampusId?: string) => {
+    try {
+      const activeCampusId = targetCampusId !== undefined ? targetCampusId : (campusFilter === 'All Campuses' ? undefined : campusFilter);
+      const r = await getStaff({ 
+        campusId: activeCampusId
+      });
+      if (r.success && r.data) setStaff(r.data);
+    } catch (error) {
+      console.error('Failed to refresh staff:', error);
+    }
+  };
+
+  useEffect(() => {
+    const activeCampusId = campusFilter === 'All Campuses' ? undefined : campusFilter;
+    refreshStaff(activeCampusId);
+  }, [campusFilter]);
 
   const filteredStaff = useMemo(() => {
     return staff.filter(member => {
-      const matchesSearch = (member.name || '').toLowerCase().includes(searchTerm.toLowerCase()) || 
-                            (member.id || '').toLowerCase().includes(searchTerm.toLowerCase()) ||
-                            (member.specialization || '').toLowerCase().includes(searchTerm.toLowerCase());
-      const matchesDept = deptFilter === 'All Departments' || member.department === deptFilter;
+      const name = `${member.first_name || ''} ${member.last_name || ''}`.trim();
+      const matchesSearch = name.toLowerCase().includes(searchTerm.toLowerCase()) || 
+                            (member.staff_number || '').toLowerCase().includes(searchTerm.toLowerCase()) ||
+                            (member.role || '').toLowerCase().includes(searchTerm.toLowerCase());
       const matchesTab = activeTab === 'All' || member.category === activeTab;
-      return matchesSearch && matchesDept && matchesTab;
+      const matchesCampus = campusFilter === 'All Campuses' || member.campus_id === campusFilter;
+      return matchesSearch && matchesTab && matchesCampus;
     });
-  }, [staff, searchTerm, deptFilter, activeTab]);
+  }, [staff, searchTerm, activeTab, campusFilter]);
 
   const handleImageUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -189,6 +225,14 @@ const Staff: React.FC<StaffProps> = ({ staff, setStaff }) => {
                 />
               </div>
               <select 
+                value={campusFilter}
+                onChange={(e) => setCampusFilter(e.target.value)}
+                className="px-4 py-2.5 bg-gray-50 dark:bg-gray-700 border border-gray-200 dark:border-gray-600 rounded-none text-xs font-bold uppercase tracking-widest outline-none dark:text-white cursor-pointer"
+              >
+                <option value="All Campuses">All Campuses</option>
+                {campuses.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
+              </select>
+              <select 
                 value={deptFilter}
                 onChange={(e) => setDeptFilter(e.target.value)}
                 className="px-4 py-2.5 bg-gray-50 dark:bg-gray-700 border border-gray-200 dark:border-gray-600 rounded-none text-xs font-bold uppercase tracking-widest outline-none dark:text-white cursor-pointer"
@@ -206,10 +250,10 @@ const Staff: React.FC<StaffProps> = ({ staff, setStaff }) => {
                  <div className="p-6">
                     <div className="flex justify-between items-start mb-6">
                        <div className={`w-16 h-16 rounded-none ${member.avatarColor} flex items-center justify-center text-white font-bold text-2xl shadow-md border-2 border-white dark:border-gray-700 -mt-10 overflow-hidden bg-white`}>
-                          {member.photo ? (
-                            <img src={member.photo} alt={member.name} className="w-full h-full object-cover" />
+                            {member.photo ? (
+                            <img src={member.photo} alt={`${member.first_name} ${member.last_name}`} className="w-full h-full object-cover" />
                           ) : (
-                            (member.name || '?').charAt(0)
+                            (member.first_name || '?').charAt(0)
                           )}
                        </div>
                        <span className={`px-2.5 py-1 rounded-none text-[10px] font-bold uppercase tracking-widest ${
@@ -223,7 +267,7 @@ const Staff: React.FC<StaffProps> = ({ staff, setStaff }) => {
 
                     <div className="mb-6">
                       <h3 className="font-bold text-gray-900 dark:text-white text-lg flex items-center gap-2 uppercase tracking-tight">
-                         {member.name}
+                         {member.first_name} {member.last_name}
                          {member.category === 'Academic' && <CheckCircle size={14} className="text-[#4B0082]" />}
                       </h3>
                       <p className="text-xs text-[#4B0082] dark:text-purple-300 font-bold uppercase tracking-widest mt-0.5">{member.role}</p>
@@ -277,14 +321,14 @@ const Staff: React.FC<StaffProps> = ({ staff, setStaff }) => {
                            <div className="flex items-center gap-3">
                               <div className={`w-8 h-8 rounded-none ${member.avatarColor} flex items-center justify-center text-white text-xs font-bold overflow-hidden bg-white`}>
                                 {member.photo ? (
-                                  <img src={member.photo} alt={member.name} className="w-full h-full object-cover" />
+                                  <img src={member.photo} alt={`${member.first_name} ${member.last_name}`} className="w-full h-full object-cover" />
                                 ) : (
-                                  (member.name || '?').charAt(0)
+                                  (member.first_name || '?').charAt(0)
                                 )}
                               </div>
                               <div>
-                                 <p className="font-bold text-gray-900 dark:text-white uppercase tracking-tight">{member.name}</p>
-                                 <p className="text-xs text-gray-400 font-mono">{member.id}</p>
+                                 <p className="font-bold text-gray-900 dark:text-white uppercase tracking-tight">{member.first_name} {member.last_name}</p>
+                                 <p className="text-xs text-gray-400 font-mono">{member.staff_number}</p>
                               </div>
                            </div>
                         </td>
