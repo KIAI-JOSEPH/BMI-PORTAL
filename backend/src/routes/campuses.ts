@@ -106,7 +106,6 @@ campusesRouter.get('/all', async (c) => {
     
     const campuses = await pb.collection('campuses').getFullList({
       sort: 'name',
-      filter: 'status = "active"',
     });
     
     return c.json<ApiResponse<Campus[]>>({
