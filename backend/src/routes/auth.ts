@@ -88,10 +88,13 @@ function setRefreshCookie(c: any, token: string, maxAgeDays: number = 7) {
  * Authenticate user and return Access Token + Set Refresh Cookie
  */
 authRouter.post('/login', loginRateLimiter, zValidator('json', loginSchema), async (c) => {
+  const { email, password, rememberMe } = c.req.valid('json');
+  
   try {
-    const { email, password, rememberMe } = c.req.valid('json');
     // Use a fresh PocketBase instance to avoid overwriting the global admin auth store
     const PocketBase = (await import('pocketbase')).default;
+    const authPb = new PocketBase(CONFIG.POCKETBASE_URL);
+    
     // Authenticate with PocketBase
     let user: User;
     if (email === 'admin@bmi.edu' && password === 'BMIAdmin2024Secure') {

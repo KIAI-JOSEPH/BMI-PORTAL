@@ -100,14 +100,16 @@ async function createAppAdminUser() {
       // Check if role is correct
       if (existingUser.role !== 'admin' && existingUser.role !== 'registrar') {
         console.log(`⚠️  User role is '${existingUser.role}' but should be 'admin' or 'registrar'`);
-        console.log('   Updating user role to admin...\n');
+        console.log('   Updating user to admin with all required fields...\n');
         
         await pb.collection('users').update(existingUser.id, {
+          name: APP_USER.name,
           role: 'admin',
+          department: APP_USER.department,
           isActive: true,
         });
         
-        console.log('✅ User role updated to admin!\n');
+        console.log('✅ User updated to admin with all required fields!\n');
       } else {
         console.log('✅ User has correct role!\n');
       }
