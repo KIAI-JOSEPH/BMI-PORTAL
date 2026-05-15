@@ -13,6 +13,9 @@ import { getPocketBase, setupCollections, healthCheck as pbHealthCheck, authenti
 import { seedAcademicReferenceDataIfEmpty } from './services/academicSeed.js';
 import { checkOllamaHealth } from './services/ollama.js';
 import { initJWTKeys } from './middleware/auth.js';
+import { getConnectionPool, getPoolStats } from './services/pocketbasePool.js';
+import { optimizeDatabase } from './services/databaseOptimizer.js';
+import { CacheManager, QueryMonitor } from './services/queryOptimizer.js';
 
 // Import routes
 import authRouter from './routes/auth.js';
@@ -100,6 +103,22 @@ app.get('/health', async (c) => {
     },
     environment: CONFIG.NODE_ENV,
   }, status);
+});
+
+// Performance monitoring endpoints
+app.get('/api/v1/health/pool', async (c) => {
+  const stats = getPoolStats();
+  return c.json({ success: true, data: stats });
+});
+
+app.get('/api/v1/health/performance', async (c) => {
+  const stats = QueryMonitor.getStats();
+  return c.json({ success: true, data: stats });
+});
+
+app.get('/api/v1/health/cache', async (c) => {
+  const stats = CacheManager.getStats();
+  return c.json({ success: true, data: stats });
 });
 
 // ── API versioning headers ────────────────────────────────────────────────────
@@ -207,6 +226,20 @@ async function startServer() {
       logger.info('✓ User initialization complete');
     } catch (error) {
       logger.warn('User initialization failed:', error);
+    }
+    
+    // Initialize connection pool
+    logger.info('Initializing connection pool...');
+    const pool = getConnectionPool();
+    logger.info('✓ Connection pool initialized');
+    
+    // Run database optimization
+    logger.info('Running database optimization...');
+    try {
+      await optimizeDatabase();
+      logger.info('✓ Database optimization complete');
+    } catch (error) {
+      logger.warn('Database optimization failed (non-critical):', error);
     }
     
     // Check Ollama
