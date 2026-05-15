@@ -256,12 +256,23 @@ export const StudentQueries = {
       filterStr = conditions.join(' && ');
     }
     
-    return query('students')
+    const result = await query('students')
       .expand(['campus_id', 'academic_records_via_student_id'])
       .filter(filterStr)
       .sort('-created')
       .paginate(page, perPage)
       .execute();
+
+    // Normalise names: split full_name into first_name / last_name when absent
+    result.items = result.items.map((s: any) => {
+      if (s.full_name && !s.first_name) {
+        const parts = s.full_name.trim().split(/\s+/);
+        return { ...s, first_name: parts[0] || '', last_name: parts.slice(1).join(' ') || '' };
+      }
+      return s;
+    });
+
+    return result;
   },
   
   /**
@@ -269,9 +280,15 @@ export const StudentQueries = {
    */
   async getWithAcademicHistory(studentId: string) {
     return withPocketBase(async (pb) => {
-      const student = await pb.collection('students').getOne(studentId, {
+      let student = await pb.collection('students').getOne(studentId, {
         expand: 'campus_id',
       });
+      // Ensure first_name/last_name are always populated from full_name
+      // (our import stores full_name; split here so every caller gets consistent data)
+      if (student.full_name && !student.first_name) {
+        const parts = student.full_name.trim().split(/\s+/);
+        student = { ...student, first_name: parts[0] || '', last_name: parts.slice(1).join(' ') || '' };
+      }
       
       const academicRecords = await pb.collection('academic_records').getList(1, 100, {
         filter: `student_id="${studentId}"`,

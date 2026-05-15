@@ -63,8 +63,11 @@ function mapExpandedGradeToFrontendShape(
   const gradePoints = typeof expanded.grade_point === 'number' ? expanded.grade_point : gradeCalc.gradePoints;
   const letterGrade = expanded.grade || gradeCalc.letterGrade;
 
+  // Prefer full_name (how our import stores it), fall back to first+last for future entries
   const studentName = student
-    ? `${student.first_name || ''} ${student.last_name || ''}`.trim() || student.full_name
+    ? (student.full_name?.trim() ||
+       `${student.first_name || ''} ${student.last_name || ''}`.trim() ||
+       'Unknown Student')
     : 'Unknown Student';
 
   return {
@@ -75,7 +78,7 @@ function mapExpandedGradeToFrontendShape(
 
     // Student
     studentName,
-    admissionNo: student?.student_number || student?.student_code || 'Unknown',
+    admissionNo: student?.admission_no || student?.student_number || student?.student_code || 'Unknown',
 
     // Course
     courseCode: course?.code || course?.course_code || '',
@@ -309,9 +312,26 @@ gradeRouter.get('/', requireRole('admin', 'registrar', 'faculty', 'staff', 'stud
     const perPage = Math.min(parseInt(query.perPage || '50'), 500);
     const studentId = query.studentId;
 
+    // studentId may be a PocketBase record ID or a student_code (e.g. "2025-035")
+    // Build a filter that handles both cases
     let filter = '';
     if (studentId) {
-      filter = `student_id = "${studentId}"`;
+      // If it looks like a PocketBase ID (15-char alphanumeric), filter by ID;
+      // otherwise try to resolve by student_code first
+      if (/^[a-z0-9]{15}$/i.test(studentId)) {
+        filter = sanitizeFilter(`student_id = "${studentId}"`);
+      } else {
+        // Resolve student_code → PocketBase ID
+        try {
+          const student = await pb.collection('students').getFirstListItem(
+            sanitizeFilter(`student_code = "${studentId}"`)
+          );
+          filter = sanitizeFilter(`student_id = "${student.id}"`);
+        } catch {
+          // student not found — return empty
+          return c.json({ success: true, data: { items: [], page: 1, perPage, totalItems: 0, totalPages: 0 } });
+        }
+      }
     }
     
     const result = await pb.collection('academic_records').getList(page, perPage, {
