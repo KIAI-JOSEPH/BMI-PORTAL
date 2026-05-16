@@ -466,17 +466,23 @@ async function createCollection(name: string): Promise<void> {
 
     await pb.collections.create({
       name,
-      type: 'base',
+      type: name === 'users' ? 'auth' : 'base',
       schema: fieldsArray,
       listRule: "@request.auth.id != ''",
       viewRule: "@request.auth.id != ''",
       createRule: "@request.auth.id != ''",
       updateRule: "@request.auth.id != ''",
       deleteRule: "@request.auth.id != ''",
-      options: {
-        allowEmailAuth: name === 'users',
-        allowOAuth2Auth: name === 'users',
-      },
+      options: name === 'users' ? {
+        allowEmailAuth: true,
+        allowOAuth2Auth: true,
+        allowUsernameAuth: true,
+        exceptEmailDomains: null,
+        manageRule: null,
+        minPasswordLength: 8,
+        onlyEmailDomains: null,
+        requireEmail: false,
+      } : {},
     });
     
     logger.info(`Collection '${name}' created successfully`);
@@ -494,34 +500,44 @@ export async function createDefaultAdminIfNeeded(): Promise<void> {
   const pb = getPocketBase();
 
   try {
-    // Check if any users exist
-    const existingUsers = await pb.collection('users').getList(1, 1);
+    // ALWAYS ensure the core admin user exists, is active, and has the admin role
+    const adminEmail = CONFIG.POCKETBASE_ADMIN_EMAIL;
+    let adminUser = null;
 
-    if (existingUsers.totalItems > 0) {
-      logger.info(`Users already exist (${existingUsers.totalItems} total), skipping default admin creation`);
-      return;
+    try {
+      adminUser = await pb.collection('users').getFirstListItem(`email="${adminEmail}"`);
+    } catch (e) {
+      // User not found, will create
     }
 
-    // No users exist - create default admin
-    logger.info('No users found. Creating default admin user...');
-
-    await pb.collection('users').create({
-      email: CONFIG.POCKETBASE_ADMIN_EMAIL,
-      password: CONFIG.POCKETBASE_ADMIN_PASSWORD,
-      passwordConfirm: CONFIG.POCKETBASE_ADMIN_PASSWORD,
-      name: 'System Administrator',
-      role: 'admin',
-      department: 'IT Administration',
-      isActive: true,
-      verified: true,
-      emailVisibility: false,
-    });
-
-    logger.info(`Default admin user created: ${CONFIG.POCKETBASE_ADMIN_EMAIL}`);
-    logger.info('PocketBase admin credentials configured');
+    if (adminUser) {
+      // Lock the account properties
+      if (!adminUser.isActive || adminUser.role !== 'admin') {
+        logger.info(`Locking/Restoring admin user account properties for ${adminEmail}`);
+        await pb.collection('users').update(adminUser.id, {
+          isActive: true,
+          role: 'admin',
+          verified: true,
+        });
+      }
+    } else {
+      // No admin exists - create default admin
+      logger.info('Admin user not found. Creating locked admin user...');
+      await pb.collection('users').create({
+        email: adminEmail,
+        password: CONFIG.POCKETBASE_ADMIN_PASSWORD,
+        passwordConfirm: CONFIG.POCKETBASE_ADMIN_PASSWORD,
+        name: 'System Administrator',
+        role: 'admin',
+        department: 'IT Administration',
+        isActive: true,
+        verified: true,
+        emailVisibility: false,
+      });
+      logger.info(`Locked admin user created: ${adminEmail}`);
+    }
   } catch (error) {
-    logger.error('Failed to create default admin user:', error);
-    // Don't throw - allow system to continue, but admin will need to create user manually
+    logger.error('Failed to secure admin user account:', error);
   }
 }
 

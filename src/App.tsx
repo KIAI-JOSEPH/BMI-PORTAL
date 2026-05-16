@@ -1,6 +1,6 @@
 
 import React, { useEffect } from 'react';
-import { BrowserRouter, Routes, Route } from 'react-router-dom';
+import { Routes, Route } from 'react-router-dom';
 import { Menu } from 'lucide-react';
 import Sidebar from './components/Sidebar';
 import AIModal from './components/AIModal';
@@ -142,18 +142,10 @@ function App() {
   }
 
   if (!isLoggedIn) {
-    return (
-      <BrowserRouter>
-        <PublicRoutes />
-      </BrowserRouter>
-    );
+    return <PublicRoutes />;
   }
 
-  return (
-    <BrowserRouter>
-      <AuthenticatedLayout />
-    </BrowserRouter>
-  );
+  return <AuthenticatedLayout />;
 }
 
 export default App;

@@ -1,3 +1,4 @@
+import { sanitizeFilter } from '../utils/helpers.js';
 // BMI UMS - Finance Routes
 import { Hono } from 'hono';
 import { zValidator } from '@hono/zod-validator';
@@ -6,7 +7,7 @@ import { getPocketBase } from '../services/pocketbase.js';
 import { authMiddleware, requireRole, getUser } from '../middleware/auth.js';
 import { auditMiddleware, logAction } from '../middleware/audit.js';
 import { logger } from '../utils/logger.js';
-import { parsePagination, sanitizeFilter } from '../utils/helpers.js';
+import { parsePagination } from '../utils/helpers.js';
 import type { ApiResponse, Transaction } from '../types/index.js';
 
 const financeRouter = new Hono();
@@ -46,7 +47,7 @@ financeRouter.get('/transactions', requireRole('admin', 'registrar', 'student'),
       );
       const studentId = (user as any).studentId as string | undefined;
       const result = await pb.collection('transactions').getList(page, perPage, {
-        filter: `student_id = "${sanitizeFilter(studentId || '')}"`,
+        filter: `student_id = "${(studentId || '').replace(/["'\\]/g, '')}"`,
         sort: '-date',
       });
       return c.json<ApiResponse<Transaction[]>>({
@@ -76,9 +77,10 @@ financeRouter.get('/transactions', requireRole('admin', 'registrar', 'student'),
       filters.push(`(name ~ "${s}" || ref ~ "${s}" || desc ~ "${s}")`);
     }
 
-    const filterString = filters.join(' && ');
+    const filterString = filters.join(' && ') || undefined;
+
     const result = await pb.collection('transactions').getList(page, perPage, {
-      ...(filterString ? { filter: filterString } : {}),
+      filter: filterString,
       sort: '-date',
     });
 
@@ -152,9 +154,9 @@ financeRouter.post(
       const newTransaction = await pb.collection('transactions').create({
         ...rest,
         ...(studentId ? { student_id: studentId } : {}),
-      });  
+      });
 
-      logger.info('Transaction created', { transactionId: newTransaction.id }); 
+      logger.info('Transaction created', { transactionId: newTransaction.id });
 
       return c.json<ApiResponse<Transaction>>({
         success: true,
@@ -191,7 +193,7 @@ financeRouter.patch(
       const payload: Record<string, unknown> = { ...rest };
       if (studentId !== undefined) payload.student_id = studentId;
 
-      const updated = await pb.collection('transactions').update(id, payload);     
+      const updated = await pb.collection('transactions').update(id, payload);
 
       logger.info('Transaction updated', { transactionId: id });
 
@@ -260,7 +262,7 @@ financeRouter.get('/stats', requireRole('admin', 'registrar'), async (c) => {
     ]);
 
     // Fetch amounts for revenue calculation (last 5000 paid transactions)      
-    const paidRecords = await pb.collection('transactions').getList(1, 5000, {  
+    const paidRecords = await pb.collection('transactions').getList(1, 5000, {
       filter: 'status = "Paid"',
       fields: 'amt',
     });
@@ -290,7 +292,7 @@ financeRouter.get('/stats', requireRole('admin', 'registrar'), async (c) => {
       averageTransaction: paidRecords.items.length > 0 ? (totalRevenue as number) / paidRecords.items.length : 0,
     };
 
-    return c.json<ApiResponse<typeof stats>>({ success: true, data: stats });   
+    return c.json<ApiResponse<typeof stats>>({ success: true, data: stats });
 
   } catch (error) {
     logger.error('Get finance stats error:', error);
@@ -304,11 +306,11 @@ financeRouter.get('/stats', requireRole('admin', 'registrar'), async (c) => {
  */
 financeRouter.get('/reports/monthly', requireRole('admin', 'registrar'), async (c) => {
   try {
-    const rawYear = c.req.query('year') || new Date().getFullYear().toString(); 
+    const rawYear = c.req.query('year') || new Date().getFullYear().toString();
     const year = /^\d{4}$/.test(rawYear) ? rawYear : new Date().getFullYear().toString();
     const pb = getPocketBase();
 
-    const transactions = await pb.collection('transactions').getList(1, 5000, { 
+    const transactions = await pb.collection('transactions').getList(1, 5000, {
       filter: `date >= "${year}-01-01" && date <= "${year}-12-31"`,
       fields: 'date,status,amt',
     }) as { items: Transaction[] };

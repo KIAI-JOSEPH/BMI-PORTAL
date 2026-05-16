@@ -1,3 +1,4 @@
+import { sanitizeFilter } from '../utils/helpers.js';
 // BMI UMS - Library Routes
 import { Hono } from 'hono';
 import { zValidator } from '@hono/zod-validator';
@@ -6,7 +7,7 @@ import { getPocketBase } from '../services/pocketbase.js';
 import { authMiddleware, requireRole } from '../middleware/auth.js';
 import { auditMiddleware, logAction } from '../middleware/audit.js';
 import { logger } from '../utils/logger.js';
-import { parsePagination, sanitizeFilter } from '../utils/helpers.js';
+import { parsePagination } from '../utils/helpers.js';
 import type { ApiResponse, LibraryItem } from '../types/index.js';
 
 const libraryRouter = new Hono();
@@ -38,13 +39,13 @@ const updateLibraryItemSchema = libraryItemSchema.partial();
 libraryRouter.get('/', async (c) => {
   try {
     const pb = getPocketBase();
-    
+
     const { page, perPage } = parsePagination(
       c.req.query('page'),
       c.req.query('perPage'),
       { page: 1, perPage: 20, maxPerPage: 500 }
     );
-    
+
     const category = c.req.query('category');
     const type = c.req.query('type');
     const status = c.req.query('status');
@@ -58,14 +59,14 @@ libraryRouter.get('/', async (c) => {
       const s = sanitizeFilter(search);
       filters.push(`(title ~ "${s}" || author ~ "${s}" || isbn ~ "${s}")`);
     }
-    
-    const filterString = filters.join(' && ');
-    
+
+    const filterString = filters.join(' && ') || undefined;
+
     const result = await pb.collection('library_items').getList(page, perPage, {
-      ...(filterString ? { filter: filterString } : {}),
+      filter: filterString,
       sort: '-created',
     });
-    
+
     return c.json<ApiResponse<LibraryItem[]>>({
       success: true,
       data: result.items as unknown as LibraryItem[],
@@ -75,7 +76,7 @@ libraryRouter.get('/', async (c) => {
         total: result.totalItems,
       },
     });
-    
+
   } catch (error) {
     logger.error('Get library items error:', error);
     return c.json<ApiResponse<never>>({
@@ -93,14 +94,14 @@ libraryRouter.get('/:id', async (c) => {
   try {
     const id = c.req.param('id');
     const pb = getPocketBase();
-    
+
     const item = await pb.collection('library_items').getOne(id);
-    
+
     return c.json<ApiResponse<LibraryItem>>({
       success: true,
       data: item as unknown as LibraryItem,
     });
-    
+
   } catch (error) {
     logger.error('Get library item error:', error);
     return c.json<ApiResponse<never>>({
@@ -123,25 +124,25 @@ libraryRouter.post(
     try {
       const data = c.req.valid('json');
       const pb = getPocketBase();
-      
+
       // Generate item ID
       const year = new Date().getFullYear();
       const randomSuffix = Math.floor(Math.random() * 900) + 100;
       const itemId = `LIB-${year}-${randomSuffix}`;
-      
+
       const newItem = await pb.collection('library_items').create({
         id: itemId,
         ...data,
       });
-      
+
       logger.info('Library item created', { itemId: newItem.id });
-      
+
       return c.json<ApiResponse<LibraryItem>>({
         success: true,
         data: newItem as unknown as LibraryItem,
         message: 'Library item added successfully',
       }, 201);
-      
+
     } catch (error) {
       logger.error('Create library item error:', error);
       return c.json<ApiResponse<never>>({
@@ -166,17 +167,17 @@ libraryRouter.patch(
       const id = c.req.param('id');
       const data = c.req.valid('json');
       const pb = getPocketBase();
-      
+
       const updated = await pb.collection('library_items').update(id, data);
-      
+
       logger.info('Library item updated', { itemId: id });
-      
+
       return c.json<ApiResponse<LibraryItem>>({
         success: true,
         data: updated as unknown as LibraryItem,
         message: 'Library item updated successfully',
       });
-      
+
     } catch (error) {
       logger.error('Update library item error:', error);
       return c.json<ApiResponse<never>>({
@@ -199,17 +200,17 @@ libraryRouter.delete(
     try {
       const id = c.req.param('id');
       const pb = getPocketBase();
-      
+
       await pb.collection('library_items').delete(id);
-      
+
       logger.info('Library item deleted', { itemId: id });
-      
+
       return c.json<ApiResponse<null>>({
         success: true,
         data: null,
         message: 'Library item deleted successfully',
       });
-      
+
     } catch (error) {
       logger.error('Delete library item error:', error);
       return c.json<ApiResponse<never>>({
@@ -232,28 +233,28 @@ libraryRouter.post(
     try {
       const id = c.req.param('id');
       const pb = getPocketBase();
-      
+
       const item = await pb.collection('library_items').getOne(id) as unknown as LibraryItem;
-      
+
       if (item.status !== 'Available' && item.status !== 'Digital') {
         return c.json<ApiResponse<never>>({
           success: false,
           error: `Item is currently ${item.status.toLowerCase()}`,
         }, 400);
       }
-      
+
       const updated = await pb.collection('library_items').update(id, {
         status: 'Borrowed',
       });
-      
+
       logger.info('Library item borrowed', { itemId: id });
-      
+
       return c.json<ApiResponse<LibraryItem>>({
         success: true,
         data: updated as unknown as LibraryItem,
         message: 'Item marked as borrowed',
       });
-      
+
     } catch (error) {
       logger.error('Borrow library item error:', error);
       return c.json<ApiResponse<never>>({
@@ -276,25 +277,25 @@ libraryRouter.post(
     try {
       const id = c.req.param('id');
       const pb = getPocketBase();
-      
+
       const item = await pb.collection('library_items').getOne(id) as unknown as LibraryItem;
-      
-      const newStatus = item.type === 'PDF' || item.type === 'E-Book' || item.type === 'Video' 
-        ? 'Digital' 
+
+      const newStatus = item.type === 'PDF' || item.type === 'E-Book' || item.type === 'Video'
+        ? 'Digital'
         : 'Available';
-      
+
       const updated = await pb.collection('library_items').update(id, {
         status: newStatus,
       });
-      
+
       logger.info('Library item returned', { itemId: id });
-      
+
       return c.json<ApiResponse<LibraryItem>>({
         success: true,
         data: updated as unknown as LibraryItem,
         message: 'Item marked as returned',
       });
-      
+
     } catch (error) {
       logger.error('Return library item error:', error);
       return c.json<ApiResponse<never>>({
@@ -312,10 +313,10 @@ libraryRouter.post(
 libraryRouter.get('/stats/overview', async (c) => {
   try {
     const pb = getPocketBase();
-    
+
     const allItems = await pb.collection('library_items').getFullList();
     const items = allItems as unknown as LibraryItem[];
-    
+
     const stats = {
       total: items.length,
       byCategory: {
@@ -339,12 +340,12 @@ libraryRouter.get('/stats/overview', async (c) => {
         Reserved: items.filter(i => i.status === 'Reserved').length,
       },
     };
-    
+
     return c.json<ApiResponse<typeof stats>>({
       success: true,
       data: stats,
     });
-    
+
   } catch (error) {
     logger.error('Get library stats error:', error);
     return c.json<ApiResponse<never>>({
