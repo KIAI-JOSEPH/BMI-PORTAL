@@ -39,8 +39,17 @@ export interface StudentFilters {
 type StudentLike = Partial<Student> & Record<string, any>;
 
 function normalizeStudent(student: StudentLike): Student {
-  const first_name = student.first_name ?? student.firstName ?? '';
-  const last_name = student.last_name ?? student.lastName ?? '';
+  let first_name = student.first_name ?? student.firstName ?? '';
+  let last_name = student.last_name ?? student.lastName ?? '';
+  const full_name = student.full_name ?? student.fullName ?? '';
+
+  // If first/last are missing but full is present, split it
+  if (!first_name && full_name) {
+    const parts = full_name.trim().split(/\s+/);
+    first_name = parts[0] || '';
+    last_name = parts.slice(1).join(' ') || '';
+  }
+
   const program_code = student.program_code ?? student.programCode ?? '';
   const admission_date = student.admission_date ?? student.admissionDate ?? '';
   const avatar_color = student.avatar_color ?? student.avatarColor ?? 'bg-purple-600';
@@ -52,6 +61,7 @@ function normalizeStudent(student: StudentLike): Student {
     ...student,
     first_name,
     last_name,
+    full_name: full_name || `${first_name} ${last_name}`.trim(),
     program_code,
     admission_date,
     avatar_color,
@@ -61,6 +71,7 @@ function normalizeStudent(student: StudentLike): Student {
     // Compatibility aliases
     firstName: first_name,
     lastName: last_name,
+    fullName: full_name || `${first_name} ${last_name}`.trim(),
     programCode: program_code,
     admissionDate: admission_date,
     avatarColor: avatar_color,

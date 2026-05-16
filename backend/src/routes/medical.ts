@@ -36,7 +36,7 @@ medicalRouter.get('/', async (c) => {
     const page = parseInt(c.req.query('page') || '1');
     const perPage = parseInt(c.req.query('perPage') || '50');
     const records = await pb.collection('medical_visits').getList(page, perPage, { sort: '-date' });
-    return c.json<ApiResponse<any>>({ success: true, data: records.items, meta: { page, perPage, totalItems: records.totalItems } });
+    return c.json<ApiResponse<any>>({ success: true, data: records.items, meta: { page, perPage, total: records.totalItems } });
   } catch (error) {
     logger.error('List medical visits error:', error);
     return c.json<ApiResponse<never>>({ success: false, error: 'Failed to fetch medical visits' }, 500);

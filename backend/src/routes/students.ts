@@ -63,7 +63,6 @@ studentsRouter.get('/', requireRole('admin', 'registrar', 'faculty', 'staff'), a
         page: result.page,
         perPage: result.perPage,
         total: result.totalItems,
-        totalPages: result.totalPages,
       },
     });
   } catch (error: any) {
@@ -121,7 +120,7 @@ studentsRouter.post('/', requireRole('admin', 'registrar'), zValidator('json', s
     
     return c.json<ApiResponse<Student>>({
       success: true,
-      data: student as Student,
+      data: student as unknown as Student,
       message: 'Student created successfully',
     }, 201);
   } catch (error: any) {
@@ -151,7 +150,7 @@ studentsRouter.patch('/:id', requireRole('admin', 'registrar'), zValidator('json
     
     return c.json<ApiResponse<Student>>({
       success: true,
-      data: student as Student,
+      data: student as unknown as Student,
       message: 'Student updated successfully',
     });
   } catch (error: any) {

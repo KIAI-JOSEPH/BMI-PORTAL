@@ -150,9 +150,11 @@ export class OptimizedQuery {
     const result = await withPocketBase(async (pb) => {
       const { page = 1, perPage = 50, expand, filter, sort } = this.options;
       
+      const expandStr = Array.isArray(expand) ? expand.join(',') : expand;
+      
       return pb.collection(this.collection).getList(page, perPage, {
-        expand,
-        filter,
+        expand: expandStr,
+        ...(filter ? { filter } : {}),
         sort,
       });
     });

@@ -26,6 +26,8 @@ class PocketBaseConnectionPool {
   private config: PoolConfig;
   private waitQueue: Array<(pb: PocketBase) => void> = [];
   private adminToken: string | null = null;
+  private initPromise: Promise<void> | null = null;
+  private _ready: boolean = false;
   
   constructor(config: Partial<PoolConfig> = {}) {
     this.config = {
@@ -35,11 +37,20 @@ class PocketBaseConnectionPool {
       idleTimeout: config.idleTimeout || 60000,
     };
     
-    // Initialize minimum connections
-    this.initialize();
+    // Start initialization and store the promise
+    this.initPromise = this.initialize();
     
     // Start idle connection cleanup
     this.startIdleCleanup();
+  }
+
+  /**
+   * Wait until the pool is initialized and authenticated
+   */
+  async waitUntilReady(): Promise<void> {
+    if (this.initPromise) {
+      await this.initPromise;
+    }
   }
   
   /**
@@ -55,7 +66,15 @@ class PocketBaseConnectionPool {
     // Authenticate admin once for the pool
     await this.authenticateAdmin();
     
+    this._ready = true;
     logger.info(`✓ Connection pool initialized with ${this.pool.length} connections`);
+  }
+
+  /**
+   * Check if the pool is ready
+   */
+  get isReady(): boolean {
+    return this._ready;
   }
   
   /**
@@ -118,6 +137,9 @@ class PocketBaseConnectionPool {
    * Acquire a connection from the pool
    */
   async acquire(): Promise<PocketBase> {
+    // Ensure pool is ready
+    await this.waitUntilReady();
+
     // Try to find an available connection
     const available = this.pool.find(conn => !conn.inUse);
     
@@ -305,6 +327,7 @@ export async function withPocketBase<T>(
   fn: (pb: PocketBase) => Promise<T>
 ): Promise<T> {
   const pool = getConnectionPool();
+  await pool.waitUntilReady();
   return pool.withConnection(fn);
 }
 

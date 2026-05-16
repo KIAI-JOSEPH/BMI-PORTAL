@@ -10,7 +10,7 @@ import { logger } from '../utils/logger.js';
 import { authMiddleware, requireRole } from '../middleware/auth.js';
 
 import { calculateGradeResult } from '../utils/grading.js';
-import { sanitizeFilter } from '../utils/helpers.js';
+import { sanitizeFilter, parseName } from '../utils/helpers.js';
 
 export interface ApiResponse<T> {
   success: boolean;
@@ -69,8 +69,9 @@ function mapExpandedGradeToFrontendShape(
     ? course.credit_hours
     : (typeof course?.credits === 'number' ? course.credits : 0);
 
+  const names = parseName(student?.full_name || expanded.student_full_name);
   const studentName = student
-    ? (`${student.first_name || ''} ${student.last_name || ''}`.trim() || student.full_name || 'Unknown')
+    ? (`${student.first_name || names.first || ''} ${student.last_name || names.last || ''}`.trim() || student.full_name || 'Unknown')
     : 'Unknown Student';
 
   return {
@@ -345,7 +346,7 @@ gradeRouter.get('/', requireRole('admin', 'registrar', 'faculty', 'staff', 'stud
     const filter = filterParts.join(' && ');
 
     const result = await pb.collection('academic_records').getList(page, perPage, {
-      filter,
+      ...(filter ? { filter } : {}),
       expand: 'student_id,student_id.campus_id,course_id,course_id.module_id',
       sort: 'student_id.full_name,course_id.code',
     });

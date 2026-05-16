@@ -12,12 +12,14 @@ import type { ApiResponse, Course } from '../types/index.js';
 function mapCourseRecord(record: Record<string, unknown>): Course {
   return {
     id: String(record.id),
+    title: String(record.title ?? record.name ?? ''),
     name: String(record.title ?? record.name ?? ''),
     code: String(record.course_code ?? record.code ?? ''),
     faculty: String(record.faculty ?? ''),
     department: String(record.department ?? ''),
     level: (record.level as Course['level']) || 'Undergraduate',
     credits: Number(record.credits ?? 0),
+    credit_hours: Number(record.credits ?? record.credit_hours ?? 0),
     status: (record.status as Course['status']) || 'Published',
     description: String(record.description ?? ''),
     syllabus: String(record.syllabus ?? ''),

@@ -230,7 +230,7 @@ async function startServer() {
     
     // Initialize connection pool
     logger.info('Initializing connection pool...');
-    const pool = getConnectionPool();
+    getConnectionPool();
     logger.info('✓ Connection pool initialized');
     
     // Run database optimization

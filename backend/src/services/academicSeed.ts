@@ -62,8 +62,8 @@ export async function seedAcademicReferenceDataIfEmpty(): Promise<void> {
 
     // Departments
     const dBs  = await findOrCreate('departments', 'dept_code', 'BS',  { dept_code: 'BS',  name: 'Biblical Studies',  faculty_code: fTheo.id });
-    const _dCs  = await findOrCreate('departments', 'dept_code', 'CS',  { dept_code: 'CS',  name: 'Computer Science',  faculty_code: fIct.id });
-    const _dMgt = await findOrCreate('departments', 'dept_code', 'MGT', { dept_code: 'MGT', name: 'Management',        faculty_code: fBus.id });
+    await findOrCreate('departments', 'dept_code', 'CS',  { dept_code: 'CS',  name: 'Computer Science',  faculty_code: fIct.id });
+    await findOrCreate('departments', 'dept_code', 'MGT', { dept_code: 'MGT', name: 'Management',        faculty_code: fBus.id });
     const dDiv = await findOrCreate('departments', 'dept_code', 'DIV', { dept_code: 'DIV', name: 'Divinity',          faculty_code: fTheo.id });
 
     // Programs

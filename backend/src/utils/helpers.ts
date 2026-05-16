@@ -119,3 +119,52 @@ export function generateAvatarColor(name: string): string {
   
   return colors[Math.abs(hash) % colors.length];
 }
+
+/**
+ * Fetch with timeout helper
+ */
+export async function fetchWithTimeout(
+  url: string,
+  options: RequestInit = {},
+  timeoutMs: number = 5000
+): Promise<Response> {
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
+
+  try {
+    const response = await fetch(url, {
+      ...options,
+      signal: controller.signal,
+    });
+    clearTimeout(timeoutId);
+    return response;
+  } catch (error) {
+    clearTimeout(timeoutId);
+    if (error instanceof Error && error.name === 'AbortError') {
+      throw new Error(`Request timeout - ${url} not responding`);
+    }
+    throw error;
+  }
+}
+
+/**
+ * Safely join filters for PocketBase, ignoring null/undefined
+ */
+export function buildFilter(filters: (string | undefined | null)[]): string | undefined {
+  const activeFilters = filters.filter(f => f && f.trim() !== '' && f !== 'undefined');
+  return activeFilters.length > 0 ? activeFilters.join(' && ') : undefined;
+}
+
+/**
+ * Split a full name into first and last name components
+ */
+export function parseName(fullName: string | undefined | null): { first: string; last: string } {
+  if (!fullName) return { first: '', last: '' };
+  const parts = fullName.trim().split(/\s+/);
+  if (parts.length === 0) return { first: '', last: '' };
+  if (parts.length === 1) return { first: parts[0], last: '' };
+  return {
+    first: parts[0],
+    last: parts.slice(1).join(' '),
+  };
+}

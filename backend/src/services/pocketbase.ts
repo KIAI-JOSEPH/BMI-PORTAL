@@ -2,6 +2,7 @@
 import PocketBase from 'pocketbase';
 import { CONFIG } from '../config/index.js';
 import { logger } from '../utils/logger.js';
+import { fetchWithTimeout } from '../utils/helpers.js';
 
 // Singleton PocketBase instance
 let pb: PocketBase | null = null;
@@ -26,7 +27,7 @@ export async function authenticateAdmin(): Promise<void> {
   const pb = getPocketBase();
   try {
     // Direct HTTP call to admin auth endpoint
-    const response = await fetch(`${CONFIG.POCKETBASE_URL}/api/admins/auth-with-password`, {
+    const response = await fetchWithTimeout(`${CONFIG.POCKETBASE_URL}/api/admins/auth-with-password`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
@@ -35,7 +36,7 @@ export async function authenticateAdmin(): Promise<void> {
         identity: CONFIG.POCKETBASE_ADMIN_EMAIL,
         password: CONFIG.POCKETBASE_ADMIN_PASSWORD,
       }),
-    });
+    }, 5000);
 
     if (!response.ok) {
       const error: any = await response.json();
@@ -65,12 +66,12 @@ export function scheduleAdminTokenRefresh(): void {
       const pb = getPocketBase();
       if (pb.authStore.isValid) {
         // Direct HTTP call to admin refresh endpoint
-        const response = await fetch(`${CONFIG.POCKETBASE_URL}/api/admins/auth-refresh`, {
+        const response = await fetchWithTimeout(`${CONFIG.POCKETBASE_URL}/api/admins/auth-refresh`, {
           method: 'POST',
           headers: {
             'Authorization': pb.authStore.token,
           },
-        });
+        }, 5000);
         
         if (response.ok) {
           const data: any = await response.json();

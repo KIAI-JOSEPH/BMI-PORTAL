@@ -11,64 +11,12 @@ import { logger } from '../utils/logger.js';
  * Indexes dramatically improve query speed on large datasets
  */
 export async function createDatabaseIndexes(): Promise<void> {
-  const pb = getPocketBase();
-  
   try {
     logger.info('Creating database indexes for optimal performance...');
     
     // Note: PocketBase uses SQLite under the hood
     // We'll create indexes through PocketBase's collection schema
     
-    const indexConfigurations = [
-      // Students collection indexes
-      {
-        collection: 'students',
-        indexes: [
-          { fields: ['campus_id'], name: 'idx_students_campus' },
-          { fields: ['status'], name: 'idx_students_status' },
-          { fields: ['programme'], name: 'idx_students_programme' },
-          { fields: ['reg_no'], name: 'idx_students_reg_no', unique: true },
-          { fields: ['student_code'], name: 'idx_students_code', unique: true },
-          { fields: ['campus_id', 'status'], name: 'idx_students_campus_status' },
-        ]
-      },
-      // Academic records indexes
-      {
-        collection: 'academic_records',
-        indexes: [
-          { fields: ['student_id'], name: 'idx_academic_student' },
-          { fields: ['course_id'], name: 'idx_academic_course' },
-          { fields: ['student_id', 'academic_year'], name: 'idx_academic_student_year' },
-          { fields: ['academic_year', 'semester'], name: 'idx_academic_year_sem' },
-        ]
-      },
-      // Courses indexes
-      {
-        collection: 'courses',
-        indexes: [
-          { fields: ['module_id'], name: 'idx_courses_module' },
-          { fields: ['code'], name: 'idx_courses_code', unique: true },
-        ]
-      },
-      // Staff indexes
-      {
-        collection: 'staff',
-        indexes: [
-          { fields: ['campus_id'], name: 'idx_staff_campus' },
-          { fields: ['staff_number'], name: 'idx_staff_number', unique: true },
-          { fields: ['category'], name: 'idx_staff_category' },
-        ]
-      },
-      // Attendance indexes (when implemented)
-      {
-        collection: 'attendance',
-        indexes: [
-          { fields: ['student_id'], name: 'idx_attendance_student' },
-          { fields: ['course_id'], name: 'idx_attendance_course' },
-          { fields: ['student_id', 'course_id'], name: 'idx_attendance_student_course' },
-        ]
-      },
-    ];
     
     logger.info('✓ Database indexes configured (PocketBase manages index creation automatically)');
     logger.info('  Indexes will be created on first query to each collection');

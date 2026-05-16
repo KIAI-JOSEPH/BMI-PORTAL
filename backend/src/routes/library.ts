@@ -1,4 +1,3 @@
-import { sanitizeFilter } from '../utils/helpers.js';
 // BMI UMS - Library Routes
 import { Hono } from 'hono';
 import { zValidator } from '@hono/zod-validator';
@@ -7,7 +6,7 @@ import { getPocketBase } from '../services/pocketbase.js';
 import { authMiddleware, requireRole } from '../middleware/auth.js';
 import { auditMiddleware, logAction } from '../middleware/audit.js';
 import { logger } from '../utils/logger.js';
-import { parsePagination } from '../utils/helpers.js';
+import { parsePagination, sanitizeFilter, buildFilter } from '../utils/helpers.js';
 import type { ApiResponse, LibraryItem } from '../types/index.js';
 
 const libraryRouter = new Hono();
@@ -60,10 +59,10 @@ libraryRouter.get('/', async (c) => {
       filters.push(`(title ~ "${s}" || author ~ "${s}" || isbn ~ "${s}")`);
     }
 
-    const filterString = filters.join(' && ') || undefined;
+    const filterString = buildFilter(filters);
 
     const result = await pb.collection('library_items').getList(page, perPage, {
-      filter: filterString,
+      ...(filterString ? { filter: filterString } : {}),
       sort: '-created',
     });
 

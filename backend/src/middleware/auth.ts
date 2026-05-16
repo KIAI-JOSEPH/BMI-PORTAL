@@ -1,7 +1,10 @@
 // BMI UMS - Authentication Middleware (RS256 / HS256 dual-mode)
 
-import type { Context, Next } from 'hono';
-import { jwtVerify, importSPKI, importPKCS8, SignJWT } from 'jose';
+import type { Next } from 'hono';
+import type { AppEnv } from '../types/hono.js';
+type Context = import('hono').Context<AppEnv>;
+import { jwtVerify, importSPKI, importPKCS8 } from 'jose';
+import type { JWTPayload } from '../types/index.js';
 import { CONFIG } from '../config/index.js';
 import { logger } from '../utils/logger.js';
 import { isTokenRevoked } from '../services/tokenBlacklist.js';
@@ -78,10 +81,10 @@ const userContext = new WeakMap<Context, { sub: string; email: string; role: str
 /**
  * Verify JWT token
  */
-async function verifyToken(token: string) {
+async function verifyToken(token: string): Promise<JWTPayload | null> {
   try {
     const { payload } = await jwtVerify(token, getVerificationKey());
-    return payload as { sub: string; email: string; role: string };
+    return payload as unknown as JWTPayload;
   } catch {
     return null;
   }

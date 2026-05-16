@@ -106,7 +106,11 @@ export interface AcademicRecordsFilters {
 
 // ─── Normaliser ───────────────────────────────────────────────────────────────
 
-export function flattenRecord(r: AcademicRecord): AcademicRecordFlat {
+export function flattenRecord(r: AcademicRecord | any): AcademicRecordFlat {
+  // If the record is already flat (e.g. from a backend that pre-flattens), just return it
+  // or cast it to the expected shape.
+  const isAlreadyFlat = !r.expand && (r.studentName || r.courseTitle || r.courseName);
+  
   const student  = r.expand?.student_id;
   const course   = r.expand?.course_id;
   const module   = course?.expand?.module_id;
@@ -114,27 +118,28 @@ export function flattenRecord(r: AcademicRecord): AcademicRecordFlat {
 
   return {
     id:            r.id,
-    studentId:     r.student_id,
-    studentCode:   student?.student_code ?? '',
-    regNo:         student?.reg_no ?? '',
-    studentName:   student?.full_name ??
-                   `${student?.first_name ?? ''} ${student?.last_name ?? ''}`.trim() ?? 'Unknown',
-    gender:        student?.gender ?? '',
-    campusName:    campus?.name ?? '',
-    courseId:      r.course_id,
-    courseCode:    course?.code ?? course?.course_code ?? '',
-    courseTitle:   course?.title ?? '',
-    creditHours:   course?.credit_hours ?? course?.credits ?? 0,
-    category:      course?.category ?? '',
-    module:        module?.name ?? '',
+    studentId:     r.studentId || r.student_id,
+    studentCode:   student?.student_code ?? r.studentCode ?? '',
+    regNo:         student?.reg_no ?? r.regNo ?? '',
+    studentName:   (student?.full_name ??
+                   `${student?.first_name ?? ''} ${student?.last_name ?? ''}`.trim()) || 
+                   r.studentName || 'Unknown',
+    gender:        student?.gender ?? r.gender ?? '',
+    campusName:    campus?.name ?? r.campusName ?? '',
+    courseId:      r.courseId || r.course_id,
+    courseCode:    (course?.code ?? course?.course_code) ?? r.courseCode ?? '',
+    courseTitle:   (course?.title ?? r.courseName) || r.courseTitle || '',
+    creditHours:   (course?.credit_hours ?? course?.credits ?? r.creditHours ?? r.credits) ?? 0,
+    category:      course?.category ?? r.category ?? '',
+    module:        module?.name ?? r.module ?? '',
     semester:      r.semester || module?.semester || '',
-    totalScore:    r.total_score,
-    caScore:       r.ca_score ?? null,
-    examScore:     r.exam_score ?? null,
-    grade:         r.grade,
-    gradePoint:    r.grade_point,
-    remarks:       r.remarks,
-    academicYear:  r.academic_year,
+    totalScore:    (r.total_score ?? r.totalScore ?? r.percentage) ?? 0,
+    caScore:       r.ca_score ?? r.caScore ?? null,
+    examScore:     r.exam_score ?? r.examScore ?? null,
+    grade:         r.grade ?? r.letterGrade ?? '',
+    gradePoint:    r.grade_point ?? r.gradePoint ?? 0,
+    remarks:       r.remarks ?? '',
+    academicYear:  r.academic_year ?? r.academicYear ?? '',
   };
 }
 

@@ -11,8 +11,9 @@ import { logger } from '../utils/logger.js';
 import { authMiddleware, getUser, getSigningKey, getJWTAlgorithm } from '../middleware/auth.js';
 import { revokeToken } from '../services/tokenBlacklist.js';
 import type { ApiResponse, User, JWTPayload } from '../types/index.js';
+import type { AppEnv } from '../types/hono.js';
 
-const authRouter = new Hono();
+const authRouter = new Hono<AppEnv>();
 
 // Signing key is now managed by auth middleware (supports RS256/HS256)
 const getSecret = () => getSigningKey();

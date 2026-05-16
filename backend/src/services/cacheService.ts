@@ -41,7 +41,7 @@ async function getRedis(): Promise<any> {
   if (process.env.REDIS_ENABLED !== 'true') return null;
 
   try {
-    const Redis = (await import('ioredis')).default;
+    const Redis = (await import('ioredis')).default as any;
     const redisUrl = process.env.REDIS_URL || 'redis://localhost:6379';
 
     redis = new Redis(redisUrl, {

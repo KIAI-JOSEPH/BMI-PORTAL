@@ -1,6 +1,7 @@
 // BMI UMS - Ollama (Local LLM) Service
 import { CONFIG } from '../config/index.js';
 import { logger } from '../utils/logger.js';
+import { fetchWithTimeout } from '../utils/helpers.js';
 
 const OLLAMA_API_URL = CONFIG.OLLAMA_URL;
 
@@ -47,7 +48,7 @@ Current User Context: ${context || 'General Administrator'}`;
   try {
     logger.info('Sending request to Ollama', { model: CONFIG.OLLAMA_MODEL });
     
-    const response = await fetch(`${OLLAMA_API_URL}/api/generate`, {
+    const response = await fetchWithTimeout(`${OLLAMA_API_URL}/api/generate`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
@@ -60,7 +61,7 @@ Current User Context: ${context || 'General Administrator'}`;
           num_predict: 1024,
         },
       }),
-    });
+    }, 15000); // 15s timeout for generation
 
     if (!response.ok) {
       throw new Error(`Ollama API error: ${response.status} ${response.statusText}`);
@@ -110,7 +111,7 @@ export async function chatCompletions(
   const { temperature = 0.7, max_tokens = 1024 } = options;
   
   try {
-    const response = await fetch(`${OLLAMA_API_URL}/v1/chat/completions`, {
+    const response = await fetchWithTimeout(`${OLLAMA_API_URL}/v1/chat/completions`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
@@ -119,7 +120,7 @@ export async function chatCompletions(
         temperature,
         max_tokens,
       }),
-    });
+    }, 15000);
 
     if (!response.ok) {
       throw new Error(`Ollama API error: ${response.status}`);
@@ -152,10 +153,10 @@ export async function checkOllamaHealth(): Promise<{
 }> {
   try {
     // Check if Ollama is running
-    const response = await fetch(`${OLLAMA_API_URL}/api/tags`, {
+    const response = await fetchWithTimeout(`${OLLAMA_API_URL}/api/tags`, {
       method: 'GET',
       headers: { 'Content-Type': 'application/json' },
-    });
+    }, 3000); // 3s timeout for health check
 
     if (!response.ok) {
       return {

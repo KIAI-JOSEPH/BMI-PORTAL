@@ -8,14 +8,18 @@ const importRouter = new Hono();
 importRouter.use('*', authMiddleware);
 importRouter.use('*', requireRole('admin', 'registrar'));
 
-const importItemSchema = z.object({
-    type: z.enum(['student', 'course', 'grade', 'staff']),
-    data: z.record(z.unknown()),
-});
 
 const importRequestSchema = z.object({
-    items: z.array(importItemSchema).max(500, 'Maximum 500 items per import'),
-});
+    faculties: z.array(z.any()).optional(),
+    departments: z.array(z.any()).optional(),
+    programs: z.array(z.any()).optional(),
+    courses: z.array(z.any()).optional(),
+    program_courses: z.array(z.any()).optional(),
+    staff: z.array(z.any()).optional(),
+    students: z.array(z.any()).optional(),
+    enrollments: z.array(z.any()).optional(),
+    grades: z.array(z.any()).optional(),
+}).passthrough();
 
 function calculateGrade(percentage: number) {
   let gradeLetter = 'F';

@@ -1,4 +1,3 @@
-import { sanitizeFilter } from '../utils/helpers.js';
 // BMI UMS - Finance Routes
 import { Hono } from 'hono';
 import { zValidator } from '@hono/zod-validator';
@@ -7,7 +6,7 @@ import { getPocketBase } from '../services/pocketbase.js';
 import { authMiddleware, requireRole, getUser } from '../middleware/auth.js';
 import { auditMiddleware, logAction } from '../middleware/audit.js';
 import { logger } from '../utils/logger.js';
-import { parsePagination } from '../utils/helpers.js';
+import { parsePagination, sanitizeFilter, buildFilter } from '../utils/helpers.js';
 import type { ApiResponse, Transaction } from '../types/index.js';
 
 const financeRouter = new Hono();
@@ -77,10 +76,10 @@ financeRouter.get('/transactions', requireRole('admin', 'registrar', 'student'),
       filters.push(`(name ~ "${s}" || ref ~ "${s}" || desc ~ "${s}")`);
     }
 
-    const filterString = filters.join(' && ') || undefined;
+    const filterString = buildFilter(filters);
 
     const result = await pb.collection('transactions').getList(page, perPage, {
-      filter: filterString,
+      ...(filterString ? { filter: filterString } : {}),
       sort: '-date',
     });
 

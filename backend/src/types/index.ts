@@ -31,11 +31,18 @@ export interface StaffMember {
   staff_number: string;
   first_name: string;
   last_name: string;
+  name: string; // Used in UI
   email: string;
   phone: string;
   role: string;
+  department: string;
   category: 'Academic' | 'Administrative' | 'Management';
   status: 'Full-time' | 'Part-time' | 'On Leave';
+  specialization?: string;
+  office?: string;
+  officeHours?: string;
+  avatarColor?: string;
+  joinDate?: string;
   campus_id?: string;
   expand?: { campus_id?: { name: string; location: string } };
   created: string;
@@ -46,8 +53,15 @@ export interface Course {
   id: string;
   code: string;
   title: string;
-  category?: string;
+  name: string; // Used in UI
+  faculty: string;
+  department: string;
+  level: 'Undergraduate' | 'Postgraduate' | 'Diploma' | 'Certificate';
+  credits: number;
   credit_hours: number;
+  status: 'Published' | 'Draft' | 'Archived';
+  description: string;
+  syllabus: string;
   module_id?: string;
   created: string;
   updated: string;

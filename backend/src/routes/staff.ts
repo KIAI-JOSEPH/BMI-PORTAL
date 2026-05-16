@@ -6,17 +6,21 @@ import { getPocketBase } from '../services/pocketbase.js';
 import { authMiddleware, requireRole } from '../middleware/auth.js';
 import { auditMiddleware, logAction } from '../middleware/audit.js';
 import { logger } from '../utils/logger.js';
-import { generateAvatarColor, parsePagination, sanitizeFilter } from '../utils/helpers.js';
+import { generateAvatarColor, parsePagination, sanitizeFilter, parseName } from '../utils/helpers.js';
 import { randomBytes } from 'crypto';
 import type { ApiResponse, StaffMember } from '../types/index.js';
 
 function mapStaffRecord(record: Record<string, unknown>): StaffMember {
-  const fn = String(record.first_name ?? '');
-  const ln = String(record.last_name ?? '');
+  const names = parseName(String(record.full_name || record.name || ''));
+  const fn = String((record.first_name ?? names.first) || '');
+  const ln = String((record.last_name ?? names.last) || '');
   const full = `${fn} ${ln}`.trim();
   return {
     id: String(record.id),
-    name: full || String(record.name ?? 'Staff'),
+    staff_number: String(record.staff_number ?? record.id),
+    first_name: fn,
+    last_name: ln,
+    name: full || (names.first ? `${names.first} ${names.last}`.trim() : String(record.name ?? 'Staff')),
     role: String(record.role ?? ''),
     department: String(record.department ?? ''),
     email: String(record.email ?? ''),
