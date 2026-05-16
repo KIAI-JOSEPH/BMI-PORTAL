@@ -409,26 +409,42 @@ export const Transcripts: React.FC<TranscriptsProps> = (props) => {
     const hasRetakes = currentRecords.some(r => r.score < 40);
     const failedModules = currentRecords.filter(r => r.score < 40).map(r => r.courseCode);
 
+    const programName = "DIPLOMA IN CHRISTIAN MINISTRY AND THEOLOGY";
+    const isDegree = programName.includes('DEGREE') || programName.includes('BACHELOR');
+    const isMasters = programName.includes('MASTER');
+
     if (transcriptType === 'Official') {
       if (hasRetakes) {
-        return `DEGREE AWARD PENDING SATISFACTORY COMPLETION OF SUPPLEMENTARY EXAMINATIONS FOR FAILED MODULES (${failedModules.join(', ')}).`;
+        return `AWARD PENDING SATISFACTORY COMPLETION OF SUPPLEMENTARY EXAMINATIONS FOR FAILED MODULES (${failedModules.join(', ')}).`;
       }
       
       const avg = parseFloat(stats.cumulative);
-      let honors = "PASS";
-      if (avg >= 70) honors = "FIRST CLASS HONOURS";
-      else if (avg >= 60) honors = "SECOND CLASS HONOURS, UPPER DIVISION";
-      else if (avg >= 50) honors = "SECOND CLASS HONOURS, LOWER DIVISION";
+      let classification = "A PASS";
       
-      const isDegree = ['Degree', 'Masters', 'PhD'].includes(selectedStudent.program_code);
-      const awardPrefix = isDegree ? "AWARDED THE DEGREE OF" : "AWARDED THE";
-      
-      return `HAVING SATISFIED THE BOARD OF EXAMINERS AND THE UNIVERSITY SENATE, IS HEREBY ${awardPrefix} ${selectedStudent.program_code.toUpperCase()} WITH ${honors}.`;
+      if (isDegree || isMasters) {
+        if (avg >= 70) classification = "FIRST CLASS HONOURS";
+        else if (avg >= 60) classification = "SECOND CLASS HONOURS, UPPER DIVISION";
+        else if (avg >= 50) classification = "SECOND CLASS HONOURS, LOWER DIVISION";
+      } else {
+        // Standard classifications for Diplomas and Certificates
+        if (avg >= 70) classification = "A DISTINCTION";
+        else if (avg >= 60) classification = "A CREDIT";
+        else if (avg >= 50) classification = "A PASS";
+      }
+
+      // We ensure the award reads professionally. E.g., "AWARDED THE DIPLOMA IN THEOLOGY WITH A DISTINCTION."
+      // If the program name lacks a prefix, we fallback nicely.
+      let fullAwardTitle = programName;
+      if (!fullAwardTitle.includes('DIPLOMA') && !fullAwardTitle.includes('CERTIFICATE') && !fullAwardTitle.includes('DEGREE') && !fullAwardTitle.includes('BACHELOR')) {
+        fullAwardTitle = `CERTIFICATE IN ${fullAwardTitle}`;
+      }
+
+      return `HAVING SATISFIED THE BOARD OF EXAMINERS AND THE UNIVERSITY SENATE, IS HEREBY AWARDED THE ${fullAwardTitle} WITH ${classification}.`;
     } else {
       if (hasRetakes) {
         return `REQUIRED TO SIT FOR SUPPLEMENTARY EXAMINATIONS IN THE FAILED MODULES (${failedModules.join(', ')}) BEFORE PROCEEDING TO THE NEXT ACADEMIC LEVEL.`;
       }
-      return `THE STUDENT HAS SATISFACTORILY COMPLETED THE ACADEMIC REQUIREMENTS FOR ${selectedTerm.toUpperCase()} AND IS RECOMMENDED TO PROCEED TO THE NEXT SEMESTER / YEAR OF STUDY.`;
+      return `THE STUDENT HAS SATISFACTORILY COMPLETED THE ACADEMIC REQUIREMENTS FOR THE ${selectedTerm.toUpperCase()} PERIOD AND IS RECOMMENDED TO PROCEED TO THE NEXT PHASE OF STUDY.`;
     }
   };
 
@@ -2048,14 +2064,11 @@ export const Transcripts: React.FC<TranscriptsProps> = (props) => {
                  <div className="absolute top-8 right-8 flex flex-col items-center gap-1 group z-20">
                     <div className="p-1 bg-white border border-gray-900 shadow-sm relative">
                        <img 
-                          src={`https://api.qrserver.com/v1/create-qr-code/?size=150x150&ecc=H&margin=1&data=${encodeURIComponent(`BMI UNIVERSITY - OFFICIAL ACADEMIC RECORD\nSTUDENT: ${selectedStudent.first_name} ${selectedStudent.last_name}\nID: ${selectedStudent.id}\nSERIAL: BMI-TR-${selectedStudent.id.split('-').pop()}\nSTATUS: VERIFIED`)}`}
+                          src={`https://api.qrserver.com/v1/create-qr-code/?size=150x150&ecc=H&margin=1&data=${encodeURIComponent(`BMI UNIVERSITY - OFFICIAL ACADEMIC RECORD\nSTUDENT: ${selectedStudent.first_name} ${selectedStudent.last_name}\nID: ${selectedStudent.id}\nSTATUS: VERIFIED`)}`}
                           className="w-16 h-16"
                           alt="Security QR"
                        />
                     </div>
-                    <span className="text-[6px] font-mono tracking-widest uppercase font-black text-red-600 select-none">
-                       SN: {selectedStudent.id.split('-').pop()}-{Date.now().toString().slice(-4)}
-                    </span>
                  </div>
 
                  <div
@@ -2081,17 +2094,15 @@ export const Transcripts: React.FC<TranscriptsProps> = (props) => {
                  </div>
                  
                  <div
-                   className={`mb-3 px-4 relative z-10 ${editorOutlineClass('studentName')}`}
+                   className={`mb-4 px-4 relative z-10 ${editorOutlineClass('studentName')}`}
                    style={getBlockStyle('studentName')}
                    onClick={() => editorMode && setSelectedBlock('studentName')}
                    onMouseDown={(e) => startBlockDrag('studentName', e)}
                  >
-                    <div className="border-b border-gray-300 pb-1">
-                      <div className="flex items-baseline justify-start">
-                        <span className="text-[8px] font-sans font-black text-gray-400 uppercase tracking-[0.18em]">Student Name:</span>
-                      </div>
-                      <div className="mt-0.5 text-center">
-                        <span className="text-[18px] leading-none font-serif font-black text-[#4B0082] uppercase tracking-[0.12em]">
+                    <div className="border-y border-gray-300 py-2.5 flex items-center">
+                      <span className="text-[8px] font-sans font-black text-gray-400 uppercase tracking-widest absolute left-4">STUDENT NAME:</span>
+                      <div className="w-full text-center">
+                        <span className="text-[19px] leading-none font-serif font-bold text-[#4B0082] uppercase tracking-[0.15em]">
                           {selectedStudent.full_name || `${selectedStudent.first_name} ${selectedStudent.last_name}`}
                         </span>
                       </div>
@@ -2099,17 +2110,49 @@ export const Transcripts: React.FC<TranscriptsProps> = (props) => {
                  </div>
 
                  <div
-                   className={`grid grid-cols-2 gap-x-10 gap-y-1 mb-3 text-[10px] font-bold relative z-10 px-4 ${editorOutlineClass('studentMeta')}`}
+                   className={`grid grid-cols-2 gap-x-12 gap-y-3 mb-4 text-[9px] font-bold relative z-10 px-4 ${editorOutlineClass('studentMeta')}`}
                    style={getBlockStyle('studentMeta')}
                    onClick={() => editorMode && setSelectedBlock('studentMeta')}
                    onMouseDown={(e) => startBlockDrag('studentMeta', e)}
                  >
-                    <div className="flex justify-between border-b border-gray-100 pb-0.5"><span className="text-gray-500 font-sans text-[8px] uppercase">Year of study:</span><span>4 (FOUR)</span></div>
-                    <div className="flex justify-between border-b border-gray-100 pb-0.5"><span className="text-gray-500 font-sans text-[8px] uppercase">Prog. of Study:</span><span className="uppercase text-gray-900 whitespace-nowrap">{selectedStudent.programme}</span></div>
-                    <div className="flex justify-between border-b border-gray-100 pb-0.5"><span className="text-gray-500 font-sans text-[8px] uppercase">FACULTY OF:</span><span className="uppercase text-gray-900 font-black">{selectedStudent.programme}</span></div>
-                    <div className="flex justify-between border-b border-gray-100 pb-0.5"><span className="text-gray-500 font-sans text-[8px] uppercase">Student ID:</span><span className="font-mono text-red-700">{selectedStudent.student_code}</span></div>
-                    <div className="flex justify-between border-b border-gray-100 pb-0.5"><span className="text-gray-500 font-sans text-[8px] uppercase">Admission:</span><span>{selectedStudent.admission_date ? new Date(selectedStudent.admission_date).toLocaleDateString('en-GB') : '27/08/2022'}</span></div>
-                    <div className="flex justify-between border-b border-gray-100 pb-0.5"><span className="text-gray-500 font-sans text-[8px] uppercase">Graduation:</span><span>21/12/2026</span></div>
+                    {/* Left Column */}
+                    <div className="flex flex-col gap-2.5">
+                       <div className="flex justify-between border-b border-gray-100 pb-1">
+                          <span className="text-gray-400 font-sans text-[8px] uppercase tracking-wider">STUDENT ID:</span>
+                          <span className="uppercase text-gray-950 font-black">{selectedStudent.admission_no || selectedStudent.student_code || selectedStudent.id}</span>
+                       </div>
+                       <div className="flex justify-between border-b border-gray-100 pb-1">
+                          <span className="text-gray-400 font-sans text-[8px] uppercase tracking-wider">SCHOOL:</span>
+                          <span className="uppercase text-gray-950 font-black">{selectedStudent.faculty || "SCHOOL OF THEOLOGY"}</span>
+                       </div>
+                       <div className="flex justify-between border-b border-gray-100 pb-1">
+                          <span className="text-gray-400 font-sans text-[8px] uppercase tracking-wider">PROGRAM:</span>
+                          <span className="uppercase text-gray-950 font-black">DIPLOMA IN CHRISTIAN MINISTRY AND THEOLOGY</span>
+                       </div>
+                       <div className="flex justify-between border-b border-gray-100 pb-1">
+                          <span className="text-gray-400 font-sans text-[8px] uppercase tracking-wider">ADMISSION DATE:</span>
+                          <span className="uppercase text-gray-950 font-black">4TH FEB 2024</span>
+                       </div>
+                    </div>
+                    {/* Right Column */}
+                    <div className="flex flex-col gap-2.5">
+                       <div className="flex justify-between border-b border-gray-100 pb-1">
+                          <span className="text-gray-400 font-sans text-[8px] uppercase tracking-wider">AWARD TYPE:</span>
+                          <span className="uppercase text-gray-950 font-black">DIPLOMA</span>
+                       </div>
+                       <div className="flex justify-between border-b border-gray-100 pb-1">
+                          <span className="text-gray-400 font-sans text-[8px] uppercase tracking-wider">DEPARTMENT:</span>
+                          <span className="uppercase text-gray-950 font-black">{selectedStudent.department || "DEPARTMENT OF PRACTICAL THEOLOGY"}</span>
+                       </div>
+                       <div className="flex justify-between border-b border-gray-100 pb-1">
+                          <span className="text-gray-400 font-sans text-[8px] uppercase tracking-wider">MODE OF STUDY:</span>
+                          <span className="uppercase text-gray-950 font-black">FULL-TIME</span>
+                       </div>
+                       <div className="flex justify-between border-b border-gray-100 pb-1">
+                          <span className="text-gray-400 font-sans text-[8px] uppercase tracking-wider">GRADUATION DATE:</span>
+                          <span className="uppercase text-gray-950 font-black">1ST MAY 2026</span>
+                       </div>
+                    </div>
                  </div>
 
                  <div
@@ -2147,38 +2190,57 @@ export const Transcripts: React.FC<TranscriptsProps> = (props) => {
                  )}
 
                  <div
-                   className={`border-b border-gray-900 mt-2 py-1 text-[10px] font-black relative z-10 px-3 bg-gray-50/20 ${editorOutlineClass('metrics')}`}
+                   className={`border border-gray-200 mt-2 p-2 relative z-10 flex text-[9px] font-black ${editorOutlineClass('metrics')}`}
                    style={getBlockStyle('metrics')}
                    onClick={() => editorMode && setSelectedBlock('metrics')}
                    onMouseDown={(e) => startBlockDrag('metrics', e)}
                  >
-                    <div className="flex gap-6 justify-center items-center">
-                       <span className="text-gray-600 font-sans text-[8px]">PERFORMANCE METRICS:</span>
-                       <span>Current Avg: <span className="text-[#4B0082]">{stats.current}%</span></span>
-                       <span>| Cumulative Avg: <span className="text-[#4B0082]">{stats.cumulative}%</span></span>
+                    {/* Left - GPA */}
+                    <div className="flex-1 flex flex-col justify-center border-r border-gray-200 px-3 relative min-h-[30px]">
+                       <span className="absolute top-0 left-3 text-[7px] text-gray-400 font-sans tracking-widest uppercase font-black">PERFORMANCE METRICS</span>
+                       <div className="flex justify-between items-end h-full pt-4">
+                          <span className="text-gray-600">Semester GPA: <span className="text-gray-950 font-black">{currentRecords.length ? (currentRecords.reduce((a, b) => a + (b.points || (b.score>=70?4:b.score>=60?3:b.score>=50?2:b.score>=40?1:0)), 0) / currentRecords.length).toFixed(2) : "0.00"}</span></span>
+                          <span className="text-gray-600">Cumulative GPA: <span className="text-[#4B0082] font-black">{allRecords.length ? (allRecords.reduce((a, b) => a + (b.points || (b.score>=70?4:b.score>=60?3:b.score>=50?2:b.score>=40?1:0)), 0) / allRecords.length).toFixed(2) : "0.00"}</span></span>
+                       </div>
+                    </div>
+                    {/* Middle - Averages */}
+                    <div className="flex-[1.2] flex justify-center items-end border-r border-gray-200 px-3 pb-0.5">
+                       <div className="flex gap-6">
+                          <span className="text-gray-600">Current Avg: <span className="text-gray-950 font-black">{stats.current}%</span></span>
+                          <span className="text-gray-600">Cumulative Avg: <span className="text-[#4B0082] font-black">{stats.cumulative}%</span></span>
+                       </div>
+                    </div>
+                    {/* Right - Classification */}
+                    <div className="flex-1 flex flex-col justify-center items-center px-3 relative min-h-[30px]">
+                       <span className="absolute top-0 right-3 text-[7px] text-gray-400 font-sans tracking-widest uppercase font-black text-right w-full">FINAL CLASSIFICATION</span>
+                       <div className="h-full flex items-end justify-center w-full pt-4">
+                          <span className="text-[#4B0082] text-[11px] font-black uppercase tracking-wider">{parseFloat(stats.cumulative) >= 70 ? 'DISTINCTION' : parseFloat(stats.cumulative) >= 60 ? 'CREDIT' : parseFloat(stats.cumulative) >= 50 ? 'PASS' : 'FAIL'}</span>
+                       </div>
                     </div>
                  </div>
 
                  <div
-                   className={`py-2 text-[10px] font-bold border-b border-gray-900 mb-3 relative z-10 px-3 ${editorOutlineClass('recommendation')}`}
+                   className={`mt-3 relative z-10 ${editorOutlineClass('recommendation')}`}
                    style={getBlockStyle('recommendation')}
                    onClick={() => editorMode && setSelectedBlock('recommendation')}
                    onMouseDown={(e) => startBlockDrag('recommendation', e)}
                  >
-                    <div className="flex gap-3 items-start">
-                       <span className="flex-shrink-0 text-[8px] font-black uppercase text-gray-400 tracking-widest pt-0.5">Recommendation:</span>
-                       <p className="uppercase leading-snug text-gray-950 font-black tracking-tight border-l-2 border-[#4B0082] pl-2.5">{getAcademicRecommendation()}</p>
+                    <div className="flex items-start gap-4 px-2 pb-3 border-b-2 border-gray-900">
+                       <span className="flex-shrink-0 text-[8px] font-black uppercase text-gray-400 tracking-widest pt-1">RECOMMENDATION:</span>
+                       <div className="border-l-[3px] border-[#4B0082] pl-3 py-0.5">
+                          <p className="uppercase leading-snug text-gray-950 font-serif font-bold text-[10px] tracking-tight">{getAcademicRecommendation()}</p>
+                       </div>
                     </div>
                  </div>
 
                  <div
-                   className={`border border-gray-300 px-3 py-1.5 text-[7px] font-black relative z-10 bg-gray-50/30 mb-2 text-center ${editorOutlineClass('grading')}`}
+                   className={`border border-gray-200 px-3 py-2 text-[8px] font-bold relative z-10 mt-3 text-center ${editorOutlineClass('grading')}`}
                    style={getBlockStyle('grading')}
                    onClick={() => editorMode && setSelectedBlock('grading')}
                    onMouseDown={(e) => startBlockDrag('grading', e)}
                  >
-                    <span className="underline uppercase text-gray-500 mr-3">Grading:</span>
-                    <span className="opacity-70 tracking-wide">A (70–100%) &nbsp;|&nbsp; B (60–69%) &nbsp;|&nbsp; C (50–59%) &nbsp;|&nbsp; D (40–49%) &nbsp;|&nbsp; <span className="text-red-600">F (&lt;40%)</span></span>
+                    <span className="underline uppercase text-gray-500 mr-3">GRADING:</span>
+                    <span className="opacity-80 tracking-wide">A (70–100%) &nbsp;|&nbsp; B (60–69%) &nbsp;|&nbsp; C (50–59%) &nbsp;|&nbsp; D (40–49%) &nbsp;|&nbsp; <span className="text-red-500 font-black">F (&lt;40%)</span></span>
                  </div>
 
                  <MicroText text="DO NOT REPRODUCE THIS DOCUMENT • BMI UNIVERSITY ACADEMIC RECORD SECURE VALIDATION LINE • TAMPER-EVIDENT DESIGN • IDW-BMIV-82" />
@@ -2191,42 +2253,44 @@ export const Transcripts: React.FC<TranscriptsProps> = (props) => {
                  </div>
 
                  <div
-                   className={`flex justify-between mt-4 relative z-10 mb-3 px-6 ${editorOutlineClass('signatures')}`}
+                   className={`flex justify-between mt-10 relative z-10 mb-4 px-8 ${editorOutlineClass('signatures')}`}
                    style={getBlockStyle('signatures')}
                    onClick={() => editorMode && setSelectedBlock('signatures')}
                    onMouseDown={(e) => startBlockDrag('signatures', e)}
                  >
-                    {/* Dean of Faculty & Academics — pushed to left */}
-                    <div className="flex flex-col items-center w-[28%]">
-                       <div className="w-full h-14 mb-0" />
+                    {/* Dean of Faculty & Academics */}
+                    <div className="flex flex-col items-start w-[32%]">
                        <div className="w-full border-b border-gray-900" />
-                       <span className="font-serif italic text-sm text-gray-800 whitespace-nowrap mt-1">{getDeanName(selectedStudent.program_code)}</span>
-                       <span className="text-[7px] font-black uppercase tracking-widest mt-0.5 text-gray-500">Dean of Faculty &amp; Academics</span>
+                       <span className="font-serif italic text-sm text-gray-900 whitespace-nowrap mt-1.5">{getDeanName(selectedStudent.program_code)}</span>
+                       <span className="text-[7px] font-black uppercase tracking-widest mt-0.5 text-gray-500">DEAN, {selectedStudent.faculty || "SCHOOL OF THEOLOGY"}</span>
                     </div>
-                    {/* Centre space — for official seal */}
-                    <div className="w-[36%]" />
-                    {/* Dean of Students — pushed to right */}
-                    <div className="flex flex-col items-center w-[28%]">
-                       <div className="w-full h-14 mb-0" />
-                       <div className="w-full border-b border-gray-900" />
-                       <span className="font-serif italic text-sm text-gray-800 whitespace-nowrap mt-1">Dr. Lilian Young</span>
-                       <span className="text-[7px] font-black uppercase tracking-widest mt-0.5 text-gray-500">Dean of Students</span>
+
+                    {/* University Registrar */}
+                    <div className="flex flex-col items-end w-[35%] relative">
+                       <div className="w-full border-b border-gray-900 relative z-10" />
+                       <span className="font-serif italic text-sm text-gray-900 whitespace-nowrap mt-1.5 w-full text-right relative z-10">Dr. Lilian Young</span>
+                       <span className="text-[7px] font-black uppercase tracking-widest mt-0.5 text-gray-500 w-full text-right relative z-10">UNIVERSITY REGISTRAR</span>
+                       
+                       {/* Digital Validation Box */}
+                       <div className="mt-4 border border-purple-200 bg-purple-50/30 px-4 py-1.5 rounded-none flex flex-col items-center justify-center w-full relative z-10">
+                          <div className="flex items-center gap-1.5">
+                             <ShieldCheck size={10} className="text-[#4B0082]" />
+                             <span className="text-[#4B0082] text-[8px] font-black uppercase tracking-widest">DIGITAL VALIDATION ACTIVE</span>
+                          </div>
+                          <span className="text-[6px] font-bold text-gray-400 uppercase tracking-[0.2em] mt-0.5">CERTIFIED TRUE COPY • E-TRANSCRIPT</span>
+                       </div>
                     </div>
                  </div>
 
                  <div
-                   className={`mt-3 flex justify-between items-end px-2 relative z-10 ${editorOutlineClass('footer')}`}
+                   className={`flex justify-between items-end px-2 mt-2 relative z-10 ${editorOutlineClass('footer')}`}
                    style={getBlockStyle('footer')}
                    onClick={() => editorMode && setSelectedBlock('footer')}
                    onMouseDown={(e) => startBlockDrag('footer', e)}
                  >
-                    <div className="flex flex-col text-[8px] text-gray-500 font-black uppercase tracking-widest leading-tight">
-                       <span>Issued: 1st May 2026</span>
-                       <span className="mt-1">ID: BMI-TR-{selectedStudent.id.split('-').pop()}</span>
-                    </div>
-                    <div className="flex items-center gap-2">
-                        <ShieldCheck size={12} className="text-[#4B0082]" />
-                        <span className="text-[8px] font-black text-gray-400 uppercase tracking-widest">Verified Archive</span>
+                    <div className="flex flex-col text-[8px] text-gray-500 font-black uppercase tracking-widest leading-[1.6]">
+                       <span>ISSUED: {new Date().toLocaleDateString('en-GB', {day: 'numeric', month: 'short', year: 'numeric'}).toUpperCase().replace(/ /g, ' ')}</span>
+                       <span>ID: BMI-TR-{selectedStudent.id.toUpperCase()}</span>
                     </div>
                  </div>
               </div>
