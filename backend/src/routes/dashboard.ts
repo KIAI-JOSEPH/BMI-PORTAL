@@ -202,4 +202,59 @@ function formatUptime(seconds: number): string {
   return `${d}d ${h}h ${m}m`;
 }
 
+/**
+ * GET /api/v1/dashboard/academic-stats
+ * Grade distribution and campus breakdown from academic_records.
+ */
+dashboardRouter.get('/academic-stats', async (c) => {
+  try {
+    const pb = getPocketBase();
+
+    const [total, passing, failing, records, campusList] = await Promise.all([
+      pb.collection('academic_records').getList(1, 1),
+      pb.collection('academic_records').getList(1, 1, { filter: 'total_score >= 50' }),
+      pb.collection('academic_records').getList(1, 1, { filter: 'total_score < 50' }),
+      pb.collection('academic_records').getList(1, 1000, { fields: 'grade,total_score' }),
+      pb.collection('campuses').getFullList({ fields: 'id,name' }),
+    ]);
+
+    // Grade distribution
+    const gradeDist: Record<string, number> = {};
+    let scoreSum = 0;
+    for (const r of records.items) {
+      const g = (r as any).grade || 'F';
+      gradeDist[g] = (gradeDist[g] || 0) + 1;
+      scoreSum += (r as any).total_score || 0;
+    }
+    const avgScore = records.items.length > 0
+      ? parseFloat((scoreSum / records.items.length).toFixed(1)) : 0;
+
+    // Per-campus student counts
+    const campusStats: Array<{ name: string; students: number }> = [];
+    for (const campus of campusList) {
+      const count = await pb.collection('students').getList(1, 1, {
+        filter: `campus_id = "${(campus as any).id}"`,
+      });
+      campusStats.push({ name: (campus as any).name, students: count.totalItems });
+    }
+
+    return c.json({
+      success: true,
+      data: {
+        totalRecords:  total.totalItems,
+        passing:       passing.totalItems,
+        failing:       failing.totalItems,
+        passRate:      total.totalItems > 0
+          ? parseFloat(((passing.totalItems / total.totalItems) * 100).toFixed(1)) : 0,
+        averageScore:  avgScore,
+        gradeDistribution: gradeDist,
+        campusBreakdown:   campusStats,
+      },
+    });
+  } catch (error: any) {
+    logger.error('Academic stats error:', error);
+    return c.json({ success: false, error: 'Failed to fetch academic stats' }, 500);
+  }
+});
+
 export default dashboardRouter;

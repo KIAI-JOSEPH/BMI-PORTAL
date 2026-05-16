@@ -55,58 +55,77 @@ function mapExpandedGradeToFrontendShape(
   }
 ) {
   const student = expanded.expand?.student_id;
-  const course = expanded.expand?.course_id;
+  const course   = expanded.expand?.course_id;
+  const module   = course?.expand?.module_id;
+  // campus may be nested under student expand
+  const campus   = student?.expand?.campus_id;
 
   const percentage = typeof expanded.total_score === 'number' ? expanded.total_score : 0;
-  const gradeCalc = calculateGradeResult(percentage);
+  const gradeCalc  = calculateGradeResult(percentage);
 
-  const gradePoints = typeof expanded.grade_point === 'number' ? expanded.grade_point : gradeCalc.gradePoints;
-  const letterGrade = expanded.grade || gradeCalc.letterGrade;
+  const gradePoints  = typeof expanded.grade_point === 'number' ? expanded.grade_point : gradeCalc.gradePoints;
+  const letterGrade  = expanded.grade || gradeCalc.letterGrade;
+  const creditHours  = typeof course?.credit_hours === 'number'
+    ? course.credit_hours
+    : (typeof course?.credits === 'number' ? course.credits : 0);
 
-  // Prefer full_name (how our import stores it), fall back to first+last for future entries
   const studentName = student
-    ? (student.full_name?.trim() ||
-       `${student.first_name || ''} ${student.last_name || ''}`.trim() ||
-       'Unknown Student')
+    ? (`${student.first_name || ''} ${student.last_name || ''}`.trim() || student.full_name || 'Unknown')
     : 'Unknown Student';
 
   return {
-    // IDs
-    id: expanded.id,
-    studentId: student?.id || '',
-    courseId: course?.id || '',
+    // ── Identity ──────────────────────────────────────────────────────────────
+    id:         expanded.id,
+    studentId:  student?.id  || expanded.student_id || '',
+    courseId:   course?.id   || expanded.course_id  || '',
 
-    // Student
+    // ── Student ───────────────────────────────────────────────────────────────
     studentName,
-    admissionNo: student?.admission_no || student?.student_number || student?.student_code || 'Unknown',
+    studentCode:  student?.student_code || '',
+    regNo:        student?.reg_no       || '',
+    admissionNo:  student?.admission_no || student?.student_number || student?.student_code || 'Unknown',
+    gender:       student?.gender       || '',
+    campusName:   campus?.name          || '',
+    campusId:     student?.campus_id    || '',
 
-    // Course
+    // ── Course ────────────────────────────────────────────────────────────────
     courseCode: course?.code || course?.course_code || '',
-    courseName: course?.title || 'Unknown Course',
-    credits: typeof course?.credit_hours === 'number' ? course.credit_hours : (typeof course?.credits === 'number' ? course.credits : 0),
+    courseName: course?.title || course?.name || 'Unknown Course',
+    credits:    creditHours,
+    creditHours,
+    category:   course?.category || '',
+    module:     module?.name     || '',
 
-    // Academic period
-    academicYear: expanded.academic_year || '',
-    semester: expanded.semester || 'Fall', // Default if missing
+    // ── Academic period ───────────────────────────────────────────────────────
+    academicYear: expanded.academic_year || '2025',
+    semester:     expanded.semester || module?.semester || '',
 
-    // Grading
-    numericGrade: percentage,
+    // ── Grading ───────────────────────────────────────────────────────────────
+    numericGrade:    percentage,
+    percentage,
+    total_score:     percentage,
     letterGrade,
+    grade:           letterGrade,
     gradePoints,
-    components: options.components || [],
-    gradingScaleId: options.gradingScaleType || 'US_4_0',
+    grade_point:     gradePoints,
+    gpa:             gradePoints,
+    remarks:         expanded.remarks || (percentage >= 50 ? 'Pass' : 'Fail'),
+    ca_score:        expanded.ca_score  ?? null,
+    exam_score:      expanded.exam_score ?? null,
+
+    // ── Component scores (empty for bulk-imported data) ───────────────────────
+    components:       options.components || [],
+    gradingScaleId:   options.gradingScaleType || 'US_4_0',
     gradingScaleType: options.gradingScaleType || 'US_4_0',
 
-    // Specializations / flags
+    // ── Flags ─────────────────────────────────────────────────────────────────
     isRetake: false,
+    status:   options.status || 'Verified',
 
-    // UI status
-    status: options.status || 'Verified',
-
-    // Timestamps/audit
-    createdAt: expanded.created,
-    updatedAt: expanded.updated,
-    createdBy: options.createdBy || 'system',
+    // ── Audit ─────────────────────────────────────────────────────────────────
+    createdAt:      expanded.created,
+    updatedAt:      expanded.updated,
+    createdBy:      options.createdBy || 'system',
     lastModifiedBy: options.createdBy || 'system',
   };
 }
@@ -310,34 +329,25 @@ gradeRouter.get('/', requireRole('admin', 'registrar', 'faculty', 'staff', 'stud
     
     const page = parseInt(query.page || '1');
     const perPage = Math.min(parseInt(query.perPage || '50'), 500);
-    const studentId = query.studentId;
+    const studentId   = query.studentId;
+    const campusId    = query.campus_id;
+    const academicYear = query.academicYear;
+    const semester    = query.semester;
+    const grade       = query.grade;
 
-    // studentId may be a PocketBase record ID or a student_code (e.g. "2025-035")
-    // Build a filter that handles both cases
-    let filter = '';
-    if (studentId) {
-      // If it looks like a PocketBase ID (15-char alphanumeric), filter by ID;
-      // otherwise try to resolve by student_code first
-      if (/^[a-z0-9]{15}$/i.test(studentId)) {
-        filter = sanitizeFilter(`student_id = "${studentId}"`);
-      } else {
-        // Resolve student_code → PocketBase ID
-        try {
-          const student = await pb.collection('students').getFirstListItem(
-            sanitizeFilter(`student_code = "${studentId}"`)
-          );
-          filter = sanitizeFilter(`student_id = "${student.id}"`);
-        } catch {
-          // student not found — return empty
-          return c.json({ success: true, data: { items: [], page: 1, perPage, totalItems: 0, totalPages: 0 } });
-        }
-      }
-    }
-    
+    // Build PocketBase filter
+    const filterParts: string[] = [];
+    if (studentId)    filterParts.push(`student_id = "${sanitizeFilter(studentId)}"`);
+    if (campusId)     filterParts.push(`student_id.campus_id = "${sanitizeFilter(campusId)}"`);
+    if (academicYear) filterParts.push(`academic_year = "${sanitizeFilter(academicYear)}"`);
+    if (semester)     filterParts.push(`semester = "${sanitizeFilter(semester)}"`);
+    if (grade)        filterParts.push(`grade = "${sanitizeFilter(grade)}"`);
+    const filter = filterParts.join(' && ');
+
     const result = await pb.collection('academic_records').getList(page, perPage, {
       filter,
-      expand: 'student_id,course_id,course_id.module_id',
-      sort: '-created',
+      expand: 'student_id,student_id.campus_id,course_id,course_id.module_id',
+      sort: 'student_id.full_name,course_id.code',
     });
 
     // Map the expanded relational data to the frontend Grade shape
@@ -354,7 +364,7 @@ gradeRouter.get('/', requireRole('admin', 'registrar', 'faculty', 'staff', 'stud
       success: true,
       data: {
         ...result,
-        items
+        items,
       },
     });
 
@@ -500,6 +510,128 @@ gradeRouter.delete('/:id', requireRole('admin', 'registrar'), async (c) => {
       success: false,
       error: 'Failed to delete grade',
     }, 500);
+  }
+});
+
+/**
+ * GET /api/v1/grades/gpa/summary
+ * Aggregate GPA per student per module from academic_records.
+ * Query params: campusId?, academicYear?
+ */
+gradeRouter.get('/gpa/summary', requireRole('admin', 'registrar', 'faculty', 'staff'), async (c) => {
+  try {
+    const pb        = getPocketBase();
+    const campusId  = c.req.query('campusId');
+    const year      = c.req.query('academicYear');
+
+    const filterParts: string[] = [];
+    if (campusId) filterParts.push(`student_id.campus_id = "${sanitizeFilter(campusId)}"`);
+    if (year)     filterParts.push(`academic_year = "${sanitizeFilter(year)}"`);
+    const filter = filterParts.join(' && ');
+
+    // Fetch all matching records with full expand (up to 2000)
+    const records = await pb.collection('academic_records').getFullList({
+      filter,
+      expand: 'student_id,student_id.campus_id,course_id,course_id.module_id',
+    });
+
+    // Aggregate per student+module
+    const map = new Map<string, {
+      studentId: string; studentCode: string; studentName: string; campusName: string;
+      module: string; credits: number; points: number;
+    }>();
+
+    for (const r of records) {
+      const student  = (r as any).expand?.student_id;
+      const course   = (r as any).expand?.course_id;
+      const module   = course?.expand?.module_id;
+      const campus   = student?.expand?.campus_id;
+
+      const credits     = typeof course?.credit_hours === 'number' ? course.credit_hours
+                        : (typeof course?.credits === 'number' ? course.credits : 0);
+      const gradePoint  = typeof (r as any).grade_point === 'number' ? (r as any).grade_point : 0;
+
+      const key = `${(r as any).student_id}__${module?.name || 'Unknown'}`;
+      const existing = map.get(key);
+      if (existing) {
+        existing.credits += credits;
+        existing.points  += gradePoint * credits;
+      } else {
+        map.set(key, {
+          studentId:   (r as any).student_id,
+          studentCode: student?.student_code || '',
+          studentName: student?.full_name || `${student?.first_name || ''} ${student?.last_name || ''}`.trim(),
+          campusName:  campus?.name || '',
+          module:      module?.name || 'Unknown',
+          credits,
+          points:      gradePoint * credits,
+        });
+      }
+    }
+
+    const summary = Array.from(map.values()).map(v => ({
+      studentId:        v.studentId,
+      studentCode:      v.studentCode,
+      studentName:      v.studentName,
+      campusName:       v.campusName,
+      module:           v.module,
+      totalCreditHours: v.credits,
+      totalGradePoints: parseFloat(v.points.toFixed(2)),
+      gpa:              v.credits > 0 ? parseFloat((v.points / v.credits).toFixed(2)) : 0,
+    }));
+
+    // Sort by campus, student name, module
+    summary.sort((a, b) =>
+      a.campusName.localeCompare(b.campusName) ||
+      a.studentName.localeCompare(b.studentName) ||
+      a.module.localeCompare(b.module)
+    );
+
+    return c.json({ success: true, data: summary, total: summary.length });
+  } catch (error: any) {
+    logger.error('GPA summary error:', error);
+    return c.json({ success: false, error: 'Failed to compute GPA summary' }, 500);
+  }
+});
+
+/**
+ * GET /api/v1/grades/student/:studentId/transcript
+ * Full academic transcript for one student — all records fully expanded.
+ */
+gradeRouter.get('/student/:studentId/transcript',
+  requireRole('admin', 'registrar', 'faculty', 'staff', 'student'), async (c) => {
+  try {
+    const pb        = getPocketBase();
+    const studentId = sanitizeFilter(c.req.param('studentId'));
+
+    const records = await pb.collection('academic_records').getFullList({
+      filter:  `student_id = "${studentId}"`,
+      expand:  'student_id,student_id.campus_id,course_id,course_id.module_id',
+      sort:    'course_id.code',
+    });
+
+    const items = records.map((r) =>
+      mapExpandedGradeToFrontendShape(r, { status: 'Verified', gradingScaleType: 'US_4_0' })
+    );
+
+    // Compute GPA
+    const totalCredits = items.reduce((s, r) => s + (r.creditHours || 0), 0);
+    const totalPoints  = items.reduce((s, r) => s + (r.gradePoints || 0) * (r.creditHours || 0), 0);
+    const overallGpa   = totalCredits > 0 ? parseFloat((totalPoints / totalCredits).toFixed(2)) : 0;
+
+    return c.json({
+      success: true,
+      data: {
+        items,
+        total:      items.length,
+        overallGpa,
+        totalCredits,
+        totalPoints: parseFloat(totalPoints.toFixed(2)),
+      },
+    });
+  } catch (error: any) {
+    logger.error('Transcript fetch error:', error);
+    return c.json({ success: false, error: 'Failed to fetch transcript' }, 500);
   }
 });
 

@@ -11,7 +11,8 @@ import StudentGradeReport from './grading/StudentGradeReport';
 import CourseGradeDistribution from './grading/CourseGradeDistribution';
 import GradeAppealForm, { AppealFormData } from './grading/GradeAppealForm';
 import GradeAppealReview from './grading/GradeAppealReview';
-import { createGrade, getGrades, updateGrade, deleteGrade } from '../grading/services/GradeAPIService';
+import { createGrade, updateGrade, deleteGrade } from '../grading/services/GradeAPIService';
+import { getAcademicRecords } from '../services/academicRecordsService';
 import { Grade } from '../grading/types';
 import { Student, Course } from '../types';
 import { BulkEntryModal } from './BulkEntryModal';
@@ -69,14 +70,39 @@ const Grades: React.FC<GradesProps> = ({ students = [], courses = [] }) => {
   const loadGrades = async () => {
     setIsLoading(true);
     try {
-      const response = await getGrades({
-        academicYear: filterYear || undefined,
-        semester: filterSemester || undefined,
+      const result = await getAcademicRecords({
+        academicYear: filterYear   || undefined,
+        semester:     filterSemester || undefined,
+        perPage:      500,
       });
-      
-      if (response.success && response.data) {
-        setGrades(response.data.items);
-      }
+      // Map AcademicRecordFlat → Grade shape expected by GradeEntryModal / table
+      const mapped = result.items.map((r) => ({
+        id:           r.id,
+        studentId:    r.studentId,
+        studentName:  r.studentName,
+        admissionNo:  r.studentCode,
+        courseId:     r.courseId,
+        courseCode:   r.courseCode,
+        courseName:   r.courseTitle,
+        credits:      r.creditHours,
+        numericGrade: r.totalScore,
+        percentage:   r.totalScore,
+        letterGrade:  r.grade,
+        gradePoints:  r.gradePoint,
+        gpa:          r.gradePoint,
+        academicYear: r.academicYear,
+        semester:     r.semester,
+        status:       'Verified',
+        isRetake:     false,
+        components:   [],
+        gradingScaleId:   'US_4_0',
+        gradingScaleType: 'US_4_0',
+        createdAt:    '',
+        updatedAt:    '',
+        createdBy:    'system',
+        lastModifiedBy: 'system',
+      })) as any[];
+      setGrades(mapped);
     } catch (error) {
       console.error('Failed to load grades:', error);
     } finally {
@@ -268,7 +294,7 @@ const Grades: React.FC<GradesProps> = ({ students = [], courses = [] }) => {
               });
             
             if (uniqueStudents.length > 0) {
-              handleViewStudentReport(uniqueStudents[0].id, uniqueStudents[0].name);
+              handleViewStudentReport(String(uniqueStudents[0].id), uniqueStudents[0].name);
             }
           }}
           className="px-6 py-3 bg-blue-600 text-white font-black text-xs uppercase tracking-widest hover:bg-blue-700 transition-all flex items-center gap-2"
@@ -292,7 +318,7 @@ const Grades: React.FC<GradesProps> = ({ students = [], courses = [] }) => {
             
             if (uniqueCourses.length > 0) {
               const course = uniqueCourses[0];
-              handleViewCourseDistribution(course.code, course.name, course.year, course.semester);
+              handleViewCourseDistribution(String(course.code), String(course.name), String(course.year), String(course.semester));
             }
           }}
           className="px-6 py-3 bg-emerald-600 text-white font-black text-xs uppercase tracking-widest hover:bg-emerald-700 transition-all flex items-center gap-2"

@@ -17,7 +17,12 @@ import {
   Maximize2
 } from 'lucide-react';
 import { Student, Course } from '../types';
-import { getStudentGrades, Grade } from '../services/gradeService';
+import {
+  getStudentAcademicRecords,
+  computeOverallGpa,
+  type AcademicRecordFlat,
+} from '../services/academicRecordsService';
+import { Grade } from '../services/gradeService';
 import { getPrograms } from '../services/catalogService';
 import { getHtml2Pdf } from '../services/pdfService';
 import { useDataStore } from '../stores/dataStore';
@@ -92,7 +97,7 @@ export const Transcripts: React.FC<TranscriptsProps> = (props) => {
   const [transcriptType, setTranscriptType] = useState<'Official' | 'Provisional'>('Official');
   const [selectedTerm, setSelectedTerm] = useState('Fall 2023');
   const [zoomLevel, setZoomLevel] = useState(100); // Zoom percentage
-  const [studentGrades, setStudentGrades] = useState<Grade[]>([]);
+  const [studentGrades, setStudentGrades] = useState<AcademicRecordFlat[]>([]);
   const [loadingGrades, setLoadingGrades] = useState(false);
   const [editorMode, setEditorMode] = useState(false);
   const [selectedBlock, setSelectedBlock] = useState<EditableBlockKey | null>(null);
@@ -180,7 +185,7 @@ export const Transcripts: React.FC<TranscriptsProps> = (props) => {
     return toSafeNumber(value).toFixed(digits);
   };
 
-  // Fetch grades when a student is selected
+  // Fetch grades when a student is selected — source of truth: PocketBase academic_records
   useEffect(() => {
     if (!selectedStudent) {
       setStudentGrades([]);
@@ -190,16 +195,8 @@ export const Transcripts: React.FC<TranscriptsProps> = (props) => {
     const fetchGrades = async () => {
       setLoadingGrades(true);
       try {
-        console.log('[Transcripts] Fetching grades for student:', selectedStudent.id);
-        const response = await getStudentGrades(selectedStudent.id);
-        
-        if (response.success && response.data) {
-          console.log('[Transcripts] Grades fetched:', response.data.items);
-          setStudentGrades(response.data.items);
-        } else {
-          console.warn('[Transcripts] No grades found or error:', response.error);
-          setStudentGrades([]);
-        }
+        const records = await getStudentAcademicRecords(selectedStudent.id);
+        setStudentGrades(records);
       } catch (error) {
         console.error('[Transcripts] Error fetching grades:', error);
         setStudentGrades([]);
@@ -350,31 +347,20 @@ export const Transcripts: React.FC<TranscriptsProps> = (props) => {
     });
   }, [students, searchTerm, programFilter]);
 
-  const getPerformanceRecords = (student: Student): PerformanceRecord[] => {
-    // Use real grades from database instead of mock data
-    if (studentGrades.length === 0) {
-      console.log('[Transcripts] No grades available for student');
-      return [];
-    }
+  const getPerformanceRecords = (_student: Student): PerformanceRecord[] => {
+    if (studentGrades.length === 0) return [];
 
-    console.log('[Transcripts] Converting grades to performance records:', studentGrades.length);
-
-    return studentGrades.map((grade) => {
-      const raw = grade as Grade & { credits?: number; creditHours?: number; hours?: number };
-      const score = toSafeNumber(grade.numericGrade ?? grade.percentage ?? grade.grade ?? grade.total ?? 0);
-      const credits = toSafeNumber(raw.credits ?? raw.creditHours ?? raw.hours ?? 0);
-
-      // Map database grade to performance record format
-      return {
-        courseCode: grade.courseCode || 'N/A',
-        courseName: grade.courseName || 'Untitled Course',
-        credits,
-        score,
-        grade: grade.letterGrade || 'F',
-        points: toSafeNumber(grade.gpa, 0),
-        term: grade.semester && grade.academicYear ? `${grade.semester} ${grade.academicYear}` : (grade.semester || grade.academicYear || "Fall 2023"),
-      };
-    });
+    return studentGrades.map((r) => ({
+      courseCode: r.courseCode || 'N/A',
+      courseName: r.courseTitle || 'Untitled Course',
+      credits:    r.creditHours,
+      score:      r.totalScore,
+      grade:      r.grade || 'F',
+      points:     r.gradePoint,
+      term:       r.semester && r.academicYear
+                    ? `${r.semester} ${r.academicYear}`
+                    : (r.semester || r.academicYear || '2025'),
+    }));
   };
 
   const allRecords = useMemo(() => selectedStudent ? getPerformanceRecords(selectedStudent) : [], [selectedStudent, studentGrades]);
