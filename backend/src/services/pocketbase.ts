@@ -512,11 +512,12 @@ export async function createDefaultAdminIfNeeded(): Promise<void> {
 
     if (adminUser) {
       // Lock the account properties
-      if (!adminUser.isActive || adminUser.role !== 'admin') {
+      if (!adminUser.isActive || adminUser.role !== 'admin' || !adminUser.name) {
         logger.info(`Locking/Restoring admin user account properties for ${adminEmail}`);
         await pb.collection('users').update(adminUser.id, {
           isActive: true,
           role: 'admin',
+          name: 'System Administrator',
           verified: true,
         });
       }
