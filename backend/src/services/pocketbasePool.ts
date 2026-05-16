@@ -63,9 +63,14 @@ class PocketBaseConnectionPool {
       await this.createConnection();
     }
     
-    // Authenticate admin once for the pool
-    await this.authenticateAdmin();
+    // Authenticate admin — degrade gracefully if it fails (e.g. fresh PB instance)
+    try {
+      await this.authenticateAdmin();
+    } catch (err) {
+      logger.warn('Connection pool: admin auth failed on init — pool will operate in degraded mode. Retry on next request.');
+    }
     
+    // Mark ready regardless so the server can still start and serve public routes
     this._ready = true;
     logger.info(`✓ Connection pool initialized with ${this.pool.length} connections`);
   }

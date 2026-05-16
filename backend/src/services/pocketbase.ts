@@ -443,10 +443,21 @@ async function createCollection(name: string): Promise<void> {
           logger.error(`Target collection '${targetName}' not found for relation field '${fieldName}' in '${name}'. Has it been created yet?`);
         }
       }
-      return {
+      
+      const fieldDef: any = {
         name: fieldName,
         ...config
       };
+      
+      // CRITICAL: Preserve existing field IDs to prevent PocketBase from dropping the column and wiping data
+      if (existingCollection && existingCollection.schema) {
+        const existingField = existingCollection.schema.find((f: any) => f.name === fieldName);
+        if (existingField && existingField.id) {
+          fieldDef.id = existingField.id;
+        }
+      }
+      
+      return fieldDef;
     });
 
     if (existingCollection) {
