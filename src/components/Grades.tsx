@@ -32,13 +32,11 @@ import { Grade } from "../grading/types";
 import { Student, Course } from "../types";
 import { BulkEntryModal } from "./BulkEntryModal";
 import { postGradeBatch } from "../services/batchService";
+import { useDataStore } from "../stores/dataStore";
 
-interface GradesProps {
-  students?: Student[];
-  courses?: Course[];
-}
-
-const Grades: React.FC<GradesProps> = ({ students = [], courses = [] }) => {
+const Grades: React.FC = () => {
+  const students = useDataStore((s) => s.students);
+  const courses = useDataStore((s) => s.courses);
   const [grades, setGrades] = useState<Grade[]>([]);
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [isDetailsOpen, setIsDetailsOpen] = useState(false);

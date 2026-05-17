@@ -19,12 +19,10 @@ import {
   History,
 } from "lucide-react";
 import { MedicalVisit, Student } from "../types";
+import { useDataStore } from "../stores/dataStore";
 
-interface MedicalProps {
-  students: Student[];
-}
-
-export const Medical: React.FC<MedicalProps> = ({ students }) => {
+export const Medical: React.FC = () => {
+  const students = useDataStore((s) => s.students);
   const [records, setRecords] = useState<MedicalVisit[]>(() => {
     const saved = localStorage.getItem("bmi_medical_records");
     return saved

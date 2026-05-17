@@ -29,6 +29,7 @@ import {
 } from "lucide-react";
 import { getAIResponse } from "../services/aiService";
 import { Student, StaffMember } from "../types";
+import { useDataStore } from "../stores/dataStore";
 
 interface MessageLog {
   id: string;
@@ -40,12 +41,9 @@ interface MessageLog {
   text: string;
 }
 
-interface CommunicationsProps {
-  students: Student[];
-  staff: StaffMember[];
-}
-
-const Communications: React.FC<CommunicationsProps> = ({ students, staff }) => {
+const Communications: React.FC = () => {
+  const students = useDataStore((s) => s.students);
+  const staff = useDataStore((s) => s.staff);
   const [activeChannel, setActiveChannel] = useState<"sms" | "email">("email");
   const [activeTab, setActiveTab] = useState<"composer" | "history">(
     "composer",

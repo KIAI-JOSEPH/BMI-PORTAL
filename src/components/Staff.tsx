@@ -25,11 +25,7 @@ import {
 import { StaffMember } from "../types";
 import { getStaff } from "../services/staffService";
 import { getAllCampuses, Campus } from "../services/campusService";
-
-interface StaffProps {
-  staff: StaffMember[];
-  setStaff: React.Dispatch<React.SetStateAction<StaffMember[]>>;
-}
+import { useDataStore } from "../stores/dataStore";
 
 const departments = [
   "All Departments",
@@ -41,7 +37,20 @@ const departments = [
   "Student Affairs",
 ];
 
-const Staff: React.FC<StaffProps> = ({ staff, setStaff }) => {
+const Staff: React.FC = () => {
+  const staff = useDataStore((s) => s.staff);
+  const _setStaff = useDataStore((s) => s.setStaff);
+  const setStaff = (action: React.SetStateAction<StaffMember[]>) => {
+    if (typeof action === "function") {
+      _setStaff(
+        (action as (prev: StaffMember[]) => StaffMember[])(
+          useDataStore.getState().staff,
+        ),
+      );
+    } else {
+      _setStaff(action);
+    }
+  };
   const [searchTerm, setSearchTerm] = useState("");
   const [deptFilter, setDeptFilter] = useState("All Departments");
   const [campusFilter, setCampusFilter] = useState("All Campuses");

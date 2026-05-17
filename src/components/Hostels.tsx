@@ -23,12 +23,10 @@ import {
   FileText,
 } from "lucide-react";
 import { Hostel, RoomAssignment, Student } from "../types";
+import { useDataStore } from "../stores/dataStore";
 
-interface HostelsProps {
-  students: Student[];
-}
-
-const Hostels: React.FC<HostelsProps> = ({ students }) => {
+const Hostels: React.FC = () => {
+  const students = useDataStore((s) => s.students);
   const [halls, setHalls] = useState<Hostel[]>(() => {
     const saved = localStorage.getItem("bmi_data_hostels");
     return saved

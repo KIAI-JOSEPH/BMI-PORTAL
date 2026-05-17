@@ -14,6 +14,8 @@ import {
 } from "lucide-react";
 import { Student } from "../types";
 import { getHtml2Pdf } from "../services/pdfService";
+import { useDataStore } from "../stores/dataStore";
+import { useUIStore } from "../stores/uiStore";
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 interface CertificateRecord {
@@ -39,10 +41,6 @@ interface QRData {
   qrCode: string;
   url: string;
   mode: string;
-}
-interface CertificatesProps {
-  students: Student[];
-  logo: string;
 }
 
 // ── Faculty → dept code map ───────────────────────────────────────────────────
@@ -522,7 +520,9 @@ const CertificateDocument: React.FC<CertDocProps> = ({
 };
 
 // ── Main Certificates Component ───────────────────────────────────────────────
-const Certificates: React.FC<CertificatesProps> = ({ students, logo }) => {
+const Certificates: React.FC = () => {
+  const students = useDataStore((s) => s.students);
+  const logo = useUIStore((s) => s.logo);
   const [searchTerm, setSearchTerm] = useState("");
   const [selectedStudent, setSelectedStudent] = useState<Student | null>(null);
   const [showCertificate, setShowCertificate] = useState(false);

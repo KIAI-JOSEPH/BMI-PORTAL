@@ -32,13 +32,7 @@ import {
   getGrades,
   Grade,
 } from "../services/gradeService";
-
-interface ExamsProps {
-  students?: Student[];
-  courses?: Course[];
-  setStudents?: React.Dispatch<React.SetStateAction<Student[]>>;
-  setCourses?: React.Dispatch<React.SetStateAction<Course[]>>;
-}
+import { useDataStore } from "../stores/dataStore";
 
 interface ExamRecord {
   id: string;
@@ -66,12 +60,9 @@ interface GradeRecord {
   level: "Diploma" | "Degree" | "Masters" | "PhD";
 }
 
-const Exams: React.FC<ExamsProps> = ({
-  students = [],
-  courses = [],
-  setStudents,
-  setCourses,
-}) => {
+const Exams: React.FC = () => {
+  const students = useDataStore((s) => s.students);
+  const courses = useDataStore((s) => s.courses);
   const [activeTab, setActiveTab] = useState<"schedule" | "grading">(
     "schedule",
   );

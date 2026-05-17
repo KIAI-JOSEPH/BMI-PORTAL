@@ -48,6 +48,18 @@ const loginSchema = z.object({
   rememberMe: z.boolean().optional().default(false),
 });
 
+// Shared new-password policy — applied to reset-password and change-password
+const newPasswordSchema = z
+  .string()
+  .min(12, "Password must be at least 12 characters")
+  .max(128, "Password too long")
+  .regex(/[A-Z]/, "Password must contain at least one uppercase letter")
+  .regex(/[0-9]/, "Password must contain at least one number")
+  .regex(
+    /[^A-Za-z0-9]/,
+    "Password must contain at least one special character",
+  );
+
 /**
  * Generate Access and Refresh Tokens
  */
@@ -353,16 +365,7 @@ authRouter.post(
 const resetPasswordSchema = z
   .object({
     token: z.string().min(1, "Reset token is required"),
-    password: z
-      .string()
-      .min(12, "Password must be at least 12 characters")
-      .max(128, "Password too long")
-      .regex(/[A-Z]/, "Password must contain at least one uppercase letter")
-      .regex(/[0-9]/, "Password must contain at least one number")
-      .regex(
-        /[^A-Za-z0-9]/,
-        "Password must contain at least one special character",
-      ),
+    password: newPasswordSchema,
     passwordConfirm: z.string(),
   })
   .refine((data) => data.password === data.passwordConfirm, {
@@ -409,53 +412,49 @@ authRouter.post(
  * POST /api/v1/auth/change-password
  * Change password for authenticated user
  */
-authRouter.post("/change-password", authMiddleware, async (c) => {
-  try {
-    const { currentPassword, newPassword } = await c.req.json();
-
-    if (!currentPassword || !newPassword) {
-      return c.json(
-        {
-          success: false,
-          error: "Current password and new password are required",
-        },
-        400,
-      );
-    }
-
-    if (newPassword.length < 8) {
-      return c.json(
-        { success: false, error: "New password must be at least 8 characters" },
-        400,
-      );
-    }
-
-    const user = c.get("user") as { sub: string; email: string };
-    const pb = getPocketBase();
-
-    // Authenticate with current password to verify
-    try {
-      await pb
-        .collection("users")
-        .authWithPassword(user.email, currentPassword);
-    } catch {
-      return c.json(
-        { success: false, error: "Current password is incorrect" },
-        401,
-      );
-    }
-
-    // Update the password
-    await pb.collection("users").update(user.sub, {
-      password: newPassword,
-      passwordConfirm: newPassword,
-    });
-
-    return c.json({ success: true, message: "Password updated successfully" });
-  } catch (error) {
-    logger.error("Password change error:", error);
-    return c.json({ success: false, error: "Failed to update password" }, 500);
-  }
+const changePasswordSchema = z.object({
+  currentPassword: z.string().min(1, "Current password is required"),
+  newPassword: newPasswordSchema,
 });
+
+authRouter.post(
+  "/change-password",
+  authMiddleware,
+  zValidator("json", changePasswordSchema),
+  async (c) => {
+    try {
+      const { currentPassword, newPassword } = c.req.valid("json");
+      const user = c.get("user") as { sub: string; email: string };
+      const pb = getPocketBase();
+
+      try {
+        await pb
+          .collection("users")
+          .authWithPassword(user.email, currentPassword);
+      } catch {
+        return c.json(
+          { success: false, error: "Current password is incorrect" },
+          401,
+        );
+      }
+
+      await pb.collection("users").update(user.sub, {
+        password: newPassword,
+        passwordConfirm: newPassword,
+      });
+
+      return c.json({
+        success: true,
+        message: "Password updated successfully",
+      });
+    } catch (error) {
+      logger.error("Password change error:", error);
+      return c.json(
+        { success: false, error: "Failed to update password" },
+        500,
+      );
+    }
+  },
+);
 
 export default authRouter;

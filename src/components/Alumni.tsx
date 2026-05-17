@@ -26,6 +26,7 @@ import {
 } from "lucide-react";
 import { getAIResponse } from "../services/aiService";
 import { Student } from "../types";
+import { useDataStore } from "../stores/dataStore";
 
 interface AlumniMember {
   id: string;
@@ -40,11 +41,8 @@ interface AlumniMember {
   isHallOfFame: boolean;
 }
 
-interface AlumniProps {
-  students?: Student[];
-}
-
-const Alumni: React.FC<AlumniProps> = ({ students = [] }) => {
+const Alumni: React.FC = () => {
+  const students = useDataStore((s) => s.students);
   const [alumni, setAlumni] = useState<AlumniMember[]>(() => {
     const saved = localStorage.getItem("bmi_data_alumni");
     return saved

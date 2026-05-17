@@ -15,17 +15,14 @@ import {
   Timer,
 } from "lucide-react";
 import { Student } from "../types";
-
-interface AttendanceProps {
-  theme: string;
-  students: Student[];
-}
+import { useDataStore } from "../stores/dataStore";
 
 interface AttendanceState {
   [studentId: string]: "present" | "absent" | "late";
 }
 
-const Attendance: React.FC<AttendanceProps> = ({ theme, students }) => {
+const Attendance: React.FC = () => {
+  const students = useDataStore((s) => s.students);
   const [selectedCourse, setSelectedCourse] = useState("School of Theology");
   const [searchTerm, setSearchTerm] = useState("");
   const [attendance, setAttendance] = useState<AttendanceState>({});

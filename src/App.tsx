@@ -1,18 +1,17 @@
-
-import React, { useEffect } from 'react';
-import { Routes, Route } from 'react-router-dom';
-import { Menu } from 'lucide-react';
-import Sidebar from './components/Sidebar';
-import AIModal from './components/AIModal';
-import Login from './components/Login';
-import VerificationPage from './components/VerificationPage';
-import SessionTimeoutWarning from './components/SessionTimeoutWarning';
-import { AppRoutes } from './router';
-import ErrorBoundary from './components/ErrorBoundary';
-import { useAuthStore } from './stores/authStore';
-import { useDataStore } from './stores/dataStore';
-import { useUIStore } from './stores/uiStore';
-import { useCoreDataPolling } from './hooks/useCoreDataPolling';
+import React, { useEffect } from "react";
+import { Routes, Route } from "react-router-dom";
+import { Menu } from "lucide-react";
+import Sidebar from "./components/Sidebar";
+import AIModal from "./components/AIModal";
+import Login from "./components/Login";
+import VerificationPage from "./components/VerificationPage";
+import SessionTimeoutWarning from "./components/SessionTimeoutWarning";
+import { AppRoutes } from "./router";
+import ErrorBoundary from "./components/ErrorBoundary";
+import { useAuthStore } from "./stores/authStore";
+import { useDataStore } from "./stores/dataStore";
+import { useUIStore } from "./stores/uiStore";
+import { useCoreDataPolling } from "./hooks/useCoreDataPolling";
 
 /** Public routes (no auth required) */
 function PublicRoutes() {
@@ -20,7 +19,15 @@ function PublicRoutes() {
   return (
     <Routes>
       <Route path="/verify" element={<VerificationPage logo={logo} />} />
-      <Route path="*" element={<Login onLogin={() => useAuthStore.getState().checkSession()} logo={logo} />} />
+      <Route
+        path="*"
+        element={
+          <Login
+            onLogin={() => useAuthStore.getState().checkSession()}
+            logo={logo}
+          />
+        }
+      />
     </Routes>
   );
 }
@@ -29,44 +36,43 @@ function PublicRoutes() {
 function AuthenticatedLayout() {
   const { logout: authLogout } = useAuthStore();
   const { fetchAllCoreData, clearAll } = useDataStore();
-  const { theme, logo, isSidebarOpen, isAIModalOpen, closeSidebar, openSidebar, closeAIModal } = useUIStore();
-  const students = useDataStore((s) => s.students);
-  const transactions = useDataStore((s) => s.transactions);
-  
-  const stats = React.useMemo(() => ({
-    students: students.length,
-    admissions: students.filter(st => st.status === 'Applicant').length,
-    tuition: transactions.filter(t => t.status === 'Paid').reduce((acc, curr) => acc + curr.amt, 0),
-    events: 5
-  }), [students, transactions]);
-
+  const {
+    theme,
+    logo,
+    isSidebarOpen,
+    isAIModalOpen,
+    closeSidebar,
+    openSidebar,
+    closeAIModal,
+  } = useUIStore();
   // Polling for data freshness (60s interval)
   useCoreDataPolling(true, 60000, fetchAllCoreData);
 
   // Handle Theme
   useEffect(() => {
-    if (theme === 'dark') {
-      document.documentElement.classList.add('dark');
+    if (theme === "dark") {
+      document.documentElement.classList.add("dark");
     } else {
-      document.documentElement.classList.remove('dark');
+      document.documentElement.classList.remove("dark");
     }
   }, [theme]);
 
   return (
     <div className="flex bg-[#F8F9FA] dark:bg-[#0a0015] h-screen font-sans transition-colors duration-300 relative overflow-hidden">
-
       {/* Drawer Trigger Button */}
       <button
         onClick={openSidebar}
-        className={`fixed top-3 left-4 z-50 p-2 bg-[#4B0082] text-white rounded-full shadow-lg hover:scale-110 transition-all border-2 border-[#FFD700] ${isSidebarOpen ? 'opacity-0 pointer-events-none' : 'opacity-100'}`}
+        className={`fixed top-3 left-4 z-50 p-2 bg-[#4B0082] text-white rounded-full shadow-lg hover:scale-110 transition-all border-2 border-[#FFD700] ${isSidebarOpen ? "opacity-0 pointer-events-none" : "opacity-100"}`}
         aria-label="Open Menu"
       >
         <Menu size={20} />
       </button>
 
       <Sidebar
-        currentView={window.location.pathname.slice(1) || 'dashboard'}
-        onChangeView={() => { /* Navigation handled by Sidebar using useNavigate */ }}
+        currentView={window.location.pathname.slice(1) || "dashboard"}
+        onChangeView={() => {
+          /* Navigation handled by Sidebar using useNavigate */
+        }}
         onLogout={async () => {
           await authLogout();
           clearAll();
@@ -106,11 +112,11 @@ function App() {
   // Session verification on mount
   useEffect(() => {
     // Clean up any stale PII / mock caches from previous versions
-    localStorage.removeItem('bmi_data_students');
-    localStorage.removeItem('bmi_data_staff');
-    localStorage.removeItem('bmi_data_transactions');
-    localStorage.removeItem('bmi_data_courses');
-    localStorage.removeItem('bmi_data_library');
+    localStorage.removeItem("bmi_data_students");
+    localStorage.removeItem("bmi_data_staff");
+    localStorage.removeItem("bmi_data_transactions");
+    localStorage.removeItem("bmi_data_courses");
+    localStorage.removeItem("bmi_data_library");
 
     checkSession();
   }, [checkSession]);
@@ -129,12 +135,20 @@ function App() {
       <div className="min-h-screen bg-gradient-to-br from-[#1a0033] via-[#4B0082] to-[#320064] flex items-center justify-center">
         <div className="flex flex-col items-center gap-6">
           <div className="w-20 h-20 rounded-xl border-2 border-[#FFD700] bg-white p-2 shadow-2xl animate-pulse">
-            <img src={logo} alt="BMI University" className="w-full h-full object-contain" />
+            <img
+              src={logo}
+              alt="BMI University"
+              className="w-full h-full object-contain"
+            />
           </div>
           <div className="w-10 h-10 border-4 border-[#FFD700]/30 border-t-[#FFD700] rounded-full animate-spin"></div>
           <div className="text-center">
-            <p className="text-[#FFD700] font-semibold text-lg">BMI University ERP</p>
-            <p className="text-white/60 text-sm mt-1">Loading system modules...</p>
+            <p className="text-[#FFD700] font-semibold text-lg">
+              BMI University ERP
+            </p>
+            <p className="text-white/60 text-sm mt-1">
+              Loading system modules...
+            </p>
           </div>
         </div>
       </div>

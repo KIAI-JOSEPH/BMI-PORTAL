@@ -7,31 +7,35 @@
  * - URL-based navigation state
  * - SEO-friendly URLs for public verification pages
  */
-import React, { Suspense, lazy } from 'react';
-import { Routes, Route, Navigate } from 'react-router-dom';
-import { useDataStore } from '../stores/dataStore';
-import { useUIStore } from '../stores/uiStore';
+import React, { Suspense, lazy } from "react";
+import { Routes, Route, Navigate } from "react-router-dom";
 
 // Lazy-loaded page components for code splitting
-const Dashboard = lazy(() => import('../components/Dashboard'));
-const Students = lazy(() => import('../components/Students'));
-const Staff = lazy(() => import('../components/Staff'));
-const Attendance = lazy(() => import('../components/Attendance'));
-const Finance = lazy(() => import('../components/Finance'));
-const Courses = lazy(() => import('../components/Courses'));
-const Exams = lazy(() => import('../components/Exams'));
-const Grades = lazy(() => import('../components/Grades'));
-const Transcripts = lazy(() => import('../components/Transcripts').then(m => ({ default: m.Transcripts })));
-const Certificates = lazy(() => import('../components/Certificates'));
-const Library = lazy(() => import('../components/Library').then(m => ({ default: m.Library })));
-const Hostels = lazy(() => import('../components/Hostels'));
-const Medical = lazy(() => import('../components/Medical').then(m => ({ default: m.Medical })));
-const Inventory = lazy(() => import('../components/Inventory'));
-const Alumni = lazy(() => import('../components/Alumni'));
-const Communications = lazy(() => import('../components/Communications'));
-const Visitors = lazy(() => import('../components/Visitors'));
-const Reports = lazy(() => import('../components/Reports'));
-const Settings = lazy(() => import('../components/Settings'));
+const Dashboard = lazy(() => import("../components/Dashboard"));
+const Students = lazy(() => import("../components/Students"));
+const Staff = lazy(() => import("../components/Staff"));
+const Attendance = lazy(() => import("../components/Attendance"));
+const Finance = lazy(() => import("../components/Finance"));
+const Courses = lazy(() => import("../components/Courses"));
+const Exams = lazy(() => import("../components/Exams"));
+const Grades = lazy(() => import("../components/Grades"));
+const Transcripts = lazy(() =>
+  import("../components/Transcripts").then((m) => ({ default: m.Transcripts })),
+);
+const Certificates = lazy(() => import("../components/Certificates"));
+const Library = lazy(() =>
+  import("../components/Library").then((m) => ({ default: m.Library })),
+);
+const Hostels = lazy(() => import("../components/Hostels"));
+const Medical = lazy(() =>
+  import("../components/Medical").then((m) => ({ default: m.Medical })),
+);
+const Inventory = lazy(() => import("../components/Inventory"));
+const Alumni = lazy(() => import("../components/Alumni"));
+const Communications = lazy(() => import("../components/Communications"));
+const Visitors = lazy(() => import("../components/Visitors"));
+const Reports = lazy(() => import("../components/Reports"));
+const Settings = lazy(() => import("../components/Settings"));
 
 // Page-level loading fallback
 function PageLoader() {
@@ -45,28 +49,6 @@ function PageLoader() {
   );
 }
 
-// Wrapper to provide legacy props expected by components (from ViewRenderer days)
-function LegacyPropsWrapper({ component: Component }: { component: any }) {
-  const ds = useDataStore();
-  const ui = useUIStore();
-  
-  return <Component 
-    students={ds.students} 
-    setStudents={ds.setStudents}
-    staff={ds.staff}
-    setStaff={ds.setStaff}
-    courses={ds.courses}
-    setCourses={ds.setCourses}
-    library={ds.library}
-    setLibrary={ds.setLibrary}
-    transactions={ds.transactions}
-    setTransactions={ds.setTransactions}
-    logo={ui.logo}
-    theme={ui.theme}
-    onUpdateLogo={ui.setLogo}
-  />;
-}
-
 /**
  * AppRoutes - authenticated route tree
  * All routes require the user to be logged in (handled by parent AppLayout).
@@ -77,24 +59,24 @@ export function AppRoutes() {
       <Routes>
         <Route path="/" element={<Dashboard />} />
         <Route path="/dashboard" element={<Dashboard />} />
-        <Route path="/students" element={<LegacyPropsWrapper component={Students} />} />
-        <Route path="/staff" element={<LegacyPropsWrapper component={Staff} />} />
-        <Route path="/attendance" element={<LegacyPropsWrapper component={Attendance} />} />
-        <Route path="/finance" element={<LegacyPropsWrapper component={Finance} />} />
-        <Route path="/courses" element={<LegacyPropsWrapper component={Courses} />} />
-        <Route path="/exams" element={<LegacyPropsWrapper component={Exams} />} />
-        <Route path="/grades" element={<LegacyPropsWrapper component={Grades} />} />
-        <Route path="/transcripts" element={<LegacyPropsWrapper component={Transcripts} />} />
-        <Route path="/certificates" element={<LegacyPropsWrapper component={Certificates} />} />
-        <Route path="/library" element={<LegacyPropsWrapper component={Library} />} />
-        <Route path="/hostels" element={<LegacyPropsWrapper component={Hostels} />} />
-        <Route path="/medical" element={<LegacyPropsWrapper component={Medical} />} />
-        <Route path="/inventory" element={<LegacyPropsWrapper component={Inventory} />} />
-        <Route path="/alumni" element={<LegacyPropsWrapper component={Alumni} />} />
-        <Route path="/communications" element={<LegacyPropsWrapper component={Communications} />} />
-        <Route path="/visitors" element={<LegacyPropsWrapper component={Visitors} />} />
-        <Route path="/reports" element={<LegacyPropsWrapper component={Reports} />} />
-        <Route path="/settings" element={<LegacyPropsWrapper component={Settings} />} />
+        <Route path="/students" element={<Students />} />
+        <Route path="/staff" element={<Staff />} />
+        <Route path="/attendance" element={<Attendance />} />
+        <Route path="/finance" element={<Finance />} />
+        <Route path="/courses" element={<Courses />} />
+        <Route path="/exams" element={<Exams />} />
+        <Route path="/grades" element={<Grades />} />
+        <Route path="/transcripts" element={<Transcripts />} />
+        <Route path="/certificates" element={<Certificates />} />
+        <Route path="/library" element={<Library />} />
+        <Route path="/hostels" element={<Hostels />} />
+        <Route path="/medical" element={<Medical />} />
+        <Route path="/inventory" element={<Inventory />} />
+        <Route path="/alumni" element={<Alumni />} />
+        <Route path="/communications" element={<Communications />} />
+        <Route path="/visitors" element={<Visitors />} />
+        <Route path="/reports" element={<Reports />} />
+        <Route path="/settings" element={<Settings />} />
         {/* Catch-all redirect to dashboard */}
         <Route path="*" element={<Navigate to="/dashboard" replace />} />
       </Routes>

@@ -25,14 +25,22 @@ import {
 } from "../services/courseService";
 import { BulkEntryModal } from "./BulkEntryModal";
 import { postCourseBatch } from "../services/batchService";
+import { useDataStore } from "../stores/dataStore";
 
-interface CoursesProps {
-  theme: string;
-  courses: Course[];
-  setCourses: React.Dispatch<React.SetStateAction<Course[]>>;
-}
-
-const Courses: React.FC<CoursesProps> = ({ theme, courses, setCourses }) => {
+const Courses: React.FC = () => {
+  const courses = useDataStore((s) => s.courses);
+  const _setCourses = useDataStore((s) => s.setCourses);
+  const setCourses = (action: React.SetStateAction<Course[]>) => {
+    if (typeof action === "function") {
+      _setCourses(
+        (action as (prev: Course[]) => Course[])(
+          useDataStore.getState().courses,
+        ),
+      );
+    } else {
+      _setCourses(action);
+    }
+  };
   const [viewMode, setViewMode] = useState<"grid" | "list">("list");
   const [searchTerm, setSearchTerm] = useState("");
   const [activeLevel, setActiveLevel] = useState("All Levels");
