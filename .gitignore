@@ -42,6 +42,7 @@ backend/.env.*
 
 # Runtime data and databases
 bin/
+pb_data/
 data/pb_data/
 *.db
 *.db-wal
