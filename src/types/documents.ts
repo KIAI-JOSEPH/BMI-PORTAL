@@ -4,22 +4,22 @@
  * Security-focused with full audit trail support
  */
 
-export type DocumentType = 
-  | 'certificate' 
-  | 'transcript' 
-  | 'id_card' 
-  | 'admission_letter' 
-  | 'good_standing' 
-  | 'registration_card' 
-  | 'library_card'
-  | 'attendance_record';
+export type DocumentType =
+  | "certificate"
+  | "transcript"
+  | "id_card"
+  | "admission_letter"
+  | "good_standing"
+  | "registration_card"
+  | "library_card"
+  | "attendance_record";
 
-export type DocumentStatus = 
-  | 'draft' 
-  | 'issued' 
-  | 'revoked' 
-  | 'suspended' 
-  | 'expired';
+export type DocumentStatus =
+  | "draft"
+  | "issued"
+  | "revoked"
+  | "suspended"
+  | "expired";
 
 export interface DocumentSecurityFeatures {
   /** Cryptographic hash of document content */
@@ -61,7 +61,7 @@ export interface BaseDocument {
 
 /** Enhanced Certificate with full security features */
 export interface EnhancedCertificate extends BaseDocument {
-  type: 'certificate';
+  type: "certificate";
   degreeTitle: string;
   faculty: string;
   department: string;
@@ -73,13 +73,13 @@ export interface EnhancedCertificate extends BaseDocument {
   thesisTitle?: string;
   thesisGrade?: string;
   /** Certificate template variant */
-  template: 'standard' | 'honors' | 'distinction' | 'phd';
+  template: "standard" | "honors" | "distinction" | "phd";
 }
 
 /** Enhanced Transcript with full security features */
 export interface EnhancedTranscript extends BaseDocument {
-  type: 'transcript';
-  transcriptType: 'official' | 'provisional' | 'complete';
+  type: "transcript";
+  transcriptType: "official" | "provisional" | "complete";
   academicLevel: string;
   faculty: string;
   department: string;
@@ -103,7 +103,7 @@ export interface TranscriptSemester {
   year: number;
   gpa: number;
   credits: number;
-  status: 'completed' | 'in_progress' | 'withdrawn';
+  status: "completed" | "in_progress" | "withdrawn";
   courses: TranscriptCourse[];
 }
 
@@ -115,14 +115,14 @@ export interface TranscriptCourse {
   score: number;
   grade: string;
   points: number;
-  status: 'passed' | 'failed' | 'incomplete' | 'withdrawn';
+  status: "passed" | "failed" | "incomplete" | "withdrawn";
   attempt: number;
 }
 
 /** Student ID Card */
 export interface StudentIDCard extends BaseDocument {
-  type: 'id_card';
-  cardNumber: string;
+  type: "id_card";
+  cardNumber?: string;
   photoUrl: string;
   firstName: string;
   lastName: string;
@@ -148,7 +148,7 @@ export interface StudentIDCard extends BaseDocument {
 
 /** Letter of Admission */
 export interface AdmissionLetter extends BaseDocument {
-  type: 'admission_letter';
+  type: "admission_letter";
   admissionNumber: string;
   academicYear: string;
   semester: string;
@@ -173,8 +173,8 @@ export interface AdmissionLetter extends BaseDocument {
 
 /** Letter of Good Standing */
 export interface GoodStandingLetter extends BaseDocument {
-  type: 'good_standing';
-  letterType: 'general' | 'transfer' | 'employment' | 'scholarship' | 'visa';
+  type: "good_standing";
+  letterType: "general" | "transfer" | "employment" | "scholarship" | "visa";
   purpose: string;
   recipientName?: string;
   recipientAddress?: string;
@@ -189,14 +189,14 @@ export interface GoodStandingLetter extends BaseDocument {
 
 /** Course Registration Card */
 export interface RegistrationCard extends BaseDocument {
-  type: 'registration_card';
+  type: "registration_card";
   academicYear: string;
   semester: string;
   registrationDate: string;
   courses: RegisteredCourse[];
   totalCredits: number;
   totalHours: number;
-  registrationStatus: 'complete' | 'pending' | 'provisional';
+  registrationStatus: "complete" | "pending" | "provisional";
   advisorName: string;
   advisorApproval: boolean;
   financeClearance: boolean;
@@ -211,26 +211,26 @@ export interface RegisteredCourse {
   lecturer: string;
   schedule: string;
   venue: string;
-  status: 'registered' | 'waitlist' | 'dropped';
+  status: "registered" | "waitlist" | "dropped";
 }
 
 /** Library Card */
 export interface LibraryCard extends BaseDocument {
-  type: 'library_card';
+  type: "library_card";
   libraryNumber: string;
-  category: 'student' | 'staff' | 'external';
+  category: "student" | "staff" | "external";
   issueDate: string;
   expiryDate: string;
   maxBooks: number;
   currentLoans: number;
   fineBalance: number;
-  accessLevel: 'full' | 'limited' | 'restricted';
+  accessLevel: "full" | "limited" | "restricted";
   departments: string[];
 }
 
 /** Attendance Record */
 export interface AttendanceRecord extends BaseDocument {
-  type: 'attendance_record';
+  type: "attendance_record";
   academicYear: string;
   semester: string;
   courseCode: string;
@@ -242,15 +242,15 @@ export interface AttendanceRecord extends BaseDocument {
   excusedSessions: number;
   attendancePercentage: number;
   sessions: AttendanceSession[];
-  eligibilityStatus: 'eligible' | 'warning' | 'barred';
+  eligibilityStatus: "eligible" | "warning" | "barred";
 }
 
 export interface AttendanceSession {
   date: string;
   time: string;
-  status: 'present' | 'absent' | 'excused' | 'late';
+  status: "present" | "absent" | "excused" | "late";
   verifiedBy: string;
-  verificationMethod: 'manual' | 'biometric' | 'qr_scan' | 'app';
+  verificationMethod: "manual" | "biometric" | "qr_scan" | "app";
 }
 
 /** Document Template Configuration */
@@ -259,10 +259,14 @@ export interface DocumentTemplate {
   type: DocumentType;
   name: string;
   description: string;
-  orientation: 'portrait' | 'landscape';
-  paperSize: 'A4' | 'A5' | 'letter' | 'ID1' | 'custom';
-  customDimensions?: { width: number; height: number; unit: 'mm' | 'in' | 'px' };
-  securityLevel: 'standard' | 'enhanced' | 'maximum';
+  orientation: "portrait" | "landscape";
+  paperSize: "A4" | "A5" | "letter" | "ID1" | "custom";
+  customDimensions?: {
+    width: number;
+    height: number;
+    unit: "mm" | "in" | "px";
+  };
+  securityLevel: "standard" | "enhanced" | "maximum";
   features: {
     qrCode: boolean;
     barcode: boolean;
@@ -278,7 +282,7 @@ export interface DocumentTemplate {
     secondaryColor: string;
     accentColor: string;
     fontFamily: string;
-    borderStyle: 'none' | 'simple' | 'ornate' | 'double' | 'seal';
+    borderStyle: "none" | "simple" | "ornate" | "double" | "seal";
     sealImage?: string;
     backgroundPattern?: string;
   };
@@ -292,8 +296,8 @@ export interface DocumentGenerationRequest {
   studentId: string;
   templateId?: string;
   options?: {
-    orientation?: 'portrait' | 'landscape';
-    securityLevel?: 'standard' | 'enhanced' | 'maximum';
+    orientation?: "portrait" | "landscape";
+    securityLevel?: "standard" | "enhanced" | "maximum";
     includeDigitalSignature?: boolean;
     includeBlockchainAnchor?: boolean;
     expiresAt?: string;
@@ -303,11 +307,11 @@ export interface DocumentGenerationRequest {
 
 /** Document Print/PDF Options */
 export interface DocumentOutputOptions {
-  format: 'pdf' | 'print' | 'preview' | 'image';
+  format: "pdf" | "print" | "preview" | "image";
   filename?: string;
-  quality?: 'low' | 'medium' | 'high' | 'maximum';
+  quality?: "low" | "medium" | "high" | "maximum";
   includeBackground?: boolean;
-  colorMode?: 'color' | 'grayscale' | 'monochrome';
+  colorMode?: "color" | "grayscale" | "monochrome";
   duplex?: boolean;
   watermarkText?: string;
   password?: string; // For encrypted PDF
@@ -326,7 +330,7 @@ export interface DocumentVerificationResult {
   };
   verification: {
     timestamp: string;
-    method: 'online' | 'offline' | 'qr_scan' | 'api';
+    method: "online" | "offline" | "qr_scan" | "api";
     verifiedBy?: string;
     ipAddress?: string;
     location?: string;
@@ -351,7 +355,14 @@ export interface DocumentStatistics {
 export interface DocumentAuditLog {
   id: string;
   documentId: string;
-  action: 'created' | 'viewed' | 'printed' | 'downloaded' | 'verified' | 'revoked' | 'updated';
+  action:
+    | "created"
+    | "viewed"
+    | "printed"
+    | "downloaded"
+    | "verified"
+    | "revoked"
+    | "updated";
   performedBy: string;
   performedAt: string;
   ipAddress?: string;

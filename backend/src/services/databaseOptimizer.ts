@@ -3,8 +3,8 @@
  * Implements indexes, cascade rules, and performance optimizations
  */
 
-import { getPocketBase } from './pocketbase.js';
-import { logger } from '../utils/logger.js';
+import { getPocketBase } from "./pocketbase.js";
+import { logger } from "../utils/logger.js";
 
 /**
  * Create indexes for optimal query performance
@@ -12,17 +12,17 @@ import { logger } from '../utils/logger.js';
  */
 export async function createDatabaseIndexes(): Promise<void> {
   try {
-    logger.info('Creating database indexes for optimal performance...');
-    
+    logger.info("Creating database indexes for optimal performance...");
+
     // Note: PocketBase uses SQLite under the hood
     // We'll create indexes through PocketBase's collection schema
-    
-    
-    logger.info('✓ Database indexes configured (PocketBase manages index creation automatically)');
-    logger.info('  Indexes will be created on first query to each collection');
-    
+
+    logger.info(
+      "✓ Database indexes configured (PocketBase manages index creation automatically)",
+    );
+    logger.info("  Indexes will be created on first query to each collection");
   } catch (error) {
-    logger.error('Failed to configure database indexes:', error);
+    logger.error("Failed to configure database indexes:", error);
     throw error;
   }
 }
@@ -31,15 +31,17 @@ export async function createDatabaseIndexes(): Promise<void> {
  * Update collection schemas with cascade rules and optimizations
  */
 export async function optimizeCollectionSchemas(): Promise<void> {
-  const pb = getPocketBase();
-  
+  // pb is managed by the global singleton; no direct call needed here
+  void getPocketBase();
   try {
-    logger.info('Optimizing collection schemas with cascade rules...');
-    
-    logger.info('✓ Collection schemas already optimized via definitions');
-    
+    logger.info("Optimizing collection schemas with cascade rules...");
+
+    logger.info("✓ Collection schemas already optimized via definitions");
   } catch (error) {
-    logger.warn('Failed to optimize collection schemas (possibly due to PocketBase API version changes):', (error as any).message);
+    logger.warn(
+      "Failed to optimize collection schemas (possibly due to PocketBase API version changes):",
+      (error as any).message,
+    );
     // Don't throw - this is non-critical
   }
 }
@@ -49,62 +51,63 @@ export async function optimizeCollectionSchemas(): Promise<void> {
  */
 export async function analyzeQueryPerformance(): Promise<void> {
   const pb = getPocketBase();
-  
+
   try {
-    logger.info('Analyzing query performance...');
-    
+    logger.info("Analyzing query performance...");
+
     // Test common queries and measure performance
     const tests = [
       {
-        name: 'Students list with campus expand',
+        name: "Students list with campus expand",
         query: async () => {
           const start = Date.now();
-          await pb.collection('students').getList(1, 50, {
-            expand: 'campus_id',
+          await pb.collection("students").getList(1, 50, {
+            expand: "campus_id",
           });
           return Date.now() - start;
-        }
+        },
       },
       {
-        name: 'Academic records with student and course expand',
+        name: "Academic records with student and course expand",
         query: async () => {
           const start = Date.now();
-          await pb.collection('academic_records').getList(1, 50, {
-            expand: 'student_id,course_id',
+          await pb.collection("academic_records").getList(1, 50, {
+            expand: "student_id,course_id",
           });
           return Date.now() - start;
-        }
+        },
       },
       {
-        name: 'Students filtered by campus and status',
+        name: "Students filtered by campus and status",
         query: async () => {
           const start = Date.now();
-          await pb.collection('students').getList(1, 50, {
+          await pb.collection("students").getList(1, 50, {
             filter: 'status = "Active"',
           });
           return Date.now() - start;
-        }
+        },
       },
     ];
-    
+
     for (const test of tests) {
       try {
         const duration = await test.query();
-        const status = duration < 100 ? '✓' : duration < 500 ? '⚠' : '✗';
+        const status = duration < 100 ? "✓" : duration < 500 ? "⚠" : "✗";
         logger.info(`${status} ${test.name}: ${duration}ms`);
-        
+
         if (duration > 500) {
-          logger.warn(`  Slow query detected! Consider adding indexes or optimizing query.`);
+          logger.warn(
+            `  Slow query detected! Consider adding indexes or optimizing query.`,
+          );
         }
       } catch (error) {
         logger.warn(`  Skipped ${test.name} (collection may not exist yet)`);
       }
     }
-    
-    logger.info('✓ Query performance analysis complete');
-    
+
+    logger.info("✓ Query performance analysis complete");
   } catch (error) {
-    logger.error('Failed to analyze query performance:', error);
+    logger.error("Failed to analyze query performance:", error);
   }
 }
 
@@ -118,19 +121,19 @@ export async function getDatabaseStats(): Promise<{
   avgQueryTime: number;
 }> {
   const pb = getPocketBase();
-  
+
   try {
     const collections = await pb.collections.getList(1, 100);
     let totalRecords = 0;
-    let largestCollection = '';
+    let largestCollection = "";
     let largestSize = 0;
-    
+
     for (const collection of collections.items) {
       try {
         const records = await pb.collection(collection.name).getList(1, 1);
         const count = records.totalItems;
         totalRecords += count;
-        
+
         if (count > largestSize) {
           largestSize = count;
           largestCollection = collection.name;
@@ -139,7 +142,7 @@ export async function getDatabaseStats(): Promise<{
         // Skip collections that can't be queried
       }
     }
-    
+
     return {
       collections: collections.totalItems,
       totalRecords,
@@ -147,11 +150,11 @@ export async function getDatabaseStats(): Promise<{
       avgQueryTime: 0, // Would need query logging to calculate
     };
   } catch (error) {
-    logger.error('Failed to get database stats:', error);
+    logger.error("Failed to get database stats:", error);
     return {
       collections: 0,
       totalRecords: 0,
-      largestCollection: 'unknown',
+      largestCollection: "unknown",
       avgQueryTime: 0,
     };
   }
@@ -161,19 +164,19 @@ export async function getDatabaseStats(): Promise<{
  * Run all database optimizations
  */
 export async function optimizeDatabase(): Promise<void> {
-  logger.info('🚀 Starting database optimization...');
-  
+  logger.info("🚀 Starting database optimization...");
+
   try {
     await createDatabaseIndexes();
     await optimizeCollectionSchemas();
     await analyzeQueryPerformance();
-    
+
     const stats = await getDatabaseStats();
-    logger.info('📊 Database Statistics:', stats);
-    
-    logger.info('✅ Database optimization complete!');
+    logger.info("📊 Database Statistics:", stats);
+
+    logger.info("✅ Database optimization complete!");
   } catch (error) {
-    logger.error('❌ Database optimization failed:', error);
+    logger.error("❌ Database optimization failed:", error);
     throw error;
   }
 }

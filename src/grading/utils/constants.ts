@@ -12,19 +12,19 @@ export const GPA_PRECISION = 2;
  * Default academic standing thresholds
  */
 export const DEFAULT_STANDING_THRESHOLDS = {
-  HONOR_ROLL_MIN_GPA: 3.5,
-  GOOD_STANDING_MIN_GPA: 2.0,
-  PROBATION_THRESHOLD_GPA: 2.0,
-  WARNING_THRESHOLD_GPA: 2.0,
+  honorRollMinGPA: 3.5,
+  goodStandingMinGPA: 2.0,
+  probationThresholdGPA: 2.0,
+  warningThresholdGPA: 2.0,
 };
 
 /**
  * Default Dean's List criteria
  */
 export const DEFAULT_DEANS_LIST_CRITERIA = {
-  MIN_GPA: 3.5,
-  MIN_CREDITS: 12,
-  EXCLUDE_INCOMPLETE: true,
+  minGPA: 3.5,
+  minCredits: 12,
+  excludeIncomplete: true,
 };
 
 /**
@@ -54,7 +54,7 @@ export const GPA_RANGE = {
 /**
  * Default retake policy
  */
-export const DEFAULT_RETAKE_POLICY = 'replace_with_highest';
+export const DEFAULT_RETAKE_POLICY = "replace_with_highest";
 
 /**
  * Maximum retake attempts allowed
@@ -79,7 +79,7 @@ export const DEFAULT_AUTO_FINALIZE_DAYS = 3;
 /**
  * Semester names
  */
-export const SEMESTERS = ['Fall', 'Spring', 'Summer'] as const;
+export const SEMESTERS = ["Fall", "Spring", "Summer"] as const;
 
 /**
  * Significant GPA change threshold

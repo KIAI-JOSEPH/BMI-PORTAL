@@ -1,30 +1,30 @@
 /**
  * BMI UMS - Data Store Tests
  */
-import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { useDataStore } from '../stores/dataStore';
+import { describe, it, expect, vi, beforeEach } from "vitest";
+import { useDataStore } from "../stores/dataStore";
 
 // Mock service modules
-vi.mock('../services/studentService', () => ({
+vi.mock("../services/studentService", () => ({
   getStudents: vi.fn(),
 }));
-vi.mock('../services/staffService', () => ({
+vi.mock("../services/staffService", () => ({
   getStaff: vi.fn(),
 }));
-vi.mock('../services/courseService', () => ({
+vi.mock("../services/courseService", () => ({
   getCourses: vi.fn(),
 }));
-vi.mock('../services/libraryService', () => ({
+vi.mock("../services/libraryService", () => ({
   getLibraryItems: vi.fn(),
 }));
-vi.mock('../services/financeService', () => ({
+vi.mock("../services/financeService", () => ({
   getTransactions: vi.fn(),
   createTransaction: vi.fn(),
 }));
 
-import { getStudents } from '../services/studentService';
+import { getStudents } from "../services/studentService";
 
-describe('useDataStore', () => {
+describe("useDataStore", () => {
   beforeEach(() => {
     vi.clearAllMocks();
     useDataStore.setState({
@@ -38,8 +38,8 @@ describe('useDataStore', () => {
     });
   });
 
-  describe('initial state', () => {
-    it('should have empty collections', () => {
+  describe("initial state", () => {
+    it("should have empty collections", () => {
       const state = useDataStore.getState();
       expect(state.students).toEqual([]);
       expect(state.staff).toEqual([]);
@@ -49,19 +49,22 @@ describe('useDataStore', () => {
     });
   });
 
-  describe('addStudent', () => {
-    it('should add a student to the beginning of the array', () => {
+  describe("addStudent", () => {
+    it("should add a student to the beginning of the array", () => {
       const student = {
-        id: '1',
-        first_name: 'John',
-        last_name: 'Doe',
-        gender: 'Male' as const,
-        email: 'john@test.com',
-        phone: '123',
-        program_code: 'CS',
-        admission_date: '2024-01-01',
-        status: 'Active' as const,
-        avatar_color: '#fff',
+        id: "1",
+        student_code: "STD-001",
+        full_name: "John Doe",
+        first_name: "John",
+        last_name: "Doe",
+        gender: "Male" as const,
+        email: "john@test.com",
+        phone: "123",
+        programme: "CS",
+        program_code: "CS",
+        admission_date: "2024-01-01",
+        status: "Active" as const,
+        avatar_color: "#fff",
         photo_zoom: 1,
       };
 
@@ -72,18 +75,18 @@ describe('useDataStore', () => {
     });
   });
 
-  describe('getStats', () => {
-    it('should compute stats from current data', () => {
+  describe("getStats", () => {
+    it("should compute stats from current data", () => {
       useDataStore.setState({
         students: [
-          { status: 'Active' } as any,
-          { status: 'Applicant' } as any,
-          { status: 'Applicant' } as any,
+          { status: "Active" } as any,
+          { status: "Applicant" } as any,
+          { status: "Applicant" } as any,
         ],
         transactions: [
-          { status: 'Paid', amt: 1000 } as any,
-          { status: 'Paid', amt: 2000 } as any,
-          { status: 'Pending', amt: 500 } as any,
+          { status: "Paid", amt: 1000 } as any,
+          { status: "Paid", amt: 2000 } as any,
+          { status: "Pending", amt: 500 } as any,
         ],
       });
 
@@ -94,11 +97,11 @@ describe('useDataStore', () => {
     });
   });
 
-  describe('clearAll', () => {
-    it('should reset all data', () => {
+  describe("clearAll", () => {
+    it("should reset all data", () => {
       useDataStore.setState({
-        students: [{ id: '1' }] as any,
-        staff: [{ id: '2' }] as any,
+        students: [{ id: "1" }] as any,
+        staff: [{ id: "2" }] as any,
       });
 
       useDataStore.getState().clearAll();

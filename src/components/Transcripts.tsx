@@ -1,34 +1,33 @@
-
-import React, { useState, useMemo, useEffect } from 'react';
-import { 
-  Search, 
-  Printer, 
-  Download, 
-  FileText, 
-  BookOpen, 
-  X, 
-  ChevronRight, 
-  ShieldCheck, 
-  MessageCircle, 
+import React, { useState, useMemo, useEffect } from "react";
+import {
+  Search,
+  Printer,
+  Download,
+  FileText,
+  BookOpen,
+  X,
+  ChevronRight,
+  ShieldCheck,
+  MessageCircle,
   Scroll,
   CheckCircle,
   ZoomIn,
   ZoomOut,
-  Maximize2
-} from 'lucide-react';
-import { Student, Course } from '../types';
+  Maximize2,
+} from "lucide-react";
+import { Student, Course } from "../types";
 import {
   getStudentAcademicRecords,
   computeOverallGpa,
   type AcademicRecordFlat,
-} from '../services/academicRecordsService';
-import { Grade } from '../services/gradeService';
-import { getPrograms } from '../services/catalogService';
-import { getHtml2Pdf } from '../services/pdfService';
-import { DocumentService } from '../services/documentService';
-import type { DocumentSecurityFeatures } from '../types/documents';
-import { useDataStore } from '../stores/dataStore';
-import { useUIStore } from '../stores/uiStore';
+} from "../services/academicRecordsService";
+import { Grade } from "../services/gradeService";
+import { getPrograms } from "../services/catalogService";
+import { getHtml2Pdf } from "../services/pdfService";
+import { DocumentService } from "../services/documentService";
+import type { DocumentSecurityFeatures } from "../types/documents";
+import { useDataStore } from "../stores/dataStore";
+import { useUIStore } from "../stores/uiStore";
 
 interface TranscriptsProps {
   students?: Student[];
@@ -47,39 +46,43 @@ interface PerformanceRecord {
 }
 
 type EditableBlockKey =
-  | 'microTop'
-  | 'headerTitle'
-  | 'studentName'
-  | 'studentMeta'
-  | 'table'
-  | 'metrics'
-  | 'recommendation'
-  | 'grading'
-  | 'signatures'
-  | 'footer';
+  | "microTop"
+  | "headerTitle"
+  | "studentName"
+  | "studentMeta"
+  | "table"
+  | "metrics"
+  | "recommendation"
+  | "grading"
+  | "signatures"
+  | "footer";
 
-type BlockPosition = { x: number; y: number; align?: 'left' | 'center' | 'right' };
+type BlockPosition = {
+  x: number;
+  y: number;
+  align?: "left" | "center" | "right";
+};
 type TranscriptTemplateLayout = {
   rows: number;
   blocks: Record<EditableBlockKey, BlockPosition>;
 };
 
-const TRANSCRIPT_LAYOUT_STORAGE_KEY = 'bmi_transcript_template_layout_v1';
+const TRANSCRIPT_LAYOUT_STORAGE_KEY = "bmi_transcript_template_layout_v1";
 // Locked layout (submitted by you). This becomes the canonical transcript geometry.
 const TRANSCRIPT_TEMPLATE_LOCKED = true;
 const DEFAULT_TRANSCRIPT_TEMPLATE_LAYOUT: TranscriptTemplateLayout = {
   rows: 25,
   blocks: {
-    microTop: { x: 0, y: -10, align: 'center' },
-    headerTitle: { x: 0, y: 0, align: 'center' },
-    studentName: { x: 0, y: 0, align: 'center' },
-    studentMeta: { x: 0, y: 0, align: 'left' },
-    table: { x: 0, y: 12, align: 'left' },
-    metrics: { x: 0, y: 0, align: 'left' },
-    recommendation: { x: 0, y: 0, align: 'left' },
-    grading: { x: 0, y: 0, align: 'center' },
-    signatures: { x: 0, y: 0, align: 'left' },
-    footer: { x: 0, y: 0, align: 'left' },
+    microTop: { x: 0, y: -10, align: "center" },
+    headerTitle: { x: 0, y: 0, align: "center" },
+    studentName: { x: 0, y: 0, align: "center" },
+    studentMeta: { x: 0, y: 0, align: "left" },
+    table: { x: 0, y: 12, align: "left" },
+    metrics: { x: 0, y: 0, align: "left" },
+    recommendation: { x: 0, y: 0, align: "left" },
+    grading: { x: 0, y: 0, align: "center" },
+    signatures: { x: 0, y: 0, align: "left" },
+    footer: { x: 0, y: 0, align: "left" },
   },
 };
 
@@ -90,24 +93,38 @@ export const Transcripts: React.FC<TranscriptsProps> = (props) => {
   const storeLogo = useUIStore((s) => s.logo);
   const students = props.students ?? storeStudents ?? [];
   const courses = props.courses ?? storeCourses ?? [];
-  const logo = props.logo ?? storeLogo ?? '';
-  const [searchTerm, setSearchTerm] = useState('');
-  const [programFilter, setProgramFilter] = useState('All Programs');
-  const [programOptions, setProgramOptions] = useState<Array<{ id: string; label: string }>>([]);
+  const logo = props.logo ?? storeLogo ?? "";
+  const [searchTerm, setSearchTerm] = useState("");
+  const [programFilter, setProgramFilter] = useState("All Programs");
+  const [programOptions, setProgramOptions] = useState<
+    Array<{ id: string; label: string }>
+  >([]);
   const [selectedStudent, setSelectedStudent] = useState<Student | null>(null);
   const [showTranscript, setShowTranscript] = useState(false);
-  const [transcriptType, setTranscriptType] = useState<'Official' | 'Provisional'>('Official');
-  const [selectedTerm, setSelectedTerm] = useState('Fall 2023');
+  const [transcriptType, setTranscriptType] = useState<
+    "Official" | "Provisional"
+  >("Official");
+  const [selectedTerm, setSelectedTerm] = useState("Fall 2023");
   const [zoomLevel, setZoomLevel] = useState(100); // Zoom percentage
   const [studentGrades, setStudentGrades] = useState<AcademicRecordFlat[]>([]);
   const [loadingGrades, setLoadingGrades] = useState(false);
   const [editorMode, setEditorMode] = useState(false);
-  const [selectedBlock, setSelectedBlock] = useState<EditableBlockKey | null>(null);
-  const [templateLayout, setTemplateLayout] = useState<TranscriptTemplateLayout>(DEFAULT_TRANSCRIPT_TEMPLATE_LAYOUT);
-  const [securityData, setSecurityData] = useState<DocumentSecurityFeatures | null>(null);
-  const dragRef = React.useRef<{ key: EditableBlockKey; startX: number; startY: number; originX: number; originY: number } | null>(null);
+  const [selectedBlock, setSelectedBlock] = useState<EditableBlockKey | null>(
+    null,
+  );
+  const [templateLayout, setTemplateLayout] =
+    useState<TranscriptTemplateLayout>(DEFAULT_TRANSCRIPT_TEMPLATE_LAYOUT);
+  const [securityData, setSecurityData] =
+    useState<DocumentSecurityFeatures | null>(null);
+  const dragRef = React.useRef<{
+    key: EditableBlockKey;
+    startX: number;
+    startY: number;
+    originX: number;
+    originY: number;
+  } | null>(null);
 
-  const terms = ['Fall 2022', 'Spring 2023', 'Fall 2023', 'Spring 2024'];
+  const terms = ["Fall 2022", "Spring 2023", "Fall 2023", "Spring 2024"];
 
   useEffect(() => {
     let cancelled = false;
@@ -117,8 +134,8 @@ export const Transcripts: React.FC<TranscriptsProps> = (props) => {
       setProgramOptions(
         r.data.map((p: Record<string, unknown>) => ({
           id: String(p.id),
-          label: `${String(p.program_code ?? '')} — ${String(p.name ?? '')}`,
-        }))
+          label: `${String(p.program_code ?? "")} — ${String(p.name ?? "")}`,
+        })),
       );
     })();
     return () => {
@@ -137,8 +154,14 @@ export const Transcripts: React.FC<TranscriptsProps> = (props) => {
       const parsed = JSON.parse(raw) as Partial<TranscriptTemplateLayout>;
       if (!parsed || !parsed.blocks) return;
       setTemplateLayout({
-        rows: parsed.rows && parsed.rows > 0 ? parsed.rows : DEFAULT_TRANSCRIPT_TEMPLATE_LAYOUT.rows,
-        blocks: { ...DEFAULT_TRANSCRIPT_TEMPLATE_LAYOUT.blocks, ...parsed.blocks },
+        rows:
+          parsed.rows && parsed.rows > 0
+            ? parsed.rows
+            : DEFAULT_TRANSCRIPT_TEMPLATE_LAYOUT.rows,
+        blocks: {
+          ...DEFAULT_TRANSCRIPT_TEMPLATE_LAYOUT.blocks,
+          ...parsed.blocks,
+        },
       });
     } catch {
       // Ignore invalid persisted layout and fallback to defaults.
@@ -147,10 +170,16 @@ export const Transcripts: React.FC<TranscriptsProps> = (props) => {
 
   useEffect(() => {
     if (TRANSCRIPT_TEMPLATE_LOCKED) return;
-    localStorage.setItem(TRANSCRIPT_LAYOUT_STORAGE_KEY, JSON.stringify(templateLayout));
+    localStorage.setItem(
+      TRANSCRIPT_LAYOUT_STORAGE_KEY,
+      JSON.stringify(templateLayout),
+    );
   }, [templateLayout]);
 
-  const updateBlockPosition = (key: EditableBlockKey, patch: Partial<BlockPosition>) => {
+  const updateBlockPosition = (
+    key: EditableBlockKey,
+    patch: Partial<BlockPosition>,
+  ) => {
     setTemplateLayout((prev) => ({
       ...prev,
       blocks: {
@@ -164,18 +193,18 @@ export const Transcripts: React.FC<TranscriptsProps> = (props) => {
     const { x, y, align } = templateLayout.blocks[key];
     return {
       transform: `translate(${x}px, ${y}px)`,
-      textAlign: align ?? 'left',
-      cursor: editorMode ? 'move' : 'default',
-      position: 'relative',
+      textAlign: align ?? "left",
+      cursor: editorMode ? "move" : "default",
+      position: "relative",
       zIndex: 10,
     };
   };
 
   const toSafeNumber = (value: unknown, fallback = 0): number => {
-    if (typeof value === 'number' && Number.isFinite(value)) {
+    if (typeof value === "number" && Number.isFinite(value)) {
       return value;
     }
-    if (typeof value === 'string') {
+    if (typeof value === "string") {
       const parsed = Number(value);
       if (Number.isFinite(parsed)) {
         return parsed;
@@ -201,7 +230,7 @@ export const Transcripts: React.FC<TranscriptsProps> = (props) => {
         const records = await getStudentAcademicRecords(selectedStudent.id);
         setStudentGrades(records);
       } catch (error) {
-        console.error('[Transcripts] Error fetching grades:', error);
+        console.error("[Transcripts] Error fetching grades:", error);
         setStudentGrades([]);
       } finally {
         setLoadingGrades(false);
@@ -222,38 +251,44 @@ export const Transcripts: React.FC<TranscriptsProps> = (props) => {
     const initSecurity = async () => {
       const docService = DocumentService.getInstance();
       try {
-        const existingDocs = await docService.getDocumentsByStudent(selectedStudent.id);
+        const existingDocs = await docService.getDocumentsByStudent(
+          selectedStudent.id,
+        );
         let doc = existingDocs.find(
-          (d) => d.type === 'transcript' && d.status === 'issued'
+          (d) => d.type === "transcript" && d.status === "issued",
         );
 
         if (!doc) {
-          doc = await docService.createDocument('transcript', selectedStudent.id, {
-            studentName: `${selectedStudent.first_name} ${selectedStudent.last_name}`,
-            transcriptType,
-            term: selectedTerm,
-          });
+          doc = await docService.createDocument(
+            "transcript",
+            selectedStudent.id,
+            {
+              studentName: `${selectedStudent.first_name} ${selectedStudent.last_name}`,
+            } as any,
+          );
         }
         if (active) {
           setSecurityData(doc.security);
         }
       } catch (err) {
-        console.error('[Transcripts] Error initializing security data:', err);
+        console.error("[Transcripts] Error initializing security data:", err);
       }
     };
 
     initSecurity();
-    return () => { active = false; };
+    return () => {
+      active = false;
+    };
   }, [showTranscript, selectedStudent, transcriptType, selectedTerm]);
 
-  const handleZoomIn = () => setZoomLevel(prev => prev + 10);
-  const handleZoomOut = () => setZoomLevel(prev => Math.max(prev - 10, 10));
+  const handleZoomIn = () => setZoomLevel((prev) => prev + 10);
+  const handleZoomOut = () => setZoomLevel((prev) => Math.max(prev - 10, 10));
   const handleZoomReset = () => setZoomLevel(100);
 
   // Mouse wheel zoom
   React.useEffect(() => {
     if (!showTranscript) return;
-    
+
     const handleWheel = (e: WheelEvent) => {
       if (e.ctrlKey || e.metaKey) {
         e.preventDefault();
@@ -265,30 +300,38 @@ export const Transcripts: React.FC<TranscriptsProps> = (props) => {
       }
     };
 
-    window.addEventListener('wheel', handleWheel, { passive: false });
-    return () => window.removeEventListener('wheel', handleWheel);
+    window.addEventListener("wheel", handleWheel, { passive: false });
+    return () => window.removeEventListener("wheel", handleWheel);
   }, [showTranscript]);
 
   React.useEffect(() => {
     if (!editorMode || !selectedBlock) return;
     const handleEditorKeys = (e: KeyboardEvent) => {
       const step = e.shiftKey ? 10 : 2;
-      if (e.key === 'ArrowUp') {
+      if (e.key === "ArrowUp") {
         e.preventDefault();
-        updateBlockPosition(selectedBlock, { y: templateLayout.blocks[selectedBlock].y - step });
-      } else if (e.key === 'ArrowDown') {
+        updateBlockPosition(selectedBlock, {
+          y: templateLayout.blocks[selectedBlock].y - step,
+        });
+      } else if (e.key === "ArrowDown") {
         e.preventDefault();
-        updateBlockPosition(selectedBlock, { y: templateLayout.blocks[selectedBlock].y + step });
-      } else if (e.key === 'ArrowLeft') {
+        updateBlockPosition(selectedBlock, {
+          y: templateLayout.blocks[selectedBlock].y + step,
+        });
+      } else if (e.key === "ArrowLeft") {
         e.preventDefault();
-        updateBlockPosition(selectedBlock, { x: templateLayout.blocks[selectedBlock].x - step });
-      } else if (e.key === 'ArrowRight') {
+        updateBlockPosition(selectedBlock, {
+          x: templateLayout.blocks[selectedBlock].x - step,
+        });
+      } else if (e.key === "ArrowRight") {
         e.preventDefault();
-        updateBlockPosition(selectedBlock, { x: templateLayout.blocks[selectedBlock].x + step });
+        updateBlockPosition(selectedBlock, {
+          x: templateLayout.blocks[selectedBlock].x + step,
+        });
       }
     };
-    window.addEventListener('keydown', handleEditorKeys);
-    return () => window.removeEventListener('keydown', handleEditorKeys);
+    window.addEventListener("keydown", handleEditorKeys);
+    return () => window.removeEventListener("keydown", handleEditorKeys);
   }, [editorMode, selectedBlock, templateLayout.blocks]);
 
   React.useEffect(() => {
@@ -298,37 +341,40 @@ export const Transcripts: React.FC<TranscriptsProps> = (props) => {
       if (!drag) return;
       const dx = event.clientX - drag.startX;
       const dy = event.clientY - drag.startY;
-      updateBlockPosition(drag.key, { x: drag.originX + dx, y: drag.originY + dy });
+      updateBlockPosition(drag.key, {
+        x: drag.originX + dx,
+        y: drag.originY + dy,
+      });
     };
     const onUp = () => {
       dragRef.current = null;
     };
-    window.addEventListener('mousemove', onMove);
-    window.addEventListener('mouseup', onUp);
+    window.addEventListener("mousemove", onMove);
+    window.addEventListener("mouseup", onUp);
     return () => {
-      window.removeEventListener('mousemove', onMove);
-      window.removeEventListener('mouseup', onUp);
+      window.removeEventListener("mousemove", onMove);
+      window.removeEventListener("mouseup", onUp);
     };
   }, [editorMode]);
 
   // Click and hold zoom
   const zoomIntervalRef = React.useRef<NodeJS.Timeout | null>(null);
 
-  const startZoom = (direction: 'in' | 'out') => {
+  const startZoom = (direction: "in" | "out") => {
     // Immediate zoom on click
-    if (direction === 'in') {
+    if (direction === "in") {
       handleZoomIn();
     } else {
       handleZoomOut();
     }
-    
+
     // Start continuous zoom after 300ms delay
     const timeoutId = setTimeout(() => {
       zoomIntervalRef.current = setInterval(() => {
-        if (direction === 'in') {
-          setZoomLevel(prev => prev + 10);
+        if (direction === "in") {
+          setZoomLevel((prev) => prev + 10);
         } else {
-          setZoomLevel(prev => Math.max(prev - 10, 10));
+          setZoomLevel((prev) => Math.max(prev - 10, 10));
         }
       }, 100); // Zoom every 100ms while holding
     }, 300);
@@ -351,36 +397,39 @@ export const Transcripts: React.FC<TranscriptsProps> = (props) => {
   // Keyboard shortcuts for zoom
   React.useEffect(() => {
     if (!showTranscript) return;
-    
+
     const handleKeyDown = (e: KeyboardEvent) => {
       if (e.ctrlKey || e.metaKey) {
-        if (e.key === '=' || e.key === '+') {
+        if (e.key === "=" || e.key === "+") {
           e.preventDefault();
           handleZoomIn();
-        } else if (e.key === '-' || e.key === '_') {
+        } else if (e.key === "-" || e.key === "_") {
           e.preventDefault();
           handleZoomOut();
-        } else if (e.key === '0') {
+        } else if (e.key === "0") {
           e.preventDefault();
           handleZoomReset();
         }
       }
     };
 
-    window.addEventListener('keydown', handleKeyDown);
-    return () => window.removeEventListener('keydown', handleKeyDown);
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
   }, [showTranscript]);
 
   const getDeanName = (program_code: string) => {
     // All faculties now use the unified Dean of Faculty & Academics
-    return 'Dr. Joseph Kiai';
+    return "Dr. Joseph Kiai";
   };
 
   const filteredStudents = useMemo(() => {
-    return students.filter(s => {
+    return students.filter((s) => {
       const q = searchTerm.toLowerCase();
-      const matchesSearch = `${s.first_name} ${s.last_name} ${s.id}`.toLowerCase().includes(q);
-      const matchesProgram = programFilter === 'All Programs' || s.program_code === programFilter;
+      const matchesSearch = `${s.first_name} ${s.last_name} ${s.id}`
+        .toLowerCase()
+        .includes(q);
+      const matchesProgram =
+        programFilter === "All Programs" || s.program_code === programFilter;
       return matchesSearch && matchesProgram;
     });
   }, [students, searchTerm, programFilter]);
@@ -389,23 +438,27 @@ export const Transcripts: React.FC<TranscriptsProps> = (props) => {
     if (studentGrades.length === 0) return [];
 
     return studentGrades.map((r) => ({
-      courseCode: r.courseCode || 'N/A',
-      courseName: r.courseTitle || 'Untitled Course',
-      credits:    r.creditHours,
-      score:      r.totalScore,
-      grade:      r.grade || 'F',
-      points:     r.gradePoint,
-      term:       r.semester && r.academicYear
-                    ? `${r.semester} ${r.academicYear}`
-                    : (r.semester || r.academicYear || '2025'),
+      courseCode: r.courseCode || "N/A",
+      courseName: r.courseTitle || "Untitled Course",
+      credits: r.creditHours,
+      score: r.totalScore,
+      grade: r.grade || "F",
+      points: r.gradePoint,
+      term:
+        r.semester && r.academicYear
+          ? `${r.semester} ${r.academicYear}`
+          : r.semester || r.academicYear || "2025",
     }));
   };
 
-  const allRecords = useMemo(() => selectedStudent ? getPerformanceRecords(selectedStudent) : [], [selectedStudent, studentGrades]);
-  
+  const allRecords = useMemo(
+    () => (selectedStudent ? getPerformanceRecords(selectedStudent) : []),
+    [selectedStudent, studentGrades],
+  );
+
   const currentRecords = useMemo(() => {
-    if (transcriptType === 'Official') return allRecords;
-    return allRecords.filter(r => r.term === selectedTerm);
+    if (transcriptType === "Official") return allRecords;
+    return allRecords.filter((r) => r.term === selectedTerm);
   }, [allRecords, transcriptType, selectedTerm]);
 
   // Single-page A4 layout model (mm): fixed zones + computed table capacity.
@@ -414,19 +467,36 @@ export const Transcripts: React.FC<TranscriptsProps> = (props) => {
   const FIXED_TOP_MM = 92;
   const FIXED_BOTTOM_MM = 50;
   const TABLE_HEADER_MM = 10;
-  const FIXED_ROWS_PER_PAGE = Math.max(1, Math.min(60, templateLayout.rows || 25));
+  const FIXED_ROWS_PER_PAGE = Math.max(
+    1,
+    Math.min(60, templateLayout.rows || 25),
+  );
   // Keep rows compact so all 25 are always visible in the single-page frame.
   const TABLE_ROW_MM = 4.6;
   const availableTableMm = Math.max(
     0,
-    A4_HEIGHT_MM - PAGE_PADDING_MM * 2 - FIXED_TOP_MM - FIXED_BOTTOM_MM - TABLE_HEADER_MM
+    A4_HEIGHT_MM -
+      PAGE_PADDING_MM * 2 -
+      FIXED_TOP_MM -
+      FIXED_BOTTOM_MM -
+      TABLE_HEADER_MM,
   );
   const rowsPerPage = FIXED_ROWS_PER_PAGE;
-  const transcriptRecords = useMemo(() => currentRecords.slice(0, rowsPerPage), [currentRecords, rowsPerPage]);
-  const hiddenCourseCount = Math.max(0, currentRecords.length - transcriptRecords.length);
+  const transcriptRecords = useMemo(
+    () => currentRecords.slice(0, rowsPerPage),
+    [currentRecords, rowsPerPage],
+  );
+  const hiddenCourseCount = Math.max(
+    0,
+    currentRecords.length - transcriptRecords.length,
+  );
   const fixedRows = useMemo<(PerformanceRecord | null)[]>(
-    () => Array.from({ length: rowsPerPage }, (_, idx) => transcriptRecords[idx] ?? null),
-    [rowsPerPage, transcriptRecords]
+    () =>
+      Array.from(
+        { length: rowsPerPage },
+        (_, idx) => transcriptRecords[idx] ?? null,
+      ),
+    [rowsPerPage, transcriptRecords],
   );
 
   const stats = useMemo(() => {
@@ -437,32 +507,37 @@ export const Transcripts: React.FC<TranscriptsProps> = (props) => {
     };
     return {
       current: calculateAvg(currentRecords),
-      cumulative: calculateAvg(allRecords)
+      cumulative: calculateAvg(allRecords),
     };
   }, [currentRecords, allRecords]);
 
   const getAcademicRecommendation = () => {
     if (!selectedStudent || currentRecords.length === 0) return "";
-    
-    const hasRetakes = currentRecords.some(r => r.score < 40);
-    const failedModules = currentRecords.filter(r => r.score < 40).map(r => r.courseCode);
+
+    const hasRetakes = currentRecords.some((r) => r.score < 40);
+    const failedModules = currentRecords
+      .filter((r) => r.score < 40)
+      .map((r) => r.courseCode);
 
     const programName = "DIPLOMA IN CHRISTIAN MINISTRY AND THEOLOGY";
-    const isDegree = programName.includes('DEGREE') || programName.includes('BACHELOR');
-    const isMasters = programName.includes('MASTER');
+    const isDegree =
+      programName.includes("DEGREE") || programName.includes("BACHELOR");
+    const isMasters = programName.includes("MASTER");
 
-    if (transcriptType === 'Official') {
+    if (transcriptType === "Official") {
       if (hasRetakes) {
-        return `AWARD PENDING SATISFACTORY COMPLETION OF SUPPLEMENTARY EXAMINATIONS FOR FAILED MODULES (${failedModules.join(', ')}).`;
+        return `AWARD PENDING SATISFACTORY COMPLETION OF SUPPLEMENTARY EXAMINATIONS FOR FAILED MODULES (${failedModules.join(", ")}).`;
       }
-      
+
       const avg = parseFloat(stats.cumulative);
       let classification = "A PASS";
-      
+
       if (isDegree || isMasters) {
         if (avg >= 70) classification = "FIRST CLASS HONOURS";
-        else if (avg >= 60) classification = "SECOND CLASS HONOURS, UPPER DIVISION";
-        else if (avg >= 50) classification = "SECOND CLASS HONOURS, LOWER DIVISION";
+        else if (avg >= 60)
+          classification = "SECOND CLASS HONOURS, UPPER DIVISION";
+        else if (avg >= 50)
+          classification = "SECOND CLASS HONOURS, LOWER DIVISION";
       } else {
         // Standard classifications for Diplomas and Certificates
         if (avg >= 70) classification = "A DISTINCTION";
@@ -473,34 +548,46 @@ export const Transcripts: React.FC<TranscriptsProps> = (props) => {
       // We ensure the award reads professionally. E.g., "AWARDED THE DIPLOMA IN THEOLOGY WITH A DISTINCTION."
       // If the program name lacks a prefix, we fallback nicely.
       let fullAwardTitle = programName;
-      if (!fullAwardTitle.includes('DIPLOMA') && !fullAwardTitle.includes('CERTIFICATE') && !fullAwardTitle.includes('DEGREE') && !fullAwardTitle.includes('BACHELOR')) {
+      if (
+        !fullAwardTitle.includes("DIPLOMA") &&
+        !fullAwardTitle.includes("CERTIFICATE") &&
+        !fullAwardTitle.includes("DEGREE") &&
+        !fullAwardTitle.includes("BACHELOR")
+      ) {
         fullAwardTitle = `CERTIFICATE IN ${fullAwardTitle}`;
       }
 
       return `HAVING SATISFIED THE BOARD OF EXAMINERS AND THE UNIVERSITY SENATE, IS HEREBY AWARDED THE ${fullAwardTitle} WITH ${classification}.`;
     } else {
       if (hasRetakes) {
-        return `REQUIRED TO SIT FOR SUPPLEMENTARY EXAMINATIONS IN THE FAILED MODULES (${failedModules.join(', ')}) BEFORE PROCEEDING TO THE NEXT ACADEMIC LEVEL.`;
+        return `REQUIRED TO SIT FOR SUPPLEMENTARY EXAMINATIONS IN THE FAILED MODULES (${failedModules.join(", ")}) BEFORE PROCEEDING TO THE NEXT ACADEMIC LEVEL.`;
       }
       return `THE STUDENT HAS SATISFACTORILY COMPLETED THE ACADEMIC REQUIREMENTS FOR THE ${selectedTerm.toUpperCase()} PERIOD AND IS RECOMMENDED TO PROCEED TO THE NEXT PHASE OF STUDY.`;
     }
   };
 
-  const buildPrintHTML = (title: string, innerHtml: string, elW: number, scale: number, A4_W: number, A4_H: number) => `<!DOCTYPE html>
+  const buildPrintHTML = (
+    title: string,
+    innerHtml: string,
+    elW: number,
+    scale: number,
+    A4_W: number,
+    A4_H: number,
+  ) => `<!DOCTYPE html>
 <html>
 <head>
   <meta charset="utf-8"/>
   <title>${title}</title>
   <style>
     * { box-sizing: border-box; margin: 0; padding: 0; }
-    @page { 
-      size: A4 portrait; 
-      margin: 0; 
+    @page {
+      size: A4 portrait;
+      margin: 0;
     }
     html, body {
       width: ${A4_W}px; height: ${A4_H}px;
       overflow: hidden; background: white;
-      -webkit-print-color-adjust: exact; 
+      -webkit-print-color-adjust: exact;
       print-color-adjust: exact;
       color-adjust: exact;
     }
@@ -517,19 +604,19 @@ export const Transcripts: React.FC<TranscriptsProps> = (props) => {
       image-rendering: crisp-edges;
     }
     @media print {
-      html, body { 
-        width: 210mm; 
-        height: 297mm; 
+      html, body {
+        width: 210mm;
+        height: 297mm;
         -webkit-print-color-adjust: exact !important;
         print-color-adjust: exact !important;
         color-adjust: exact !important;
       }
-      #scale-wrapper { 
-        width: 210mm; 
-        height: 297mm; 
+      #scale-wrapper {
+        width: 210mm;
+        height: 297mm;
       }
-      #print-root { 
-        transform: scale(${scale}); 
+      #print-root {
+        transform: scale(${scale});
         image-rendering: -webkit-optimize-contrast;
         image-rendering: crisp-edges;
       }
@@ -545,7 +632,7 @@ export const Transcripts: React.FC<TranscriptsProps> = (props) => {
 <body>
   <div id="scale-wrapper"><div id="print-root">${innerHtml}</div></div>
   <script>
-    window.onload = function() { 
+    window.onload = function() {
       // Wait for all images and fonts to load before printing
       Promise.all([
         document.fonts.ready,
@@ -558,8 +645,8 @@ export const Transcripts: React.FC<TranscriptsProps> = (props) => {
         })
       ]).then(() => {
         setTimeout(() => {
-          window.focus(); 
-          window.print(); 
+          window.focus();
+          window.print();
           setTimeout(() => { window.close(); }, 1000);
         }, 500);
       });
@@ -568,37 +655,40 @@ export const Transcripts: React.FC<TranscriptsProps> = (props) => {
 </body>
 </html>`;
 
-  const handlePrint = async (mode: 'print' | 'download' = 'print') => {
+  const handlePrint = async (mode: "print" | "download" = "print") => {
     if (!selectedStudent) return;
-    const element = document.getElementById('official-transcript-root');
+    const element = document.getElementById("official-transcript-root");
     if (!element) return;
-    const fileName = `${transcriptType}_TRANSCRIPT_${selectedStudent.id}_${selectedStudent.last_name}`.toUpperCase();
+    const fileName =
+      `${transcriptType}_TRANSCRIPT_${selectedStudent.id}_${selectedStudent.last_name}`.toUpperCase();
 
     // Shared: inline all computed styles so the clone is a pixel-perfect replica
     const inlineStyles = (source: HTMLElement): HTMLElement => {
       const clone = source.cloneNode(true) as HTMLElement;
-      const sourceEls = Array.from(source.querySelectorAll('*')) as HTMLElement[];
-      const cloneEls  = Array.from(clone.querySelectorAll('*'))  as HTMLElement[];
+      const sourceEls = Array.from(
+        source.querySelectorAll("*"),
+      ) as HTMLElement[];
+      const cloneEls = Array.from(clone.querySelectorAll("*")) as HTMLElement[];
       const rootCs = window.getComputedStyle(source);
-      let rootInline = '';
+      let rootInline = "";
       for (let i = 0; i < rootCs.length; i++) {
         const p = rootCs[i];
         rootInline += `${p}:${rootCs.getPropertyValue(p)};`;
       }
-      clone.setAttribute('style', rootInline);
+      clone.setAttribute("style", rootInline);
       sourceEls.forEach((el, idx) => {
         const cs = window.getComputedStyle(el);
-        let inline = '';
+        let inline = "";
         for (let i = 0; i < cs.length; i++) {
           const p = cs[i];
           inline += `${p}:${cs.getPropertyValue(p)};`;
         }
-        cloneEls[idx].setAttribute('style', inline);
+        cloneEls[idx].setAttribute("style", inline);
       });
       return clone;
     };
 
-    if (mode === 'download') {
+    if (mode === "download") {
       try {
         // Real PDF Download: Using html2pdf.js for better layout preservation and vector-like quality
         const html2pdf = await getHtml2Pdf();
@@ -606,55 +696,60 @@ export const Transcripts: React.FC<TranscriptsProps> = (props) => {
         const opt = {
           margin: [10, 10, 10, 10], // Top, Right, Bottom, Left margins in mm
           filename: `${fileName}.pdf`,
-          image: { type: 'jpeg', quality: 1.0 }, // Maximum image quality
-          html2canvas: { 
+          image: { type: "jpeg", quality: 1.0 }, // Maximum image quality
+          html2canvas: {
             scale: 6, // 576 DPI - ultra high quality for sharp logos and text
-            useCORS: true, 
+            useCORS: true,
             letterRendering: true,
             logging: false,
-            backgroundColor: '#ffffff',
+            backgroundColor: "#ffffff",
             allowTaint: false,
             imageTimeout: 0,
             width: 794, // A4 width in pixels at 96 DPI (210mm)
-            windowWidth: 794
+            windowWidth: 794,
           },
-          jsPDF: { 
-            unit: 'mm', 
-            format: 'a4', 
-            orientation: 'portrait',
+          jsPDF: {
+            unit: "mm",
+            format: "a4",
+            orientation: "portrait",
             compress: false, // Don't compress to maintain highest quality
             precision: 16,
-            hotfixes: ['px_scaling']
+            hotfixes: ["px_scaling"],
           },
-          pagebreak: { mode: ['avoid-all', 'css', 'legacy'] }
+          pagebreak: { mode: ["avoid-all", "css", "legacy"] },
         };
 
         // Create a dedicated container for the export to ensure 100% resemblance
-        const worker = html2pdf().set(opt).from(element).toPdf().get('pdf').then((pdf: any) => {
-          // Add metadata to the real PDF
-          pdf.setProperties({
-            title: `Official Transcript - ${selectedStudent.first_name} ${selectedStudent.last_name}`,
-            subject: 'Official Academic Record',
-            author: 'BMI University Systems',
-            keywords: 'transcript, academic, record, BMI',
-            creator: 'BMI UMS'
-          });
-        }).save();
-
+        const worker = html2pdf()
+          .set(opt)
+          .from(element)
+          .toPdf()
+          .get("pdf")
+          .then((pdf: any) => {
+            // Add metadata to the real PDF
+            pdf.setProperties({
+              title: `Official Transcript - ${selectedStudent.first_name} ${selectedStudent.last_name}`,
+              subject: "Official Academic Record",
+              author: "BMI University Systems",
+              keywords: "transcript, academic, record, BMI",
+              creator: "BMI UMS",
+            });
+          })
+          .save();
       } catch (err) {
-        console.error('PDF download failed', err);
-        alert('High-quality PDF generation failed. Falling back to basic download...');
-        
+        console.error("PDF download failed", err);
+        alert(
+          "High-quality PDF generation failed. Falling back to basic download...",
+        );
+
         // Fallback to basic download if html2pdf fails
-        const jsPDFModule = await import('https://esm.sh/jspdf@2.5.1?bundle');
-        const { jsPDF } = jsPDFModule;
-        const canvasModule = await import('https://esm.sh/html2canvas@1.4.1?bundle');
-        const html2canvas = canvasModule.default;
-        
+        const { default: jsPDF } = await import("jspdf");
+        const { default: html2canvas } = await import("html2canvas");
+
         const canvas = await html2canvas(element, { scale: 3 });
-        const imgData = canvas.toDataURL('image/png');
-        const pdf = new jsPDF('p', 'mm', 'a4');
-        pdf.addImage(imgData, 'PNG', 0, 0, 210, 297);
+        const imgData = canvas.toDataURL("image/png");
+        const pdf = new jsPDF("p", "mm", "a4");
+        pdf.addImage(imgData, "PNG", 0, 0, 210, 297);
         pdf.save(`${fileName}.pdf`);
       }
     } else {
@@ -662,21 +757,21 @@ export const Transcripts: React.FC<TranscriptsProps> = (props) => {
       const SCREEN_A4_W = 794;
       const SCREEN_A4_H = 1123;
 
-      const elW  = element.scrollWidth  || SCREEN_A4_W;
-      const elH  = element.scrollHeight || SCREEN_A4_H;
+      const elW = element.scrollWidth || SCREEN_A4_W;
+      const elH = element.scrollHeight || SCREEN_A4_H;
       const scale = Math.min(SCREEN_A4_W / elW, SCREEN_A4_H / elH, 1);
 
       const cloned = inlineStyles(element);
-      
+
       // Ensure all dark mode classes are removed for the official print
       const removeDarkClasses = (el: HTMLElement) => {
-        el.classList.remove('dark');
-        const children = el.querySelectorAll('*');
-        children.forEach(child => child.classList.remove('dark'));
+        el.classList.remove("dark");
+        const children = el.querySelectorAll("*");
+        children.forEach((child) => child.classList.remove("dark"));
       };
       removeDarkClasses(cloned);
 
-      const printWindow = window.open('', '_blank', 'width=800,height=600');
+      const printWindow = window.open("", "_blank", "width=800,height=600");
       if (!printWindow) return;
 
       // Build enhanced print HTML with high-quality rendering hints
@@ -688,11 +783,11 @@ export const Transcripts: React.FC<TranscriptsProps> = (props) => {
           <style>
             @page { size: A4 portrait; margin: 0; }
             body { margin: 0; padding: 0; background: white; -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important; }
-            #print-container { 
-              width: 210mm; 
-              height: 297mm; 
-              overflow: hidden; 
-              position: relative; 
+            #print-container {
+              width: 210mm;
+              height: 297mm;
+              overflow: hidden;
+              position: relative;
               display: flex;
               align-items: center;
               justify-content: center;
@@ -727,49 +822,71 @@ export const Transcripts: React.FC<TranscriptsProps> = (props) => {
     }
   };
 
-
-  const handleShare = async (platform?: 'whatsapp') => {
+  const handleShare = async (platform?: "whatsapp") => {
     if (!selectedStudent) return;
-    const element = document.getElementById('official-transcript-root');
+    const element = document.getElementById("official-transcript-root");
     if (!element) return;
-    if (platform === 'whatsapp') {
-       try {
-          const html2pdf = await getHtml2Pdf();
-          const pdfBlob = await html2pdf().from(element).set({
+    if (platform === "whatsapp") {
+      try {
+        const html2pdf = await getHtml2Pdf();
+        const pdfBlob = await html2pdf()
+          .from(element)
+          .set({
             margin: 0,
-            jsPDF: { unit: 'mm', format: 'a4', orientation: 'portrait' }
-          }).output('blob');
-          const file = new File([pdfBlob], `TRANSCRIPT_${selectedStudent.id}.pdf`, { type: 'application/pdf' });
-          if (navigator.canShare && navigator.canShare({ files: [file] })) {
-             await navigator.share({
-                files: [file],
-                title: `${transcriptType} Academic Transcript`,
-                text: `${transcriptType} transcript for ${selectedStudent.first_name} ${selectedStudent.last_name} (${selectedStudent.id})`
-             });
-          } else {
-             const waUrl = `https://api.whatsapp.com/send?text=${encodeURIComponent(transcriptType + " Academic Transcript for " + selectedStudent.first_name + " " + selectedStudent.last_name + " (" + selectedStudent.id + ")")}`;
-             window.open(waUrl, '_blank');
-          }
-       } catch (err) {
-          const waUrl = `https://api.whatsapp.com/send?text=${encodeURIComponent("Academic Transcript Link: " + window.location.href)}`;
-          window.open(waUrl, '_blank');
-       }
-       return;
+            jsPDF: { unit: "mm", format: "a4", orientation: "portrait" },
+          })
+          .output("blob");
+        const file = new File(
+          [pdfBlob],
+          `TRANSCRIPT_${selectedStudent.id}.pdf`,
+          { type: "application/pdf" },
+        );
+        if (navigator.canShare && navigator.canShare({ files: [file] })) {
+          await navigator.share({
+            files: [file],
+            title: `${transcriptType} Academic Transcript`,
+            text: `${transcriptType} transcript for ${selectedStudent.first_name} ${selectedStudent.last_name} (${selectedStudent.id})`,
+          });
+        } else {
+          const waUrl = `https://api.whatsapp.com/send?text=${encodeURIComponent(transcriptType + " Academic Transcript for " + selectedStudent.first_name + " " + selectedStudent.last_name + " (" + selectedStudent.id + ")")}`;
+          window.open(waUrl, "_blank");
+        }
+      } catch (err) {
+        const waUrl = `https://api.whatsapp.com/send?text=${encodeURIComponent("Academic Transcript Link: " + window.location.href)}`;
+        window.open(waUrl, "_blank");
+      }
+      return;
     }
-    handlePrint('print');
+    handlePrint("print");
   };
 
   const handleDownloadWord = async () => {
     if (!selectedStudent) return;
 
     try {
-      const { Document, Paragraph, TextRun, Table, TableRow, TableCell, AlignmentType, HeadingLevel, BorderStyle, WidthType, convertInchesToTwip, ImageRun, VerticalAlign, ShadingType } = await import('docx');
-      const { saveAs } = await import('file-saver');
+      const {
+        Document,
+        Paragraph,
+        TextRun,
+        Table,
+        TableRow,
+        TableCell,
+        AlignmentType,
+        HeadingLevel,
+        BorderStyle,
+        WidthType,
+        convertInchesToTwip,
+        ImageRun,
+        VerticalAlign,
+        ShadingType,
+      } = await import("docx");
+      const { saveAs } = await import("file-saver");
 
-      const fileName = `${transcriptType}_TRANSCRIPT_${selectedStudent.id}_${selectedStudent.last_name}`.toUpperCase();
+      const fileName =
+        `${transcriptType}_TRANSCRIPT_${selectedStudent.id}_${selectedStudent.last_name}`.toUpperCase();
 
       // Fetch logo as base64
-      let logoBase64 = '';
+      let logoBase64 = "";
       try {
         const response = await fetch(logo);
         const blob = await response.blob();
@@ -779,7 +896,7 @@ export const Transcripts: React.FC<TranscriptsProps> = (props) => {
           reader.readAsDataURL(blob);
         });
       } catch (e) {
-        console.warn('Could not fetch logo:', e);
+        console.warn("Could not fetch logo:", e);
       }
 
       // Create table rows for performance records - matching preview layout
@@ -789,63 +906,71 @@ export const Transcripts: React.FC<TranscriptsProps> = (props) => {
           tableHeader: true,
           children: [
             new TableCell({
-              children: [new Paragraph({ 
-                text: 'Course Code', 
-                alignment: AlignmentType.LEFT,
-                style: 'TableHeader'
-              })],
-              shading: { fill: 'F3F4F6', type: ShadingType.SOLID },
+              children: [
+                new Paragraph({
+                  text: "Course Code",
+                  alignment: AlignmentType.LEFT,
+                  style: "TableHeader",
+                }),
+              ],
+              shading: { fill: "F3F4F6", type: ShadingType.SOLID },
               borders: {
-                top: { style: BorderStyle.SINGLE, size: 1, color: '000000' },
-                bottom: { style: BorderStyle.SINGLE, size: 1, color: '000000' },
-                left: { style: BorderStyle.SINGLE, size: 1, color: '000000' },
-                right: { style: BorderStyle.SINGLE, size: 1, color: '000000' },
+                top: { style: BorderStyle.SINGLE, size: 1, color: "000000" },
+                bottom: { style: BorderStyle.SINGLE, size: 1, color: "000000" },
+                left: { style: BorderStyle.SINGLE, size: 1, color: "000000" },
+                right: { style: BorderStyle.SINGLE, size: 1, color: "000000" },
               },
               verticalAlign: VerticalAlign.CENTER,
             }),
             new TableCell({
-              children: [new Paragraph({ 
-                text: 'Course Description', 
-                alignment: AlignmentType.LEFT,
-                style: 'TableHeader'
-              })],
-              shading: { fill: 'F3F4F6', type: ShadingType.SOLID },
+              children: [
+                new Paragraph({
+                  text: "Course Description",
+                  alignment: AlignmentType.LEFT,
+                  style: "TableHeader",
+                }),
+              ],
+              shading: { fill: "F3F4F6", type: ShadingType.SOLID },
               borders: {
-                top: { style: BorderStyle.SINGLE, size: 1, color: '000000' },
-                bottom: { style: BorderStyle.SINGLE, size: 1, color: '000000' },
-                left: { style: BorderStyle.SINGLE, size: 1, color: '000000' },
-                right: { style: BorderStyle.SINGLE, size: 1, color: '000000' },
+                top: { style: BorderStyle.SINGLE, size: 1, color: "000000" },
+                bottom: { style: BorderStyle.SINGLE, size: 1, color: "000000" },
+                left: { style: BorderStyle.SINGLE, size: 1, color: "000000" },
+                right: { style: BorderStyle.SINGLE, size: 1, color: "000000" },
               },
               verticalAlign: VerticalAlign.CENTER,
             }),
             new TableCell({
-              children: [new Paragraph({ 
-                text: 'Hours', 
-                alignment: AlignmentType.CENTER,
-                style: 'TableHeader'
-              })],
-              shading: { fill: 'F3F4F6', type: ShadingType.SOLID },
+              children: [
+                new Paragraph({
+                  text: "Hours",
+                  alignment: AlignmentType.CENTER,
+                  style: "TableHeader",
+                }),
+              ],
+              shading: { fill: "F3F4F6", type: ShadingType.SOLID },
               borders: {
-                top: { style: BorderStyle.SINGLE, size: 1, color: '000000' },
-                bottom: { style: BorderStyle.SINGLE, size: 1, color: '000000' },
-                left: { style: BorderStyle.SINGLE, size: 1, color: '000000' },
-                right: { style: BorderStyle.SINGLE, size: 1, color: '000000' },
+                top: { style: BorderStyle.SINGLE, size: 1, color: "000000" },
+                bottom: { style: BorderStyle.SINGLE, size: 1, color: "000000" },
+                left: { style: BorderStyle.SINGLE, size: 1, color: "000000" },
+                right: { style: BorderStyle.SINGLE, size: 1, color: "000000" },
               },
               verticalAlign: VerticalAlign.CENTER,
               width: { size: 15, type: WidthType.PERCENTAGE },
             }),
             new TableCell({
-              children: [new Paragraph({ 
-                text: 'Grade', 
-                alignment: AlignmentType.CENTER,
-                style: 'TableHeader'
-              })],
-              shading: { fill: 'F3F4F6', type: ShadingType.SOLID },
+              children: [
+                new Paragraph({
+                  text: "Grade",
+                  alignment: AlignmentType.CENTER,
+                  style: "TableHeader",
+                }),
+              ],
+              shading: { fill: "F3F4F6", type: ShadingType.SOLID },
               borders: {
-                top: { style: BorderStyle.SINGLE, size: 1, color: '000000' },
-                bottom: { style: BorderStyle.SINGLE, size: 1, color: '000000' },
-                left: { style: BorderStyle.SINGLE, size: 1, color: '000000' },
-                right: { style: BorderStyle.SINGLE, size: 1, color: '000000' },
+                top: { style: BorderStyle.SINGLE, size: 1, color: "000000" },
+                bottom: { style: BorderStyle.SINGLE, size: 1, color: "000000" },
+                left: { style: BorderStyle.SINGLE, size: 1, color: "000000" },
+                right: { style: BorderStyle.SINGLE, size: 1, color: "000000" },
               },
               verticalAlign: VerticalAlign.CENTER,
               width: { size: 10, type: WidthType.PERCENTAGE },
@@ -853,564 +978,897 @@ export const Transcripts: React.FC<TranscriptsProps> = (props) => {
           ],
         }),
         // Data rows
-        ...fixedRows.map(rec => new TableRow({
-          children: [
-            new TableCell({ 
-              children: [new Paragraph({ 
-                children: [new TextRun({ text: rec?.courseCode ?? '', font: 'Courier New', bold: true, size: 18, color: '4B0082' })],
-                alignment: AlignmentType.LEFT
-              })],
-              borders: {
-                top: { style: BorderStyle.SINGLE, size: 1, color: 'E5E7EB' },
-                bottom: { style: BorderStyle.SINGLE, size: 1, color: 'E5E7EB' },
-                left: { style: BorderStyle.SINGLE, size: 1, color: '000000' },
-                right: { style: BorderStyle.SINGLE, size: 1, color: '000000' },
-              },
-              verticalAlign: VerticalAlign.CENTER,
+        ...fixedRows.map(
+          (rec) =>
+            new TableRow({
+              children: [
+                new TableCell({
+                  children: [
+                    new Paragraph({
+                      children: [
+                        new TextRun({
+                          text: rec?.courseCode ?? "",
+                          font: "Courier New",
+                          bold: true,
+                          size: 18,
+                          color: "4B0082",
+                        }),
+                      ],
+                      alignment: AlignmentType.LEFT,
+                    }),
+                  ],
+                  borders: {
+                    top: {
+                      style: BorderStyle.SINGLE,
+                      size: 1,
+                      color: "E5E7EB",
+                    },
+                    bottom: {
+                      style: BorderStyle.SINGLE,
+                      size: 1,
+                      color: "E5E7EB",
+                    },
+                    left: {
+                      style: BorderStyle.SINGLE,
+                      size: 1,
+                      color: "000000",
+                    },
+                    right: {
+                      style: BorderStyle.SINGLE,
+                      size: 1,
+                      color: "000000",
+                    },
+                  },
+                  verticalAlign: VerticalAlign.CENTER,
+                }),
+                new TableCell({
+                  children: [
+                    new Paragraph({
+                      children: [
+                        new TextRun({
+                          text: (rec?.courseName ?? "").toUpperCase(),
+                          bold: true,
+                          size: 18,
+                        }),
+                      ],
+                      alignment: AlignmentType.LEFT,
+                    }),
+                  ],
+                  borders: {
+                    top: {
+                      style: BorderStyle.SINGLE,
+                      size: 1,
+                      color: "E5E7EB",
+                    },
+                    bottom: {
+                      style: BorderStyle.SINGLE,
+                      size: 1,
+                      color: "E5E7EB",
+                    },
+                    left: {
+                      style: BorderStyle.SINGLE,
+                      size: 1,
+                      color: "000000",
+                    },
+                    right: {
+                      style: BorderStyle.SINGLE,
+                      size: 1,
+                      color: "000000",
+                    },
+                  },
+                  verticalAlign: VerticalAlign.CENTER,
+                }),
+                new TableCell({
+                  children: [
+                    new Paragraph({
+                      children: [
+                        new TextRun({
+                          text: rec ? formatNumber(rec.credits, 2) : "",
+                          bold: true,
+                          size: 18,
+                        }),
+                      ],
+                      alignment: AlignmentType.CENTER,
+                    }),
+                  ],
+                  borders: {
+                    top: {
+                      style: BorderStyle.SINGLE,
+                      size: 1,
+                      color: "E5E7EB",
+                    },
+                    bottom: {
+                      style: BorderStyle.SINGLE,
+                      size: 1,
+                      color: "E5E7EB",
+                    },
+                    left: {
+                      style: BorderStyle.SINGLE,
+                      size: 1,
+                      color: "000000",
+                    },
+                    right: {
+                      style: BorderStyle.SINGLE,
+                      size: 1,
+                      color: "000000",
+                    },
+                  },
+                  verticalAlign: VerticalAlign.CENTER,
+                }),
+                new TableCell({
+                  children: [
+                    new Paragraph({
+                      children: [
+                        new TextRun({
+                          text: rec?.grade ?? "",
+                          bold: true,
+                          size: 22,
+                          color: rec
+                            ? rec.score >= 70
+                              ? "10B981"
+                              : rec.score < 40
+                                ? "DC2626"
+                                : "4B0082"
+                            : "4B0082",
+                        }),
+                      ],
+                      alignment: AlignmentType.CENTER,
+                    }),
+                  ],
+                  borders: {
+                    top: {
+                      style: BorderStyle.SINGLE,
+                      size: 1,
+                      color: "E5E7EB",
+                    },
+                    bottom: {
+                      style: BorderStyle.SINGLE,
+                      size: 1,
+                      color: "E5E7EB",
+                    },
+                    left: {
+                      style: BorderStyle.SINGLE,
+                      size: 1,
+                      color: "000000",
+                    },
+                    right: {
+                      style: BorderStyle.SINGLE,
+                      size: 1,
+                      color: "000000",
+                    },
+                  },
+                  verticalAlign: VerticalAlign.CENTER,
+                }),
+              ],
             }),
-            new TableCell({ 
-              children: [new Paragraph({ 
-                children: [new TextRun({ text: (rec?.courseName ?? '').toUpperCase(), bold: true, size: 18 })],
-                alignment: AlignmentType.LEFT
-              })],
-              borders: {
-                top: { style: BorderStyle.SINGLE, size: 1, color: 'E5E7EB' },
-                bottom: { style: BorderStyle.SINGLE, size: 1, color: 'E5E7EB' },
-                left: { style: BorderStyle.SINGLE, size: 1, color: '000000' },
-                right: { style: BorderStyle.SINGLE, size: 1, color: '000000' },
-              },
-              verticalAlign: VerticalAlign.CENTER,
-            }),
-            new TableCell({ 
-              children: [new Paragraph({ 
-                children: [new TextRun({ text: rec ? formatNumber(rec.credits, 2) : '', bold: true, size: 18 })],
-                alignment: AlignmentType.CENTER
-              })],
-              borders: {
-                top: { style: BorderStyle.SINGLE, size: 1, color: 'E5E7EB' },
-                bottom: { style: BorderStyle.SINGLE, size: 1, color: 'E5E7EB' },
-                left: { style: BorderStyle.SINGLE, size: 1, color: '000000' },
-                right: { style: BorderStyle.SINGLE, size: 1, color: '000000' },
-              },
-              verticalAlign: VerticalAlign.CENTER,
-            }),
-            new TableCell({ 
-              children: [new Paragraph({ 
-                children: [new TextRun({ 
-                  text: rec?.grade ?? '', 
-                  bold: true, 
-                  size: 22,
-                  color: rec ? (rec.score >= 70 ? '10B981' : rec.score < 40 ? 'DC2626' : '4B0082') : '4B0082'
-                })],
-                alignment: AlignmentType.CENTER
-              })],
-              borders: {
-                top: { style: BorderStyle.SINGLE, size: 1, color: 'E5E7EB' },
-                bottom: { style: BorderStyle.SINGLE, size: 1, color: 'E5E7EB' },
-                left: { style: BorderStyle.SINGLE, size: 1, color: '000000' },
-                right: { style: BorderStyle.SINGLE, size: 1, color: '000000' },
-              },
-              verticalAlign: VerticalAlign.CENTER,
-            }),
-          ],
-        })),
+        ),
       ];
 
       const doc = new Document({
         styles: {
           paragraphStyles: [
             {
-              id: 'TableHeader',
-              name: 'Table Header',
-              basedOn: 'Normal',
+              id: "TableHeader",
+              name: "Table Header",
+              basedOn: "Normal",
               run: {
                 bold: true,
                 size: 18,
-                font: 'Arial',
-                color: '000000',
+                font: "Arial",
+                color: "000000",
               },
             },
           ],
         },
-        sections: [{
-          properties: {
-            page: {
-              margin: {
-                top: convertInchesToTwip(0.5),
-                right: convertInchesToTwip(0.5),
-                bottom: convertInchesToTwip(0.5),
-                left: convertInchesToTwip(0.5),
+        sections: [
+          {
+            properties: {
+              page: {
+                margin: {
+                  top: convertInchesToTwip(0.5),
+                  right: convertInchesToTwip(0.5),
+                  bottom: convertInchesToTwip(0.5),
+                  left: convertInchesToTwip(0.5),
+                },
               },
             },
-          },
-          children: [
-            // Microtext security line
-            new Paragraph({
-              text: 'BMI UNIVERSITY OFFICIAL ACADEMIC TRANSCRIPT • SECURITY VALIDATED RECORD • DO NOT REPRODUCE',
-              alignment: AlignmentType.CENTER,
-              spacing: { after: 100 },
-              style: 'Normal',
-              run: {
-                size: 12,
-                color: '999999',
-                font: 'Arial',
-              },
-            }),
-
-            // Header with logo
-            ...(logoBase64 ? [
+            children: [
+              // Microtext security line
               new Paragraph({
+                text: "BMI UNIVERSITY OFFICIAL ACADEMIC TRANSCRIPT • SECURITY VALIDATED RECORD • DO NOT REPRODUCE",
                 alignment: AlignmentType.CENTER,
                 spacing: { after: 100 },
+                style: "Normal",
+                run: {
+                  size: 12,
+                  color: "999999",
+                  font: "Arial",
+                },
+              }),
+
+              // Header with logo
+              ...(logoBase64
+                ? [
+                    new Paragraph({
+                      alignment: AlignmentType.CENTER,
+                      spacing: { after: 100 },
+                      children: [
+                        new ImageRun({
+                          type: "png",
+                          data: logoBase64,
+                          transformation: {
+                            width: 64,
+                            height: 64,
+                          },
+                        }),
+                      ],
+                    }),
+                  ]
+                : []),
+
+              // University name
+              new Paragraph({
+                text: "BMI UNIVERSITY",
+                alignment: AlignmentType.CENTER,
+                spacing: { after: 50 },
+                run: {
+                  size: 32,
+                  bold: true,
+                  font: "Georgia",
+                  color: "000000",
+                },
+              }),
+
+              // Office of the Registrar
+              new Paragraph({
+                text: "OFFICE OF THE REGISTRAR",
+                alignment: AlignmentType.CENTER,
+                spacing: { after: 100 },
+                run: {
+                  size: 14,
+                  bold: true,
+                  font: "Arial",
+                  color: "666666",
+                },
+              }),
+
+              // Document title with border
+              new Paragraph({
+                text: `${transcriptType.toUpperCase()} ACADEMIC TRANSCRIPT${transcriptType === "Provisional" ? ` | PERIOD: ${selectedTerm.toUpperCase()}` : ""}`,
+                alignment: AlignmentType.CENTER,
+                spacing: { after: 200 },
+                border: {
+                  top: { style: BorderStyle.SINGLE, size: 6, color: "000000" },
+                  bottom: {
+                    style: BorderStyle.SINGLE,
+                    size: 6,
+                    color: "000000",
+                  },
+                },
+                run: {
+                  size: 20,
+                  bold: true,
+                  font: "Georgia",
+                  color: "000000",
+                },
+              }),
+
+              // Student Name (large, prominent)
+              new Paragraph({
+                alignment: AlignmentType.LEFT,
+                spacing: { after: 100 },
+                border: {
+                  bottom: {
+                    style: BorderStyle.SINGLE,
+                    size: 3,
+                    color: "CCCCCC",
+                  },
+                },
                 children: [
-                  new ImageRun({
-                    data: logoBase64,
-                    transformation: {
-                      width: 64,
-                      height: 64,
-                    },
+                  new TextRun({
+                    text: "Student Name:  ",
+                    size: 14,
+                    bold: true,
+                    font: "Arial",
+                    color: "999999",
+                  }),
+                  new TextRun({
+                    text: `${selectedStudent.first_name.toUpperCase()} ${selectedStudent.last_name.toUpperCase()}`,
+                    size: 24,
+                    bold: true,
+                    font: "Georgia",
+                    color: "000000",
                   }),
                 ],
               }),
-            ] : []),
 
-            // University name
-            new Paragraph({
-              text: 'BMI UNIVERSITY',
-              alignment: AlignmentType.CENTER,
-              spacing: { after: 50 },
-              run: {
-                size: 32,
-                bold: true,
-                font: 'Georgia',
-                color: '000000',
-              },
-            }),
-            
-            // Office of the Registrar
-            new Paragraph({
-              text: 'OFFICE OF THE REGISTRAR',
-              alignment: AlignmentType.CENTER,
-              spacing: { after: 100 },
-              run: {
-                size: 14,
-                bold: true,
-                font: 'Arial',
-                color: '666666',
-              },
-            }),
-
-            // Document title with border
-            new Paragraph({
-              text: `${transcriptType.toUpperCase()} ACADEMIC TRANSCRIPT${transcriptType === 'Provisional' ? ` | PERIOD: ${selectedTerm.toUpperCase()}` : ''}`,
-              alignment: AlignmentType.CENTER,
-              spacing: { after: 200 },
-              border: {
-                top: { style: BorderStyle.SINGLE, size: 6, color: '000000' },
-                bottom: { style: BorderStyle.SINGLE, size: 6, color: '000000' },
-              },
-              run: {
-                size: 20,
-                bold: true,
-                font: 'Georgia',
-                color: '000000',
-              },
-            }),
-
-            // Student Name (large, prominent)
-            new Paragraph({
-              alignment: AlignmentType.LEFT,
-              spacing: { after: 100 },
-              border: {
-                bottom: { style: BorderStyle.SINGLE, size: 3, color: 'CCCCCC' },
-              },
-              children: [
-                new TextRun({ 
-                  text: 'Student Name:  ', 
-                  size: 14, 
-                  bold: true, 
-                  font: 'Arial',
-                  color: '999999'
-                }),
-                new TextRun({ 
-                  text: `${selectedStudent.first_name.toUpperCase()} ${selectedStudent.last_name.toUpperCase()}`, 
-                  size: 24, 
-                  bold: true, 
-                  font: 'Georgia',
-                  color: '000000'
-                }),
-              ],
-            }),
-
-            // Student details grid (2 columns)
-            new Table({
-              width: { size: 100, type: WidthType.PERCENTAGE },
-              borders: {
-                top: { style: BorderStyle.NONE, size: 0 },
-                bottom: { style: BorderStyle.NONE, size: 0 },
-                left: { style: BorderStyle.NONE, size: 0 },
-                right: { style: BorderStyle.NONE, size: 0 },
-                insideHorizontal: { style: BorderStyle.NONE, size: 0 },
-                insideVertical: { style: BorderStyle.NONE, size: 0 },
-              },
-              rows: [
-                new TableRow({
-                  children: [
-                    new TableCell({
-                      children: [new Paragraph({
+              // Student details grid (2 columns)
+              new Table({
+                width: { size: 100, type: WidthType.PERCENTAGE },
+                borders: {
+                  top: { style: BorderStyle.NONE, size: 0 },
+                  bottom: { style: BorderStyle.NONE, size: 0 },
+                  left: { style: BorderStyle.NONE, size: 0 },
+                  right: { style: BorderStyle.NONE, size: 0 },
+                  insideHorizontal: { style: BorderStyle.NONE, size: 0 },
+                  insideVertical: { style: BorderStyle.NONE, size: 0 },
+                },
+                rows: [
+                  new TableRow({
+                    children: [
+                      new TableCell({
                         children: [
-                          new TextRun({ text: 'Year of study: ', size: 16, color: '666666', font: 'Arial' }),
-                          new TextRun({ text: '4 (FOUR)', size: 18, bold: true, font: 'Arial' }),
+                          new Paragraph({
+                            children: [
+                              new TextRun({
+                                text: "Year of study: ",
+                                size: 16,
+                                color: "666666",
+                                font: "Arial",
+                              }),
+                              new TextRun({
+                                text: "4 (FOUR)",
+                                size: 18,
+                                bold: true,
+                                font: "Arial",
+                              }),
+                            ],
+                          }),
                         ],
-                      })],
-                      borders: {
-                        bottom: { style: BorderStyle.SINGLE, size: 1, color: 'E5E7EB' },
-                      },
-                      margins: { bottom: 50 },
-                    }),
-                    new TableCell({
-                      children: [new Paragraph({
-                        children: [
-                          new TextRun({ text: 'Prog. of Study: ', size: 16, color: '666666', font: 'Arial' }),
-                          new TextRun({ text: selectedStudent.program_code.toUpperCase(), size: 18, bold: true, font: 'Arial' }),
-                        ],
-                      })],
-                      borders: {
-                        bottom: { style: BorderStyle.SINGLE, size: 1, color: 'E5E7EB' },
-                      },
-                      margins: { bottom: 50 },
-                    }),
-                  ],
-                }),
-                new TableRow({
-                  children: [
-                    new TableCell({
-                      children: [new Paragraph({
-                        children: [
-                          new TextRun({ text: 'FACULTY OF: ', size: 16, color: '666666', font: 'Arial' }),
-                          new TextRun({ text: selectedStudent.program_code.toUpperCase(), size: 18, bold: true, font: 'Arial' }),
-                        ],
-                      })],
-                      borders: {
-                        bottom: { style: BorderStyle.SINGLE, size: 1, color: 'E5E7EB' },
-                      },
-                      margins: { bottom: 50 },
-                    }),
-                    new TableCell({
-                      children: [new Paragraph({
-                        children: [
-                          new TextRun({ text: 'Student ID: ', size: 16, color: '666666', font: 'Arial' }),
-                          new TextRun({ text: selectedStudent.id, size: 18, bold: true, font: 'Courier New', color: 'DC2626' }),
-                        ],
-                      })],
-                      borders: {
-                        bottom: { style: BorderStyle.SINGLE, size: 1, color: 'E5E7EB' },
-                      },
-                      margins: { bottom: 50 },
-                    }),
-                  ],
-                }),
-                new TableRow({
-                  children: [
-                    new TableCell({
-                      children: [new Paragraph({
-                        children: [
-                          new TextRun({ text: 'Admission: ', size: 16, color: '666666', font: 'Arial' }),
-                          new TextRun({ text: '27/08/2022', size: 18, bold: true, font: 'Arial' }),
-                        ],
-                      })],
-                      borders: {
-                        bottom: { style: BorderStyle.SINGLE, size: 1, color: 'E5E7EB' },
-                      },
-                      margins: { bottom: 50 },
-                    }),
-                    new TableCell({
-                      children: [new Paragraph({
-                        children: [
-                          new TextRun({ text: 'Graduation: ', size: 16, color: '666666', font: 'Arial' }),
-                          new TextRun({ text: '21/12/2026', size: 18, bold: true, font: 'Arial' }),
-                        ],
-                      })],
-                      borders: {
-                        bottom: { style: BorderStyle.SINGLE, size: 1, color: 'E5E7EB' },
-                      },
-                      margins: { bottom: 50 },
-                    }),
-                  ],
-                }),
-              ],
-            }),
-
-            // Spacing before table
-            new Paragraph({
-              text: '',
-              spacing: { before: 300, after: 100 },
-            }),
-
-            // Performance table
-            new Table({
-              width: {
-                size: 100,
-                type: WidthType.PERCENTAGE,
-              },
-              borders: {
-                top: { style: BorderStyle.SINGLE, size: 6, color: '000000' },
-                bottom: { style: BorderStyle.SINGLE, size: 6, color: '000000' },
-                left: { style: BorderStyle.SINGLE, size: 6, color: '000000' },
-                right: { style: BorderStyle.SINGLE, size: 6, color: '000000' },
-                insideHorizontal: { style: BorderStyle.SINGLE, size: 1, color: 'E5E7EB' },
-                insideVertical: { style: BorderStyle.SINGLE, size: 1, color: '000000' },
-              },
-              rows: tableRows,
-            }),
-
-            // Performance metrics bar
-            new Paragraph({
-              alignment: AlignmentType.CENTER,
-              spacing: { before: 200, after: 200 },
-              shading: { fill: 'F9FAFB', type: ShadingType.SOLID },
-              border: {
-                top: { style: BorderStyle.SINGLE, size: 6, color: '000000' },
-                bottom: { style: BorderStyle.SINGLE, size: 6, color: '000000' },
-              },
-              children: [
-                new TextRun({ text: 'PERFORMANCE METRICS:  ', size: 16, color: '666666', font: 'Arial' }),
-                new TextRun({ text: 'Current Avg: ', size: 18, bold: true, font: 'Arial' }),
-                new TextRun({ text: `${stats.current}%`, size: 18, bold: true, color: '4B0082', font: 'Arial' }),
-                new TextRun({ text: '  |  ', size: 18, font: 'Arial' }),
-                new TextRun({ text: 'Cumulative Avg: ', size: 18, bold: true, font: 'Arial' }),
-                new TextRun({ text: `${stats.cumulative}%`, size: 18, bold: true, color: '4B0082', font: 'Arial' }),
-              ],
-            }),
-
-            // Academic recommendation
-            new Paragraph({
-              alignment: AlignmentType.LEFT,
-              spacing: { before: 200, after: 100 },
-              children: [
-                new TextRun({ text: 'Recommendation:  ', size: 16, bold: true, color: '999999', font: 'Arial' }),
-              ],
-            }),
-            new Paragraph({
-              text: getAcademicRecommendation(),
-              alignment: AlignmentType.LEFT,
-              spacing: { after: 300 },
-              border: {
-                left: { style: BorderStyle.SINGLE, size: 12, color: '4B0082' },
-              },
-              indent: { left: convertInchesToTwip(0.2) },
-              run: {
-                size: 18,
-                bold: true,
-                font: 'Arial',
-                color: '000000',
-              },
-            }),
-
-            // Grading scale
-            new Paragraph({
-              alignment: AlignmentType.CENTER,
-              spacing: { before: 200, after: 200 },
-              shading: { fill: 'F9FAFB', type: ShadingType.SOLID },
-              border: {
-                top: { style: BorderStyle.SINGLE, size: 1, color: 'CCCCCC' },
-                bottom: { style: BorderStyle.SINGLE, size: 1, color: 'CCCCCC' },
-              },
-              children: [
-                new TextRun({ text: 'GRADING:  ', size: 14, bold: true, color: '666666', font: 'Arial', underline: {} }),
-                new TextRun({ text: 'A (70–100%)  |  B (60–69%)  |  C (50–59%)  |  D (40–49%)  |  ', size: 14, color: '666666', font: 'Arial' }),
-                new TextRun({ text: 'F (<40%)', size: 14, color: 'DC2626', font: 'Arial' }),
-              ],
-            }),
-
-            // Microtext security line
-            new Paragraph({
-              text: 'DO NOT REPRODUCE THIS DOCUMENT • BMI UNIVERSITY ACADEMIC RECORD SECURE VALIDATION LINE',
-              alignment: AlignmentType.CENTER,
-              spacing: { after: 200 },
-              run: {
-                size: 12,
-                color: '999999',
-                font: 'Arial',
-              },
-            }),
-
-            // Signatures
-            new Paragraph({
-              text: '',
-              spacing: { before: 400, after: 200 },
-            }),
-            
-            // Signature table
-            new Table({
-              width: { size: 100, type: WidthType.PERCENTAGE },
-              borders: {
-                top: { style: BorderStyle.NONE, size: 0 },
-                bottom: { style: BorderStyle.NONE, size: 0 },
-                left: { style: BorderStyle.NONE, size: 0 },
-                right: { style: BorderStyle.NONE, size: 0 },
-                insideHorizontal: { style: BorderStyle.NONE, size: 0 },
-                insideVertical: { style: BorderStyle.NONE, size: 0 },
-              },
-              rows: [
-                new TableRow({
-                  children: [
-                    new TableCell({
-                      children: [
-                        new Paragraph({ text: '', spacing: { after: 600 } }),
-                        new Paragraph({
-                          text: '________________________',
-                          alignment: AlignmentType.CENTER,
-                          spacing: { after: 50 },
-                        }),
-                        new Paragraph({
-                          text: getDeanName(selectedStudent.program_code),
-                          alignment: AlignmentType.CENTER,
-                          spacing: { after: 50 },
-                          run: {
-                            size: 20,
-                            italics: true,
-                            font: 'Georgia',
+                        borders: {
+                          bottom: {
+                            style: BorderStyle.SINGLE,
+                            size: 1,
+                            color: "E5E7EB",
                           },
-                        }),
-                        new Paragraph({
-                          text: 'Dean of Faculty & Academics',
-                          alignment: AlignmentType.CENTER,
-                          run: {
-                            size: 14,
-                            bold: true,
-                            font: 'Arial',
-                            color: '666666',
+                        },
+                        margins: { bottom: 50 },
+                      }),
+                      new TableCell({
+                        children: [
+                          new Paragraph({
+                            children: [
+                              new TextRun({
+                                text: "Prog. of Study: ",
+                                size: 16,
+                                color: "666666",
+                                font: "Arial",
+                              }),
+                              new TextRun({
+                                text: selectedStudent.program_code.toUpperCase(),
+                                size: 18,
+                                bold: true,
+                                font: "Arial",
+                              }),
+                            ],
+                          }),
+                        ],
+                        borders: {
+                          bottom: {
+                            style: BorderStyle.SINGLE,
+                            size: 1,
+                            color: "E5E7EB",
                           },
-                        }),
-                      ],
-                      width: { size: 40, type: WidthType.PERCENTAGE },
-                    }),
-                    new TableCell({
-                      children: [new Paragraph({ text: '' })],
-                      width: { size: 20, type: WidthType.PERCENTAGE },
-                      borders: {
-                        top: { style: BorderStyle.NONE, size: 0 },
-                        bottom: { style: BorderStyle.NONE, size: 0 },
-                        left: { style: BorderStyle.NONE, size: 0 },
-                        right: { style: BorderStyle.NONE, size: 0 },
-                      },
-                    }),
-                    new TableCell({
-                      children: [
-                        new Paragraph({ text: '', spacing: { after: 600 } }),
-                        new Paragraph({
-                          text: '________________________',
-                          alignment: AlignmentType.CENTER,
-                          spacing: { after: 50 },
-                        }),
-                        new Paragraph({
-                          text: 'Dr. Lilian Young',
-                          alignment: AlignmentType.CENTER,
-                          spacing: { after: 50 },
-                          run: {
-                            size: 20,
-                            italics: true,
-                            font: 'Georgia',
+                        },
+                        margins: { bottom: 50 },
+                      }),
+                    ],
+                  }),
+                  new TableRow({
+                    children: [
+                      new TableCell({
+                        children: [
+                          new Paragraph({
+                            children: [
+                              new TextRun({
+                                text: "FACULTY OF: ",
+                                size: 16,
+                                color: "666666",
+                                font: "Arial",
+                              }),
+                              new TextRun({
+                                text: selectedStudent.program_code.toUpperCase(),
+                                size: 18,
+                                bold: true,
+                                font: "Arial",
+                              }),
+                            ],
+                          }),
+                        ],
+                        borders: {
+                          bottom: {
+                            style: BorderStyle.SINGLE,
+                            size: 1,
+                            color: "E5E7EB",
                           },
-                        }),
-                        new Paragraph({
-                          text: 'Dean of Students',
-                          alignment: AlignmentType.CENTER,
-                          run: {
-                            size: 14,
-                            bold: true,
-                            font: 'Arial',
-                            color: '666666',
+                        },
+                        margins: { bottom: 50 },
+                      }),
+                      new TableCell({
+                        children: [
+                          new Paragraph({
+                            children: [
+                              new TextRun({
+                                text: "Student ID: ",
+                                size: 16,
+                                color: "666666",
+                                font: "Arial",
+                              }),
+                              new TextRun({
+                                text: selectedStudent.id,
+                                size: 18,
+                                bold: true,
+                                font: "Courier New",
+                                color: "DC2626",
+                              }),
+                            ],
+                          }),
+                        ],
+                        borders: {
+                          bottom: {
+                            style: BorderStyle.SINGLE,
+                            size: 1,
+                            color: "E5E7EB",
                           },
-                        }),
-                      ],
-                      width: { size: 40, type: WidthType.PERCENTAGE },
-                    }),
-                  ],
-                }),
-              ],
-            }),
+                        },
+                        margins: { bottom: 50 },
+                      }),
+                    ],
+                  }),
+                  new TableRow({
+                    children: [
+                      new TableCell({
+                        children: [
+                          new Paragraph({
+                            children: [
+                              new TextRun({
+                                text: "Admission: ",
+                                size: 16,
+                                color: "666666",
+                                font: "Arial",
+                              }),
+                              new TextRun({
+                                text: "27/08/2022",
+                                size: 18,
+                                bold: true,
+                                font: "Arial",
+                              }),
+                            ],
+                          }),
+                        ],
+                        borders: {
+                          bottom: {
+                            style: BorderStyle.SINGLE,
+                            size: 1,
+                            color: "E5E7EB",
+                          },
+                        },
+                        margins: { bottom: 50 },
+                      }),
+                      new TableCell({
+                        children: [
+                          new Paragraph({
+                            children: [
+                              new TextRun({
+                                text: "Graduation: ",
+                                size: 16,
+                                color: "666666",
+                                font: "Arial",
+                              }),
+                              new TextRun({
+                                text: "21/12/2026",
+                                size: 18,
+                                bold: true,
+                                font: "Arial",
+                              }),
+                            ],
+                          }),
+                        ],
+                        borders: {
+                          bottom: {
+                            style: BorderStyle.SINGLE,
+                            size: 1,
+                            color: "E5E7EB",
+                          },
+                        },
+                        margins: { bottom: 50 },
+                      }),
+                    ],
+                  }),
+                ],
+              }),
 
-            // Footer
-            new Paragraph({
-              text: '',
-              spacing: { before: 400 },
-            }),
-            new Table({
-              width: { size: 100, type: WidthType.PERCENTAGE },
-              borders: {
-                top: { style: BorderStyle.NONE, size: 0 },
-                bottom: { style: BorderStyle.NONE, size: 0 },
-                left: { style: BorderStyle.NONE, size: 0 },
-                right: { style: BorderStyle.NONE, size: 0 },
-                insideHorizontal: { style: BorderStyle.NONE, size: 0 },
-                insideVertical: { style: BorderStyle.NONE, size: 0 },
-              },
-              rows: [
-                new TableRow({
-                  children: [
-                    new TableCell({
-                      children: [new Paragraph({
+              // Spacing before table
+              new Paragraph({
+                text: "",
+                spacing: { before: 300, after: 100 },
+              }),
+
+              // Performance table
+              new Table({
+                width: {
+                  size: 100,
+                  type: WidthType.PERCENTAGE,
+                },
+                borders: {
+                  top: { style: BorderStyle.SINGLE, size: 6, color: "000000" },
+                  bottom: {
+                    style: BorderStyle.SINGLE,
+                    size: 6,
+                    color: "000000",
+                  },
+                  left: { style: BorderStyle.SINGLE, size: 6, color: "000000" },
+                  right: {
+                    style: BorderStyle.SINGLE,
+                    size: 6,
+                    color: "000000",
+                  },
+                  insideHorizontal: {
+                    style: BorderStyle.SINGLE,
+                    size: 1,
+                    color: "E5E7EB",
+                  },
+                  insideVertical: {
+                    style: BorderStyle.SINGLE,
+                    size: 1,
+                    color: "000000",
+                  },
+                },
+                rows: tableRows,
+              }),
+
+              // Performance metrics bar
+              new Paragraph({
+                alignment: AlignmentType.CENTER,
+                spacing: { before: 200, after: 200 },
+                shading: { fill: "F9FAFB", type: ShadingType.SOLID },
+                border: {
+                  top: { style: BorderStyle.SINGLE, size: 6, color: "000000" },
+                  bottom: {
+                    style: BorderStyle.SINGLE,
+                    size: 6,
+                    color: "000000",
+                  },
+                },
+                children: [
+                  new TextRun({
+                    text: "PERFORMANCE METRICS:  ",
+                    size: 16,
+                    color: "666666",
+                    font: "Arial",
+                  }),
+                  new TextRun({
+                    text: "Current Avg: ",
+                    size: 18,
+                    bold: true,
+                    font: "Arial",
+                  }),
+                  new TextRun({
+                    text: `${stats.current}%`,
+                    size: 18,
+                    bold: true,
+                    color: "4B0082",
+                    font: "Arial",
+                  }),
+                  new TextRun({ text: "  |  ", size: 18, font: "Arial" }),
+                  new TextRun({
+                    text: "Cumulative Avg: ",
+                    size: 18,
+                    bold: true,
+                    font: "Arial",
+                  }),
+                  new TextRun({
+                    text: `${stats.cumulative}%`,
+                    size: 18,
+                    bold: true,
+                    color: "4B0082",
+                    font: "Arial",
+                  }),
+                ],
+              }),
+
+              // Academic recommendation
+              new Paragraph({
+                alignment: AlignmentType.LEFT,
+                spacing: { before: 200, after: 100 },
+                children: [
+                  new TextRun({
+                    text: "Recommendation:  ",
+                    size: 16,
+                    bold: true,
+                    color: "999999",
+                    font: "Arial",
+                  }),
+                ],
+              }),
+              new Paragraph({
+                text: getAcademicRecommendation(),
+                alignment: AlignmentType.LEFT,
+                spacing: { after: 300 },
+                border: {
+                  left: {
+                    style: BorderStyle.SINGLE,
+                    size: 12,
+                    color: "4B0082",
+                  },
+                },
+                indent: { left: convertInchesToTwip(0.2) },
+                run: {
+                  size: 18,
+                  bold: true,
+                  font: "Arial",
+                  color: "000000",
+                },
+              }),
+
+              // Grading scale
+              new Paragraph({
+                alignment: AlignmentType.CENTER,
+                spacing: { before: 200, after: 200 },
+                shading: { fill: "F9FAFB", type: ShadingType.SOLID },
+                border: {
+                  top: { style: BorderStyle.SINGLE, size: 1, color: "CCCCCC" },
+                  bottom: {
+                    style: BorderStyle.SINGLE,
+                    size: 1,
+                    color: "CCCCCC",
+                  },
+                },
+                children: [
+                  new TextRun({
+                    text: "GRADING:  ",
+                    size: 14,
+                    bold: true,
+                    color: "666666",
+                    font: "Arial",
+                    underline: {},
+                  }),
+                  new TextRun({
+                    text: "A (70–100%)  |  B (60–69%)  |  C (50–59%)  |  D (40–49%)  |  ",
+                    size: 14,
+                    color: "666666",
+                    font: "Arial",
+                  }),
+                  new TextRun({
+                    text: "F (<40%)",
+                    size: 14,
+                    color: "DC2626",
+                    font: "Arial",
+                  }),
+                ],
+              }),
+
+              // Microtext security line
+              new Paragraph({
+                text: "DO NOT REPRODUCE THIS DOCUMENT • BMI UNIVERSITY ACADEMIC RECORD SECURE VALIDATION LINE",
+                alignment: AlignmentType.CENTER,
+                spacing: { after: 200 },
+                run: {
+                  size: 12,
+                  color: "999999",
+                  font: "Arial",
+                },
+              }),
+
+              // Signatures
+              new Paragraph({
+                text: "",
+                spacing: { before: 400, after: 200 },
+              }),
+
+              // Signature table
+              new Table({
+                width: { size: 100, type: WidthType.PERCENTAGE },
+                borders: {
+                  top: { style: BorderStyle.NONE, size: 0 },
+                  bottom: { style: BorderStyle.NONE, size: 0 },
+                  left: { style: BorderStyle.NONE, size: 0 },
+                  right: { style: BorderStyle.NONE, size: 0 },
+                  insideHorizontal: { style: BorderStyle.NONE, size: 0 },
+                  insideVertical: { style: BorderStyle.NONE, size: 0 },
+                },
+                rows: [
+                  new TableRow({
+                    children: [
+                      new TableCell({
                         children: [
-                          new TextRun({ text: 'Issued: ', size: 16, bold: true, color: '666666', font: 'Arial' }),
-                          new TextRun({ text: securityData?.issuedAt ? new Date(securityData.issuedAt).toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' }) : '1st May 2026', size: 16, font: 'Arial' }),
+                          new Paragraph({ text: "", spacing: { after: 600 } }),
+                          new Paragraph({
+                            text: "________________________",
+                            alignment: AlignmentType.CENTER,
+                            spacing: { after: 50 },
+                          }),
+                          new Paragraph({
+                            text: getDeanName(selectedStudent.program_code),
+                            alignment: AlignmentType.CENTER,
+                            spacing: { after: 50 },
+                            run: {
+                              size: 20,
+                              italics: true,
+                              font: "Georgia",
+                            },
+                          }),
+                          new Paragraph({
+                            text: "Dean of Faculty & Academics",
+                            alignment: AlignmentType.CENTER,
+                            run: {
+                              size: 14,
+                              bold: true,
+                              font: "Arial",
+                              color: "666666",
+                            },
+                          }),
                         ],
-                      })],
-                    }),
-                    new TableCell({
-                      children: [new Paragraph({
+                        width: { size: 40, type: WidthType.PERCENTAGE },
+                      }),
+                      new TableCell({
+                        children: [new Paragraph({ text: "" })],
+                        width: { size: 20, type: WidthType.PERCENTAGE },
+                        borders: {
+                          top: { style: BorderStyle.NONE, size: 0 },
+                          bottom: { style: BorderStyle.NONE, size: 0 },
+                          left: { style: BorderStyle.NONE, size: 0 },
+                          right: { style: BorderStyle.NONE, size: 0 },
+                        },
+                      }),
+                      new TableCell({
                         children: [
-                          new TextRun({ text: 'ID: ', size: 16, bold: true, color: '666666', font: 'Arial' }),
-                          new TextRun({ text: securityData?.serialNumber || `BMI-TR-${selectedStudent.id.split('-').pop()}`, size: 16, font: 'Arial' }),
+                          new Paragraph({ text: "", spacing: { after: 600 } }),
+                          new Paragraph({
+                            text: "________________________",
+                            alignment: AlignmentType.CENTER,
+                            spacing: { after: 50 },
+                          }),
+                          new Paragraph({
+                            text: "Dr. Lilian Young",
+                            alignment: AlignmentType.CENTER,
+                            spacing: { after: 50 },
+                            run: {
+                              size: 20,
+                              italics: true,
+                              font: "Georgia",
+                            },
+                          }),
+                          new Paragraph({
+                            text: "Dean of Students",
+                            alignment: AlignmentType.CENTER,
+                            run: {
+                              size: 14,
+                              bold: true,
+                              font: "Arial",
+                              color: "666666",
+                            },
+                          }),
                         ],
-                      })],
-                    }),
-                    new TableCell({
-                      children: [new Paragraph({
-                        alignment: AlignmentType.RIGHT,
+                        width: { size: 40, type: WidthType.PERCENTAGE },
+                      }),
+                    ],
+                  }),
+                ],
+              }),
+
+              // Footer
+              new Paragraph({
+                text: "",
+                spacing: { before: 400 },
+              }),
+              new Table({
+                width: { size: 100, type: WidthType.PERCENTAGE },
+                borders: {
+                  top: { style: BorderStyle.NONE, size: 0 },
+                  bottom: { style: BorderStyle.NONE, size: 0 },
+                  left: { style: BorderStyle.NONE, size: 0 },
+                  right: { style: BorderStyle.NONE, size: 0 },
+                  insideHorizontal: { style: BorderStyle.NONE, size: 0 },
+                  insideVertical: { style: BorderStyle.NONE, size: 0 },
+                },
+                rows: [
+                  new TableRow({
+                    children: [
+                      new TableCell({
                         children: [
-                          new TextRun({ text: '✓ Verified Archive', size: 16, bold: true, color: '4B0082', font: 'Arial' }),
+                          new Paragraph({
+                            children: [
+                              new TextRun({
+                                text: "Issued: ",
+                                size: 16,
+                                bold: true,
+                                color: "666666",
+                                font: "Arial",
+                              }),
+                              new TextRun({
+                                text: securityData?.issuedAt
+                                  ? new Date(
+                                      securityData.issuedAt,
+                                    ).toLocaleDateString("en-US", {
+                                      year: "numeric",
+                                      month: "long",
+                                      day: "numeric",
+                                    })
+                                  : "1st May 2026",
+                                size: 16,
+                                font: "Arial",
+                              }),
+                            ],
+                          }),
                         ],
-                      })],
-                    }),
-                  ],
-                }),
-              ],
-            }),
-            
-            new Paragraph({
-              text: `Document ID: ${securityData?.serialNumber || `${selectedStudent.id}-${transcriptType.toUpperCase()}-${new Date().getFullYear()}`}`,
-              alignment: AlignmentType.CENTER,
-              spacing: { before: 200 },
-              border: {
-                top: { style: BorderStyle.SINGLE, size: 6, color: 'C9A84C' },
-              },
-              run: {
-                size: 18,
-                font: 'Arial',
-                color: '666666',
-              },
-            }),
-            new Paragraph({
-              text: 'This is an official document issued by BMI University',
-              alignment: AlignmentType.CENTER,
-              run: {
-                size: 16,
-                italics: true,
-                font: 'Arial',
-                color: '999999',
-              },
-            }),
-          ],
-        }],
+                      }),
+                      new TableCell({
+                        children: [
+                          new Paragraph({
+                            children: [
+                              new TextRun({
+                                text: "ID: ",
+                                size: 16,
+                                bold: true,
+                                color: "666666",
+                                font: "Arial",
+                              }),
+                              new TextRun({
+                                text:
+                                  securityData?.serialNumber ||
+                                  `BMI-TR-${selectedStudent.id.split("-").pop()}`,
+                                size: 16,
+                                font: "Arial",
+                              }),
+                            ],
+                          }),
+                        ],
+                      }),
+                      new TableCell({
+                        children: [
+                          new Paragraph({
+                            alignment: AlignmentType.RIGHT,
+                            children: [
+                              new TextRun({
+                                text: "✓ Verified Archive",
+                                size: 16,
+                                bold: true,
+                                color: "4B0082",
+                                font: "Arial",
+                              }),
+                            ],
+                          }),
+                        ],
+                      }),
+                    ],
+                  }),
+                ],
+              }),
+
+              new Paragraph({
+                text: `Document ID: ${securityData?.serialNumber || `${selectedStudent.id}-${transcriptType.toUpperCase()}-${new Date().getFullYear()}`}`,
+                alignment: AlignmentType.CENTER,
+                spacing: { before: 200 },
+                border: {
+                  top: { style: BorderStyle.SINGLE, size: 6, color: "C9A84C" },
+                },
+                run: {
+                  size: 18,
+                  font: "Arial",
+                  color: "666666",
+                },
+              }),
+              new Paragraph({
+                text: "This is an official document issued by BMI University",
+                alignment: AlignmentType.CENTER,
+                run: {
+                  size: 16,
+                  italics: true,
+                  font: "Arial",
+                  color: "999999",
+                },
+              }),
+            ],
+          },
+        ],
       });
 
-      const blob = await (await import('docx')).Packer.toBlob(doc);
+      const blob = await (await import("docx")).Packer.toBlob(doc);
       saveAs(blob, `${fileName}.docx`);
     } catch (err) {
-      console.error('Word generation failed:', err);
-      alert('Word document generation failed. Please try again.');
+      console.error("Word generation failed:", err);
+      alert("Word document generation failed. Please try again.");
     }
   };
 
@@ -1418,19 +1876,20 @@ export const Transcripts: React.FC<TranscriptsProps> = (props) => {
     if (!selectedStudent) return;
 
     try {
-      const fileName = `${transcriptType}_TRANSCRIPT_${selectedStudent.id}_${selectedStudent.last_name}`.toUpperCase();
-      
+      const fileName =
+        `${transcriptType}_TRANSCRIPT_${selectedStudent.id}_${selectedStudent.last_name}`.toUpperCase();
+
       // A4 dimensions at 96 DPI
       const width = 794;
       const height = 1123;
-      
+
       // Wrap long text for recommendation
       const wrapText = (text: string, maxCharsPerLine: number): string[] => {
-        const words = text.split(' ');
+        const words = text.split(" ");
         const lines: string[] = [];
-        let currentLine = '';
-        
-        words.forEach(word => {
+        let currentLine = "";
+
+        words.forEach((word) => {
           const testLine = currentLine ? `${currentLine} ${word}` : word;
           if (testLine.length > maxCharsPerLine && currentLine) {
             lines.push(currentLine);
@@ -1439,41 +1898,50 @@ export const Transcripts: React.FC<TranscriptsProps> = (props) => {
             currentLine = testLine;
           }
         });
-        
+
         if (currentLine) lines.push(currentLine);
         return lines;
       };
-      
+
       const recommendationLines = wrapText(getAcademicRecommendation(), 95);
-      
+
       // Build course table rows
-      const courseRows = fixedRows.map((rec, idx) => {
-        const y = 430 + (idx * 22);
-        const gradeColor = rec ? (rec.score >= 70 ? '#10B981' : rec.score < 40 ? '#DC2626' : '#4B0082') : '#4B0082';
-        const rawName = rec?.courseName ?? '';
-        const courseName = rawName.length > 45 ? rawName.substring(0, 42) + '...' : rawName;
-        
-        return `
+      const courseRows = fixedRows
+        .map((rec, idx) => {
+          const y = 430 + idx * 22;
+          const gradeColor = rec
+            ? rec.score >= 70
+              ? "#10B981"
+              : rec.score < 40
+                ? "#DC2626"
+                : "#4B0082"
+            : "#4B0082";
+          const rawName = rec?.courseName ?? "";
+          const courseName =
+            rawName.length > 45 ? rawName.substring(0, 42) + "..." : rawName;
+
+          return `
     <!-- Row ${idx + 1} -->
-    <rect x="50" y="${y - 15}" width="694" height="22" fill="${idx % 2 === 0 ? '#FFFFFF' : '#F9FAFB'}" />
-    <text x="60" y="${y}" font-family="Courier New, monospace" font-size="9" font-weight="bold" fill="#4B0082">${rec?.courseCode ?? ''}</text>
+    <rect x="50" y="${y - 15}" width="694" height="22" fill="${idx % 2 === 0 ? "#FFFFFF" : "#F9FAFB"}" />
+    <text x="60" y="${y}" font-family="Courier New, monospace" font-size="9" font-weight="bold" fill="#4B0082">${rec?.courseCode ?? ""}</text>
     <text x="140" y="${y}" font-family="Arial, sans-serif" font-size="9" font-weight="bold" fill="#1F2937">${courseName.toUpperCase()}</text>
-    <text x="520" y="${y}" font-family="Arial, sans-serif" font-size="9" fill="#374151" text-anchor="middle">${rec ? formatNumber(rec.credits, 2) : ''}</text>
-    <text x="600" y="${y}" font-family="Arial, sans-serif" font-size="10" font-weight="bold" fill="${gradeColor}" text-anchor="middle">${rec ? `${rec.score}%` : ''}</text>
-    <text x="670" y="${y}" font-family="Arial, sans-serif" font-size="12" font-weight="bold" fill="${gradeColor}" text-anchor="middle">${rec?.grade ?? ''}</text>
-    <text x="720" y="${y}" font-family="Arial, sans-serif" font-size="8" fill="#6B7280" text-anchor="end">${rec?.term ?? ''}</text>`;
-      }).join('');
-      
-      const tableEndY = 430 + (fixedRows.length * 22);
+    <text x="520" y="${y}" font-family="Arial, sans-serif" font-size="9" fill="#374151" text-anchor="middle">${rec ? formatNumber(rec.credits, 2) : ""}</text>
+    <text x="600" y="${y}" font-family="Arial, sans-serif" font-size="10" font-weight="bold" fill="${gradeColor}" text-anchor="middle">${rec ? `${rec.score}%` : ""}</text>
+    <text x="670" y="${y}" font-family="Arial, sans-serif" font-size="12" font-weight="bold" fill="${gradeColor}" text-anchor="middle">${rec?.grade ?? ""}</text>
+    <text x="720" y="${y}" font-family="Arial, sans-serif" font-size="8" fill="#6B7280" text-anchor="end">${rec?.term ?? ""}</text>`;
+        })
+        .join("");
+
+      const tableEndY = 430 + fixedRows.length * 22;
       const statsY = tableEndY + 40;
       const recommendationY = statsY + 80;
       const signaturesY = height - 200;
       const footerY = height - 120;
 
       const svg = `<?xml version="1.0" encoding="UTF-8"?>
-<svg xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" 
+<svg xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink"
      width="${width}" height="${height}" viewBox="0 0 ${width} ${height}">
-  
+
   <defs>
     <!-- Gold gradient for border -->
     <linearGradient id="goldGradient" x1="0%" y1="0%" x2="100%" y2="100%">
@@ -1481,7 +1949,7 @@ export const Transcripts: React.FC<TranscriptsProps> = (props) => {
       <stop offset="50%" stop-color="#FFA500" />
       <stop offset="100%" stop-color="#FFD700" />
     </linearGradient>
-    
+
     <!-- Security pattern -->
     <pattern id="securityPattern" x="0" y="0" width="100" height="100" patternUnits="userSpaceOnUse">
       <path d="M0,50 Q25,25 50,50 T100,50" fill="none" stroke="#E5E7EB" stroke-width="0.5" opacity="0.3" />
@@ -1489,152 +1957,156 @@ export const Transcripts: React.FC<TranscriptsProps> = (props) => {
       <path d="M0,75 Q25,50 50,75 T100,75" fill="none" stroke="#E5E7EB" stroke-width="0.5" opacity="0.3" />
     </pattern>
   </defs>
-  
+
   <!-- Background with security pattern -->
   <rect width="${width}" height="${height}" fill="#FFFFFF"/>
   <rect width="${width}" height="${height}" fill="url(#securityPattern)" opacity="0.4"/>
-  
+
   <!-- Main border (double gold) -->
-  <rect x="25" y="25" width="${width - 50}" height="${height - 50}" 
+  <rect x="25" y="25" width="${width - 50}" height="${height - 50}"
         fill="none" stroke="url(#goldGradient)" stroke-width="3" rx="2"/>
-  <rect x="30" y="30" width="${width - 60}" height="${height - 60}" 
+  <rect x="30" y="30" width="${width - 60}" height="${height - 60}"
         fill="none" stroke="#C9A84C" stroke-width="1" rx="1"/>
-  
+
   <!-- Top microtext security line -->
-  <text x="${width/2}" y="15" font-family="Arial, sans-serif" font-size="5" fill="#999999" text-anchor="middle" opacity="0.6">
-    BMI UNIVERSITY OFFICIAL ACADEMIC TRANSCRIPT • SECURITY VALIDATED RECORD • DO NOT REPRODUCE • AUTHENTIC DOCUMENT • ID: ${securityData?.serialNumber || 'PENDING'}
+  <text x="${width / 2}" y="15" font-family="Arial, sans-serif" font-size="5" fill="#999999" text-anchor="middle" opacity="0.6">
+    BMI UNIVERSITY OFFICIAL ACADEMIC TRANSCRIPT • SECURITY VALIDATED RECORD • DO NOT REPRODUCE • AUTHENTIC DOCUMENT • ID: ${securityData?.serialNumber || "PENDING"}
   </text>
-  
+
   <!-- Logo -->
-  <image x="${width/2 - 35}" y="50" width="70" height="70" xlink:href="${logo}" preserveAspectRatio="xMidYMid meet"/>
-  
+  <image x="${width / 2 - 35}" y="50" width="70" height="70" xlink:href="${logo}" preserveAspectRatio="xMidYMid meet"/>
+
   <!-- University Name -->
-  <text x="${width/2}" y="145" font-family="Georgia, serif" font-size="26" font-weight="bold" 
+  <text x="${width / 2}" y="145" font-family="Georgia, serif" font-size="26" font-weight="bold"
         fill="#4B0082" text-anchor="middle" letter-spacing="1">BMI University</text>
-  
+
   <!-- Subtitle -->
-  <text x="${width/2}" y="165" font-family="Georgia, serif" font-size="11" font-style="italic" 
+  <text x="${width / 2}" y="165" font-family="Georgia, serif" font-size="11" font-style="italic"
         fill="#6B7280" text-anchor="middle">Home of Knowledge and Innovation</text>
-  
+
   <!-- Office of the Registrar -->
-  <text x="${width/2}" y="185" font-family="Arial, sans-serif" font-size="9" font-weight="bold" 
+  <text x="${width / 2}" y="185" font-family="Arial, sans-serif" font-size="9" font-weight="bold"
         fill="#9CA3AF" text-anchor="middle" letter-spacing="2">OFFICE OF THE REGISTRAR</text>
-  
+
   <!-- Document Title with borders -->
   <line x1="100" y1="205" x2="${width - 100}" y2="205" stroke="#000000" stroke-width="2"/>
-  <text x="${width/2}" y="225" font-family="Georgia, serif" font-size="18" font-weight="bold" 
+  <text x="${width / 2}" y="225" font-family="Georgia, serif" font-size="18" font-weight="bold"
         fill="#000000" text-anchor="middle" letter-spacing="1">${transcriptType.toUpperCase()} ACADEMIC TRANSCRIPT</text>
   <line x1="100" y1="235" x2="${width - 100}" y2="235" stroke="#000000" stroke-width="2"/>
-  
+
   <!-- Student Name (large and prominent) -->
   <text x="60" y="270" font-family="Arial, sans-serif" font-size="10" font-weight="bold" fill="#9CA3AF">Name:</text>
   <text x="60" y="290" font-family="Georgia, serif" font-size="20" font-weight="bold" fill="#000000" letter-spacing="0.5">
     ${selectedStudent.first_name.toUpperCase()} ${selectedStudent.last_name.toUpperCase()}
   </text>
   <line x1="60" y1="295" x2="400" y2="295" stroke="#CCCCCC" stroke-width="1"/>
-  
+
   <!-- Student Details Grid (2 columns) -->
   <!-- Left Column -->
   <text x="60" y="320" font-family="Arial, sans-serif" font-size="9" fill="#6B7280">Year of study:</text>
   <text x="150" y="320" font-family="Arial, sans-serif" font-size="10" font-weight="bold" fill="#000000">4 (FOUR)</text>
   <line x1="60" y1="325" x2="350" y2="325" stroke="#E5E7EB" stroke-width="0.5"/>
-  
+
   <text x="60" y="345" font-family="Arial, sans-serif" font-size="9" fill="#6B7280">FACULTY OF:</text>
   <text x="150" y="345" font-family="Arial, sans-serif" font-size="10" font-weight="bold" fill="#000000">${selectedStudent.program_code.toUpperCase()}</text>
   <line x1="60" y1="350" x2="350" y2="350" stroke="#E5E7EB" stroke-width="0.5"/>
-  
+
   <text x="60" y="370" font-family="Arial, sans-serif" font-size="9" fill="#6B7280">Admission:</text>
   <text x="150" y="370" font-family="Arial, sans-serif" font-size="10" font-weight="bold" fill="#000000">${selectedStudent.admission_date}</text>
   <line x1="60" y1="375" x2="350" y2="375" stroke="#E5E7EB" stroke-width="0.5"/>
-  
+
   <!-- Right Column -->
   <text x="400" y="320" font-family="Arial, sans-serif" font-size="9" fill="#6B7280">Program:</text>
   <text x="470" y="320" font-family="Arial, sans-serif" font-size="10" font-weight="bold" fill="#000000">${selectedStudent.program_code.substring(0, 30).toUpperCase()}</text>
   <line x1="400" y1="325" x2="730" y2="325" stroke="#E5E7EB" stroke-width="0.5"/>
-  
+
   <text x="400" y="345" font-family="Arial, sans-serif" font-size="9" fill="#6B7280">Student ID:</text>
   <text x="470" y="345" font-family="Courier New, monospace" font-size="10" font-weight="bold" fill="#DC2626">${selectedStudent.id}</text>
   <line x1="400" y1="350" x2="730" y2="350" stroke="#E5E7EB" stroke-width="0.5"/>
-  
+
   <text x="400" y="370" font-family="Arial, sans-serif" font-size="9" fill="#6B7280">Graduation:</text>
   <text x="470" y="370" font-family="Arial, sans-serif" font-size="10" font-weight="bold" fill="#000000">${parseInt(selectedStudent.admission_date) + 4}</text>
   <line x1="400" y1="375" x2="730" y2="375" stroke="#E5E7EB" stroke-width="0.5"/>
-  
+
   <!-- Academic Performance Section -->
   <text x="60" y="405" font-family="Arial, sans-serif" font-size="12" font-weight="bold" fill="#000000">ACADEMIC PERFORMANCE</text>
-  
+
   <!-- Table Header -->
   <rect x="50" y="410" width="694" height="25" fill="#F3F4F6"/>
   <line x1="50" y1="410" x2="744" y2="410" stroke="#000000" stroke-width="1"/>
   <line x1="50" y1="435" x2="744" y2="435" stroke="#000000" stroke-width="1"/>
   <line x1="50" y1="410" x2="50" y2="435" stroke="#000000" stroke-width="1"/>
   <line x1="744" y1="410" x2="744" y2="435" stroke="#000000" stroke-width="1"/>
-  
+
   <text x="60" y="427" font-family="Arial, sans-serif" font-size="9" font-weight="bold" fill="#374151">Course Code</text>
   <text x="140" y="427" font-family="Arial, sans-serif" font-size="9" font-weight="bold" fill="#374151">Course Description</text>
   <text x="520" y="427" font-family="Arial, sans-serif" font-size="9" font-weight="bold" fill="#374151" text-anchor="middle">Hours</text>
   <text x="600" y="427" font-family="Arial, sans-serif" font-size="9" font-weight="bold" fill="#374151" text-anchor="middle">Score</text>
   <text x="670" y="427" font-family="Arial, sans-serif" font-size="9" font-weight="bold" fill="#374151" text-anchor="middle">Grade</text>
   <text x="720" y="427" font-family="Arial, sans-serif" font-size="9" font-weight="bold" fill="#374151" text-anchor="end">Term</text>
-  
+
   <!-- Table Border Lines -->
   <line x1="50" y1="410" x2="50" y2="${tableEndY}" stroke="#000000" stroke-width="1"/>
   <line x1="744" y1="410" x2="744" y2="${tableEndY}" stroke="#000000" stroke-width="1"/>
   <line x1="50" y1="${tableEndY}" x2="744" y2="${tableEndY}" stroke="#000000" stroke-width="1"/>
-  
+
   <!-- Course Rows -->
   ${courseRows}
-  
+
   <!-- Performance Metrics Bar -->
   <rect x="50" y="${statsY - 20}" width="694" height="50" fill="#F9FAFB" stroke="#E5E7EB" stroke-width="1"/>
-  <text x="${width/2}" y="${statsY}" font-family="Arial, sans-serif" font-size="11" font-weight="bold" fill="#374151" text-anchor="middle">
+  <text x="${width / 2}" y="${statsY}" font-family="Arial, sans-serif" font-size="11" font-weight="bold" fill="#374151" text-anchor="middle">
     Current Term Average: <tspan fill="#4B0082">${stats.current}%</tspan>  |  Cumulative Average: <tspan fill="#4B0082">${stats.cumulative}%</tspan>
   </text>
-  
+
   <!-- Grading Scale -->
-  <text x="${width/2}" y="${statsY + 18}" font-family="Arial, sans-serif" font-size="8" fill="#6B7280" text-anchor="middle">
+  <text x="${width / 2}" y="${statsY + 18}" font-family="Arial, sans-serif" font-size="8" fill="#6B7280" text-anchor="middle">
     A (70–100%) | B (60–69%) | C (50–59%) | D (40–49%) | F (&lt;40%)
   </text>
-  
+
   <!-- Academic Recommendation -->
   <rect x="50" y="${recommendationY - 10}" width="5" height="80" fill="#4B0082"/>
   <text x="65" y="${recommendationY + 5}" font-family="Arial, sans-serif" font-size="11" font-weight="bold" fill="#000000">ACADEMIC RECOMMENDATION</text>
-  ${recommendationLines.map((line, idx) => `
-  <text x="65" y="${recommendationY + 25 + (idx * 14)}" font-family="Arial, sans-serif" font-size="9" fill="#374151">${line}</text>`).join('')}
-  
+  ${recommendationLines
+    .map(
+      (line, idx) => `
+  <text x="65" y="${recommendationY + 25 + idx * 14}" font-family="Arial, sans-serif" font-size="9" fill="#374151">${line}</text>`,
+    )
+    .join("")}
+
   <!-- Signatures Section -->
   <text x="200" y="${signaturesY}" font-family="Arial, sans-serif" font-size="10" fill="#000000">_________________________</text>
   <text x="550" y="${signaturesY}" font-family="Arial, sans-serif" font-size="10" fill="#000000">_________________________</text>
-  
+
   <text x="200" y="${signaturesY + 20}" font-family="Arial, sans-serif" font-size="10" font-weight="bold" fill="#000000" text-anchor="middle">${getDeanName(selectedStudent.program_code)}</text>
   <text x="550" y="${signaturesY + 20}" font-family="Arial, sans-serif" font-size="10" font-weight="bold" fill="#000000" text-anchor="middle">Dean of Students</text>
-  
+
   <text x="200" y="${signaturesY + 35}" font-family="Arial, sans-serif" font-size="8" font-style="italic" fill="#6B7280" text-anchor="middle">Dean of Faculty &amp; Academics</text>
   <text x="550" y="${signaturesY + 35}" font-family="Arial, sans-serif" font-size="8" font-style="italic" fill="#6B7280" text-anchor="middle">Student Affairs</text>
-  
+
   <!-- Footer -->
   <line x1="60" y1="${footerY}" x2="${width - 60}" y2="${footerY}" stroke="#C9A84C" stroke-width="1"/>
-  
-  <text x="60" y="${footerY + 20}" font-family="Arial, sans-serif" font-size="8" fill="#6B7280">Issued: ${securityData?.issuedAt ? new Date(securityData.issuedAt).toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' }) : new Date().toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' })}</text>
-  <text x="${width/2}" y="${footerY + 20}" font-family="Courier New, monospace" font-size="8" fill="#6B7280" text-anchor="middle">ID: ${securityData?.serialNumber || `${selectedStudent.id}-${transcriptType.toUpperCase()}-${new Date().getFullYear()}`}</text>
+
+  <text x="60" y="${footerY + 20}" font-family="Arial, sans-serif" font-size="8" fill="#6B7280">Issued: ${securityData?.issuedAt ? new Date(securityData.issuedAt).toLocaleDateString("en-US", { year: "numeric", month: "long", day: "numeric" }) : new Date().toLocaleDateString("en-US", { year: "numeric", month: "long", day: "numeric" })}</text>
+  <text x="${width / 2}" y="${footerY + 20}" font-family="Courier New, monospace" font-size="8" fill="#6B7280" text-anchor="middle">ID: ${securityData?.serialNumber || `${selectedStudent.id}-${transcriptType.toUpperCase()}-${new Date().getFullYear()}`}</text>
   <text x="${width - 60}" y="${footerY + 20}" font-family="Arial, sans-serif" font-size="8" fill="#6B7280" text-anchor="end">Verified Archive</text>
-  
+
   <!-- Document ID with gold border -->
-  <line x1="${width/2 - 150}" y1="${footerY + 25}" x2="${width/2 + 150}" y2="${footerY + 25}" stroke="#FFD700" stroke-width="2"/>
-  <text x="${width/2}" y="${footerY + 40}" font-family="Arial, sans-serif" font-size="9" font-style="italic" fill="#9CA3AF" text-anchor="middle">
+  <line x1="${width / 2 - 150}" y1="${footerY + 25}" x2="${width / 2 + 150}" y2="${footerY + 25}" stroke="#FFD700" stroke-width="2"/>
+  <text x="${width / 2}" y="${footerY + 40}" font-family="Arial, sans-serif" font-size="9" font-style="italic" fill="#9CA3AF" text-anchor="middle">
     This is an official document issued by BMI University
   </text>
-  
+
   <!-- Bottom microtext security line -->
-  <text x="${width/2}" y="${height - 10}" font-family="Arial, sans-serif" font-size="5" fill="#999999" text-anchor="middle" opacity="0.6">
-    OFFICIAL TRANSCRIPT • TAMPER-EVIDENT SECURITY FEATURES • VERIFY AT ${securityData?.verificationUrl || 'BMI.EDU/VERIFY'}
+  <text x="${width / 2}" y="${height - 10}" font-family="Arial, sans-serif" font-size="5" fill="#999999" text-anchor="middle" opacity="0.6">
+    OFFICIAL TRANSCRIPT • TAMPER-EVIDENT SECURITY FEATURES • VERIFY AT ${securityData?.verificationUrl || "BMI.EDU/VERIFY"}
   </text>
 </svg>`;
 
       // Download SVG
-      const blob = new Blob([svg], { type: 'image/svg+xml;charset=utf-8' });
+      const blob = new Blob([svg], { type: "image/svg+xml;charset=utf-8" });
       const url = URL.createObjectURL(blob);
-      const a = document.createElement('a');
+      const a = document.createElement("a");
       a.href = url;
       a.download = `${fileName}.svg`;
       document.body.appendChild(a);
@@ -1642,26 +2114,35 @@ export const Transcripts: React.FC<TranscriptsProps> = (props) => {
       document.body.removeChild(a);
       URL.revokeObjectURL(url);
     } catch (err) {
-      console.error('SVG generation failed:', err);
-      alert('SVG generation failed. Please try again.');
+      console.error("SVG generation failed:", err);
+      alert("SVG generation failed. Please try again.");
     }
   };
 
   const MicroText = ({ text }: { text: string }) => (
     <div className="relative overflow-hidden whitespace-nowrap text-[2.5px] md:text-[3px] leading-none text-gray-400 select-none uppercase tracking-tighter opacity-60 h-1 flex items-center bg-gradient-to-r from-purple-50/50 via-gray-50/50 to-purple-50/50 border-y border-gray-100/50">
       {/* Primary security text */}
-      {Array.from({ length: 15 }).map((_, i) => <span key={i} className="mr-4">{text}</span>)}
-      
+      {Array.from({ length: 15 }).map((_, i) => (
+        <span key={i} className="mr-4">
+          {text}
+        </span>
+      ))}
+
       {/* Hidden layer - visible only under magnification */}
       <div className="absolute inset-0 flex items-center opacity-20 text-[1.5px]">
         {Array.from({ length: 30 }).map((_, i) => (
-          <span key={`hidden-${i}`} className="mr-2 text-red-600">AUTHENTIC</span>
+          <span key={`hidden-${i}`} className="mr-2 text-red-600">
+            AUTHENTIC
+          </span>
         ))}
       </div>
     </div>
   );
 
-  const startBlockDrag = (key: EditableBlockKey, e: React.MouseEvent<HTMLDivElement>) => {
+  const startBlockDrag = (
+    key: EditableBlockKey,
+    e: React.MouseEvent<HTMLDivElement>,
+  ) => {
     if (!editorMode) return;
     e.preventDefault();
     e.stopPropagation();
@@ -1678,681 +2159,1201 @@ export const Transcripts: React.FC<TranscriptsProps> = (props) => {
   const editorOutlineClass = (key: EditableBlockKey) =>
     editorMode
       ? selectedBlock === key
-        ? 'outline outline-2 outline-amber-500/90'
-        : 'outline outline-1 outline-cyan-500/60'
-      : '';
+        ? "outline outline-2 outline-amber-500/90"
+        : "outline outline-1 outline-cyan-500/60"
+      : "";
 
   return (
     <div className="h-full flex flex-col animate-fade-in relative">
       {/* Sticky Header */}
       <div className="flex-shrink-0 sticky top-0 z-40 bg-white/95 dark:bg-gray-900/95 backdrop-blur-md border-b border-gray-200 dark:border-gray-700 px-4 py-2 flex flex-col md:flex-row justify-between items-center gap-2 shadow-sm min-h-[60px]">
         <div className="flex items-center gap-3 pl-14 w-full md:w-auto">
-           <div className="w-1 h-5 bg-[#FFD700] rounded-none"></div>
-           <div className="flex flex-col">
-              <h2 className="text-base md:text-lg font-bold text-[#2E004F] dark:text-white tracking-tight uppercase leading-none">Academic Records & Transcripts</h2>
-              <p className="text-[8px] md:text-[9px] font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-widest">BMI Registrar • Automated Grade Aggregation Node</p>
-           </div>
+          <div className="w-1 h-5 bg-[#FFD700] rounded-none"></div>
+          <div className="flex flex-col">
+            <h2 className="text-base md:text-lg font-bold text-[#2E004F] dark:text-white tracking-tight uppercase leading-none">
+              Academic Records & Transcripts
+            </h2>
+            <p className="text-[8px] md:text-[9px] font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-widest">
+              BMI Registrar • Automated Grade Aggregation Node
+            </p>
+          </div>
         </div>
       </div>
 
       {/* Sticky Top Tab Bar */}
       <div className="sticky top-[60px] z-30 bg-[#F8F9FA]/95 dark:bg-[#0a0015]/95 backdrop-blur-md border-b border-gray-200 dark:border-gray-800 px-6 py-3 flex items-center gap-3 overflow-x-auto no-scrollbar shadow-sm">
-         <div className="flex items-center gap-2 mr-4 text-gray-400">
-            <Scroll size={14} />
-            <span className="text-[9px] font-black uppercase tracking-widest">Document Type</span>
-         </div>
-         {['Official', 'Provisional'].map((type) => (
-            <button
-              key={type}
-              onClick={() => setTranscriptType(type as any)}
-              className={`px-5 py-1.5 rounded-full text-[10px] font-black uppercase tracking-widest transition-all whitespace-nowrap ${
-                transcriptType === type 
-                  ? 'bg-[#4B0082] text-white shadow-lg shadow-purple-500/20 scale-105 border border-purple-500/50' 
-                  : 'bg-white dark:bg-gray-800 text-gray-500 dark:text-gray-400 border border-gray-200 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-700 hover:text-[#4B0082]'
-              }`}
-            >
-              {type}
-            </button>
-         ))}
+        <div className="flex items-center gap-2 mr-4 text-gray-400">
+          <Scroll size={14} />
+          <span className="text-[9px] font-black uppercase tracking-widest">
+            Document Type
+          </span>
+        </div>
+        {["Official", "Provisional"].map((type) => (
+          <button
+            key={type}
+            onClick={() => setTranscriptType(type as any)}
+            className={`px-5 py-1.5 rounded-full text-[10px] font-black uppercase tracking-widest transition-all whitespace-nowrap ${
+              transcriptType === type
+                ? "bg-[#4B0082] text-white shadow-lg shadow-purple-500/20 scale-105 border border-purple-500/50"
+                : "bg-white dark:bg-gray-800 text-gray-500 dark:text-gray-400 border border-gray-200 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-700 hover:text-[#4B0082]"
+            }`}
+          >
+            {type}
+          </button>
+        ))}
       </div>
 
       {/* Scrollable Content */}
       <div className="flex-1 overflow-y-auto p-6 space-y-8">
         <div className="grid grid-cols-1 lg:grid-cols-4 gap-8">
           <div className="lg:col-span-1 space-y-6">
-             <div className="bg-white dark:bg-gray-800 p-8 rounded-none border border-gray-100 dark:border-gray-700 space-y-6 shadow-sm">
-                <div className="relative">
-                   <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" size={16} />
-                   <input 
-                     type="text" 
-                     placeholder="Search Registry..." 
-                     value={searchTerm}
-                     onChange={(e) => setSearchTerm(e.target.value)}
-                     className="w-full pl-10 pr-4 py-3 bg-gray-50 dark:bg-gray-700 border border-gray-200 dark:border-gray-600 rounded-none text-xs font-bold uppercase tracking-tight outline-none focus:ring-1 focus:ring-[#4B0082]"
-                   />
+            <div className="bg-white dark:bg-gray-800 p-8 rounded-none border border-gray-100 dark:border-gray-700 space-y-6 shadow-sm">
+              <div className="relative">
+                <Search
+                  className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400"
+                  size={16}
+                />
+                <input
+                  type="text"
+                  placeholder="Search Registry..."
+                  value={searchTerm}
+                  onChange={(e) => setSearchTerm(e.target.value)}
+                  className="w-full pl-10 pr-4 py-3 bg-gray-50 dark:bg-gray-700 border border-gray-200 dark:border-gray-600 rounded-none text-xs font-bold uppercase tracking-tight outline-none focus:ring-1 focus:ring-[#4B0082]"
+                />
+              </div>
+              <div className="space-y-4">
+                <div className="space-y-1">
+                  <label className="text-[10px] font-black uppercase text-gray-400 tracking-widest">
+                    Target Program
+                  </label>
+                  <select
+                    value={programFilter}
+                    onChange={(e) => setProgramFilter(e.target.value)}
+                    className="w-full px-4 py-3 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-600 rounded-none text-[10px] font-black uppercase outline-none focus:ring-1 focus:ring-[#4B0082] cursor-pointer dark:text-gray-200"
+                  >
+                    <option value="All Programs">All Programs</option>
+                    {programOptions.map((p) => (
+                      <option key={p.id} value={p.id}>
+                        {p.label}
+                      </option>
+                    ))}
+                  </select>
                 </div>
-                <div className="space-y-4">
-                   <div className="space-y-1">
-                      <label className="text-[10px] font-black uppercase text-gray-400 tracking-widest">Target Program</label>
-                      <select 
-                        value={programFilter}
-                        onChange={(e) => setProgramFilter(e.target.value)}
-                        className="w-full px-4 py-3 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-600 rounded-none text-[10px] font-black uppercase outline-none focus:ring-1 focus:ring-[#4B0082] cursor-pointer dark:text-gray-200"
-                      >
-                         <option value="All Programs">All Programs</option>
-                         {programOptions.map((p) => (
-                           <option key={p.id} value={p.id}>{p.label}</option>
-                         ))}
-                      </select>
-                   </div>
-                </div>
-                <div className="pt-6 border-t border-gray-50 dark:border-gray-700">
-                   <div className="max-h-[400px] overflow-y-auto no-scrollbar space-y-1">
-                      {filteredStudents.map(student => (
-                        <button 
-                          key={student.id}
-                          onClick={() => { setSelectedStudent(student); setShowTranscript(false); }}
-                          className={`w-full text-left p-3 rounded-none transition-all flex items-center justify-between group ${selectedStudent?.id === student.id ? 'bg-[#4B0082] text-white shadow-lg' : 'hover:bg-purple-50 dark:hover:bg-gray-700'}`}
+              </div>
+              <div className="pt-6 border-t border-gray-50 dark:border-gray-700">
+                <div className="max-h-[400px] overflow-y-auto no-scrollbar space-y-1">
+                  {filteredStudents.map((student) => (
+                    <button
+                      key={student.id}
+                      onClick={() => {
+                        setSelectedStudent(student);
+                        setShowTranscript(false);
+                      }}
+                      className={`w-full text-left p-3 rounded-none transition-all flex items-center justify-between group ${selectedStudent?.id === student.id ? "bg-[#4B0082] text-white shadow-lg" : "hover:bg-purple-50 dark:hover:bg-gray-700"}`}
+                    >
+                      <div>
+                        <p className="text-[11px] font-black uppercase tracking-tight leading-none">
+                          {student.first_name} {student.last_name}
+                        </p>
+                        <p
+                          className={`text-[9px] font-bold uppercase mt-1 ${selectedStudent?.id === student.id ? "text-purple-200" : "text-gray-400"}`}
                         >
-                           <div>
-                              <p className="text-[11px] font-black uppercase tracking-tight leading-none">{student.first_name} {student.last_name}</p>
-                              <p className={`text-[9px] font-bold uppercase mt-1 ${selectedStudent?.id === student.id ? 'text-purple-200' : 'text-gray-400'}`}>{student.id}</p>
-                           </div>
-                           <ChevronRight size={14} className={selectedStudent?.id === student.id ? 'text-[#FFD700]' : 'text-gray-300'} />
-                        </button>
-                      ))}
-                   </div>
+                          {student.id}
+                        </p>
+                      </div>
+                      <ChevronRight
+                        size={14}
+                        className={
+                          selectedStudent?.id === student.id
+                            ? "text-[#FFD700]"
+                            : "text-gray-300"
+                        }
+                      />
+                    </button>
+                  ))}
                 </div>
-             </div>
+              </div>
+            </div>
           </div>
 
           <div className="lg:col-span-3">
-             {selectedStudent ? (
-               <div className="space-y-6 animate-slide-up">
-                  <div className="bg-white dark:bg-gray-800 rounded-none shadow-xl border border-gray-100 dark:border-gray-700 overflow-hidden relative">
-                     <div className="absolute top-0 left-0 w-2 h-full bg-[#4B0082]"></div>
-                     <div className="p-8 flex flex-col md:flex-row justify-between items-center gap-8">
-                        <div className="flex items-center gap-8">
-                           <div className={`w-28 h-28 rounded-none ${selectedStudent.avatarColor} border-2 border-[#FFD700] p-1 shadow-2xl overflow-hidden`}>
-                              {selectedStudent.photo ? <img src={selectedStudent.photo} className="w-full h-full object-cover" style={{ transform: `scale(${selectedStudent.photoZoom})` }} /> : <div className="w-full h-full flex items-center justify-center text-3xl font-black text-white">{selectedStudent.first_name[0]}</div>}
-                           </div>
-                           <div>
-                              <h3 className="text-3xl font-black text-gray-900 dark:text-white uppercase tracking-tighter leading-none">{selectedStudent.first_name} {selectedStudent.last_name}</h3>
-                              <p className="text-xs font-bold text-[#4B0082] dark:text-[#FFD700] uppercase tracking-widest mt-3">{selectedStudent.program_code} • {selectedStudent.id}</p>
-                           </div>
-                        </div>
-                        <button 
-                          onClick={() => setShowTranscript(true)}
-                          className="px-10 py-4 bg-[#FFD700] text-[#4B0082] rounded-none font-black text-xs uppercase tracking-widest shadow-xl hover:bg-white transition-all flex items-center gap-3"
-                        >
-                           <FileText size={18} /> Official Transcript View
-                        </button>
-                     </div>
+            {selectedStudent ? (
+              <div className="space-y-6 animate-slide-up">
+                <div className="bg-white dark:bg-gray-800 rounded-none shadow-xl border border-gray-100 dark:border-gray-700 overflow-hidden relative">
+                  <div className="absolute top-0 left-0 w-2 h-full bg-[#4B0082]"></div>
+                  <div className="p-8 flex flex-col md:flex-row justify-between items-center gap-8">
+                    <div className="flex items-center gap-8">
+                      <div
+                        className={`w-28 h-28 rounded-none ${selectedStudent.avatarColor} border-2 border-[#FFD700] p-1 shadow-2xl overflow-hidden`}
+                      >
+                        {selectedStudent.photo ? (
+                          <img
+                            src={selectedStudent.photo}
+                            className="w-full h-full object-cover"
+                            style={{
+                              transform: `scale(${selectedStudent.photoZoom})`,
+                            }}
+                          />
+                        ) : (
+                          <div className="w-full h-full flex items-center justify-center text-3xl font-black text-white">
+                            {selectedStudent.first_name[0]}
+                          </div>
+                        )}
+                      </div>
+                      <div>
+                        <h3 className="text-3xl font-black text-gray-900 dark:text-white uppercase tracking-tighter leading-none">
+                          {selectedStudent.first_name}{" "}
+                          {selectedStudent.last_name}
+                        </h3>
+                        <p className="text-xs font-bold text-[#4B0082] dark:text-[#FFD700] uppercase tracking-widest mt-3">
+                          {selectedStudent.program_code} • {selectedStudent.id}
+                        </p>
+                      </div>
+                    </div>
+                    <button
+                      onClick={() => setShowTranscript(true)}
+                      className="px-10 py-4 bg-[#FFD700] text-[#4B0082] rounded-none font-black text-xs uppercase tracking-widest shadow-xl hover:bg-white transition-all flex items-center gap-3"
+                    >
+                      <FileText size={18} /> Official Transcript View
+                    </button>
                   </div>
+                </div>
 
-                  <div className="bg-white dark:bg-gray-800 rounded-none shadow-xl border border-gray-100 dark:border-gray-700 overflow-hidden">
-                     <div className="p-6 bg-gray-900 text-white flex justify-between items-center border-b border-gray-800">
-                        <div className="flex items-center gap-3">
-                           <BookOpen size={18} className="text-[#FFD700]" />
-                           <h3 className="font-black text-xs uppercase tracking-[0.25em]">Live Academic Performance Node</h3>
-                        </div>
-                        <div className="flex items-center gap-2 text-[10px] font-bold text-gray-400">
-                           <ShieldCheck size={14} className="text-emerald-500" /> SYSTEM VERIFIED RECORDS
-                        </div>
-                     </div>
-                     <div className="overflow-x-auto no-scrollbar">
-                        <table className="w-full text-left">
-                           <thead>
-                              <tr className="bg-gray-50 dark:bg-gray-700/50 text-[10px] font-black text-gray-400 uppercase tracking-widest border-b border-gray-100 dark:border-gray-700">
-                                 <th className="px-6 py-4">Module Identifier</th>
-                                 <th className="px-6 py-4">Specification</th>
-                                 <th className="px-6 py-4 text-center">Score (%)</th>
-                                 <th className="px-6 py-4 text-center">Grade</th>
-                                 <th className="px-6 py-4 text-center">Term</th>
-                              </tr>
-                           </thead>
-                           <tbody className="divide-y divide-gray-50 dark:divide-gray-800">
-                              {transcriptRecords.map((rec, i) => (
-                                <tr key={i} className="hover:bg-purple-50/20 dark:hover:bg-gray-700/20 transition-all group">
-                                   <td className="px-6 py-4 font-mono text-xs font-bold text-[#4B0082] dark:text-purple-300">{rec.courseCode}</td>
-                                   <td className="px-6 py-4 text-xs font-black text-gray-900 dark:text-white uppercase tracking-tight leading-none">{rec.courseName}</td>
-                                   <td className="px-6 py-4 text-center text-sm font-black text-gray-900 dark:text-white">{rec.score}%</td>
-                                   <td className="px-6 py-4 text-center">
-                                      <span className={`text-xl font-black ${rec.score >= 70 ? 'text-emerald-600' : rec.score < 40 ? 'text-red-600' : 'text-[#4B0082] dark:text-[#FFD700]'}`}>{rec.grade}</span>
-                                   </td>
-                                   <td className="px-6 py-4 text-center text-[10px] font-black uppercase text-gray-500">{rec.term}</td>
-                                </tr>
-                              ))}
-                           </tbody>
-                        </table>
-                     </div>
+                <div className="bg-white dark:bg-gray-800 rounded-none shadow-xl border border-gray-100 dark:border-gray-700 overflow-hidden">
+                  <div className="p-6 bg-gray-900 text-white flex justify-between items-center border-b border-gray-800">
+                    <div className="flex items-center gap-3">
+                      <BookOpen size={18} className="text-[#FFD700]" />
+                      <h3 className="font-black text-xs uppercase tracking-[0.25em]">
+                        Live Academic Performance Node
+                      </h3>
+                    </div>
+                    <div className="flex items-center gap-2 text-[10px] font-bold text-gray-400">
+                      <ShieldCheck size={14} className="text-emerald-500" />{" "}
+                      SYSTEM VERIFIED RECORDS
+                    </div>
                   </div>
-               </div>
-             ) : (
-               <div className="h-full min-h-[500px] flex flex-col items-center justify-center bg-white dark:bg-gray-800 rounded-none border-2 border-dashed border-gray-100 dark:border-gray-700 text-gray-400">
-                  <FileText size={80} className="mb-6 opacity-20" />
-                  <h3 className="text-xl font-black uppercase tracking-[0.3em] opacity-40">Awaiting Record Selection</h3>
-               </div>
-             )}
+                  <div className="overflow-x-auto no-scrollbar">
+                    <table className="w-full text-left">
+                      <thead>
+                        <tr className="bg-gray-50 dark:bg-gray-700/50 text-[10px] font-black text-gray-400 uppercase tracking-widest border-b border-gray-100 dark:border-gray-700">
+                          <th className="px-6 py-4">Module Identifier</th>
+                          <th className="px-6 py-4">Specification</th>
+                          <th className="px-6 py-4 text-center">Score (%)</th>
+                          <th className="px-6 py-4 text-center">Grade</th>
+                          <th className="px-6 py-4 text-center">Term</th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-gray-50 dark:divide-gray-800">
+                        {transcriptRecords.map((rec, i) => (
+                          <tr
+                            key={i}
+                            className="hover:bg-purple-50/20 dark:hover:bg-gray-700/20 transition-all group"
+                          >
+                            <td className="px-6 py-4 font-mono text-xs font-bold text-[#4B0082] dark:text-purple-300">
+                              {rec.courseCode}
+                            </td>
+                            <td className="px-6 py-4 text-xs font-black text-gray-900 dark:text-white uppercase tracking-tight leading-none">
+                              {rec.courseName}
+                            </td>
+                            <td className="px-6 py-4 text-center text-sm font-black text-gray-900 dark:text-white">
+                              {rec.score}%
+                            </td>
+                            <td className="px-6 py-4 text-center">
+                              <span
+                                className={`text-xl font-black ${rec.score >= 70 ? "text-emerald-600" : rec.score < 40 ? "text-red-600" : "text-[#4B0082] dark:text-[#FFD700]"}`}
+                              >
+                                {rec.grade}
+                              </span>
+                            </td>
+                            <td className="px-6 py-4 text-center text-[10px] font-black uppercase text-gray-500">
+                              {rec.term}
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+              </div>
+            ) : (
+              <div className="h-full min-h-[500px] flex flex-col items-center justify-center bg-white dark:bg-gray-800 rounded-none border-2 border-dashed border-gray-100 dark:border-gray-700 text-gray-400">
+                <FileText size={80} className="mb-6 opacity-20" />
+                <h3 className="text-xl font-black uppercase tracking-[0.3em] opacity-40">
+                  Awaiting Record Selection
+                </h3>
+              </div>
+            )}
           </div>
         </div>
       </div>
 
-        {showTranscript && selectedStudent && (
+      {showTranscript && selectedStudent && (
         <div className="fixed inset-0 z-[130] flex flex-col items-center bg-black/95 backdrop-blur-3xl overflow-y-auto">
-           {/* Action Buttons - Fixed at top, not zoomed */}
-           <div className="sticky top-0 z-50 w-full flex flex-wrap gap-4 items-center justify-between no-print p-6 bg-gray-900/95 backdrop-blur-xl border-b border-white/10 shadow-2xl">
-                 <div className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-[#4B0082] via-[#FFD700] to-[#4B0082]"></div>
-                 <div className="flex flex-wrap gap-4 items-center">
-                    <div className="flex bg-gray-800 p-1 border border-white/10 rounded-none mr-2">
-                       <button 
-                         onClick={() => setTranscriptType('Official')}
-                         className={`px-5 py-2.5 text-[10px] font-black uppercase tracking-widest transition-all ${transcriptType === 'Official' ? 'bg-[#FFD700] text-[#4B0082]' : 'text-gray-400 hover:text-white'}`}
-                       >Complete Registry</button>
-                       <button 
-                         onClick={() => setTranscriptType('Provisional')}
-                         className={`px-5 py-2.5 text-[10px] font-black uppercase tracking-widest transition-all ${transcriptType === 'Provisional' ? 'bg-[#FFD700] text-[#4B0082]' : 'text-gray-400 hover:text-white'}`}
-                       >Term Provisional</button>
-                    </div>
-                    
-                    {/* Zoom Controls */}
-                    <div className="flex items-center gap-2 bg-gray-800 px-4 py-2 rounded-lg border border-white/10">
-                      <button 
-                        onMouseDown={() => startZoom('out')}
-                        onMouseUp={stopZoom}
-                        onMouseLeave={stopZoom}
-                        onTouchStart={() => startZoom('out')}
-                        onTouchEnd={stopZoom}
-                        disabled={zoomLevel <= 10}
-                        className="p-2 bg-gray-700 text-white hover:bg-gray-600 transition-all disabled:opacity-30 disabled:cursor-not-allowed rounded select-none"
-                        title="Zoom Out (Ctrl+- or Ctrl+Scroll)"
-                      >
-                        <ZoomOut size={16} />
-                      </button>
-                      <button 
-                        onClick={handleZoomReset}
-                        className="px-3 py-2 bg-gray-700 text-white hover:bg-gray-600 transition-all text-[10px] font-bold rounded min-w-[60px] select-none"
-                        title="Reset Zoom (Ctrl+0)"
-                      >
-                        {zoomLevel}%
-                      </button>
-                      <button 
-                        onMouseDown={() => startZoom('in')}
-                        onMouseUp={stopZoom}
-                        onMouseLeave={stopZoom}
-                        onTouchStart={() => startZoom('in')}
-                        onTouchEnd={stopZoom}
-                        className="p-2 bg-gray-700 text-white hover:bg-gray-600 transition-all rounded select-none"
-                        title="Zoom In (Ctrl++ or Ctrl+Scroll)"
-                      >
-                        <ZoomIn size={16} />
-                      </button>
-                    </div>
-
-                    {!TRANSCRIPT_TEMPLATE_LOCKED && (
-                      <div className="flex items-center gap-2 bg-gray-800 px-3 py-2 rounded-lg border border-white/10">
-                        <button
-                          onClick={() => setEditorMode((prev) => !prev)}
-                          className={`px-3 py-2 text-[10px] font-black uppercase tracking-widest transition-all rounded ${editorMode ? 'bg-amber-500 text-black' : 'bg-gray-700 text-white hover:bg-gray-600'}`}
-                        >
-                          {editorMode ? 'Editor On' : 'Edit Template'}
-                        </button>
-                        <label className="text-[9px] font-black uppercase text-gray-300">Rows</label>
-                        <input
-                          type="number"
-                          min={1}
-                          max={60}
-                          value={templateLayout.rows}
-                          onChange={(e) => {
-                            const value = Number(e.target.value);
-                            if (Number.isFinite(value)) {
-                              setTemplateLayout((prev) => ({ ...prev, rows: Math.max(1, Math.min(60, value)) }));
-                            }
-                          }}
-                          className="w-16 px-2 py-1 bg-gray-700 border border-white/20 text-white text-[10px] font-black"
-                        />
-                        {editorMode && (
-                          <span className="text-[9px] font-black uppercase text-amber-300">
-                            {selectedBlock ? `Selected: ${selectedBlock}` : 'Click block to select'}
-                          </span>
-                        )}
-                        {editorMode && selectedBlock && (
-                          <div className="flex items-center gap-1">
-                            <button onClick={() => updateBlockPosition(selectedBlock, { align: 'left' })} className="px-2 py-1 text-[9px] font-black bg-gray-700 text-white border border-white/20">L</button>
-                            <button onClick={() => updateBlockPosition(selectedBlock, { align: 'center' })} className="px-2 py-1 text-[9px] font-black bg-gray-700 text-white border border-white/20">C</button>
-                            <button onClick={() => updateBlockPosition(selectedBlock, { align: 'right' })} className="px-2 py-1 text-[9px] font-black bg-gray-700 text-white border border-white/20">R</button>
-                          </div>
-                        )}
-                      </div>
-                    )}
-                    
-                    <button onClick={() => handlePrint('print')} className="flex items-center gap-2 px-8 py-3.5 bg-[#4B0082] text-white text-[10px] font-black uppercase tracking-widest hover:bg-black transition-all shadow-lg border border-white/10"><Printer size={18} /> Print Record</button>
-                    <button onClick={() => handlePrint('download')} className="flex items-center gap-2 px-8 py-3.5 bg-emerald-600 text-white text-[10px] font-black uppercase tracking-widest hover:bg-emerald-700 transition-all shadow-lg border border-white/10"><Download size={18} /> PDF Archive</button>
-                    <button onClick={handleDownloadWord} className="flex items-center gap-2 px-8 py-3.5 bg-blue-600 text-white text-[10px] font-black uppercase tracking-widest hover:bg-blue-700 transition-all shadow-lg border border-white/10"><Download size={18} /> Word</button>
-                    <button onClick={handleDownloadSVG} className="flex items-center gap-2 px-8 py-3.5 bg-purple-600 text-white text-[10px] font-black uppercase tracking-widest hover:bg-purple-700 transition-all shadow-lg border border-white/10"><Download size={18} /> SVG</button>
-                    <button onClick={() => handleShare('whatsapp')} className="flex items-center gap-2 px-8 py-3.5 bg-[#25D366] text-white text-[10px] font-black uppercase tracking-widest hover:bg-emerald-600 transition-all shadow-lg border border-white/10"><MessageCircle size={18} /> Send Data</button>
-                 </div>
-                 <button onClick={() => setShowTranscript(false)} className="p-4 bg-red-600 text-white hover:bg-red-700 transition-all shadow-xl group">
-                    <X size={24} className="group-hover:rotate-90 transition-transform" />
-                 </button>
+          {/* Action Buttons - Fixed at top, not zoomed */}
+          <div className="sticky top-0 z-50 w-full flex flex-wrap gap-4 items-center justify-between no-print p-6 bg-gray-900/95 backdrop-blur-xl border-b border-white/10 shadow-2xl">
+            <div className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-[#4B0082] via-[#FFD700] to-[#4B0082]"></div>
+            <div className="flex flex-wrap gap-4 items-center">
+              <div className="flex bg-gray-800 p-1 border border-white/10 rounded-none mr-2">
+                <button
+                  onClick={() => setTranscriptType("Official")}
+                  className={`px-5 py-2.5 text-[10px] font-black uppercase tracking-widest transition-all ${transcriptType === "Official" ? "bg-[#FFD700] text-[#4B0082]" : "text-gray-400 hover:text-white"}`}
+                >
+                  Complete Registry
+                </button>
+                <button
+                  onClick={() => setTranscriptType("Provisional")}
+                  className={`px-5 py-2.5 text-[10px] font-black uppercase tracking-widest transition-all ${transcriptType === "Provisional" ? "bg-[#FFD700] text-[#4B0082]" : "text-gray-400 hover:text-white"}`}
+                >
+                  Term Provisional
+                </button>
               </div>
-           
-           {/* Transcript Container - This gets zoomed */}
-           <div className="w-full flex justify-center p-4 md:p-8 pt-8 md:pt-12">
-             <div 
-               className="transcript-zoom-wrapper"
-               style={{ 
-                 transform: `scale(${zoomLevel / 100})`,
-                 transformOrigin: 'top center',
-                 transition: 'transform 0.2s ease-out',
-                 willChange: 'transform'
-               }}
-             >
-              <div 
-                id="official-transcript-root" 
+
+              {/* Zoom Controls */}
+              <div className="flex items-center gap-2 bg-gray-800 px-4 py-2 rounded-lg border border-white/10">
+                <button
+                  onMouseDown={() => startZoom("out")}
+                  onMouseUp={stopZoom}
+                  onMouseLeave={stopZoom}
+                  onTouchStart={() => startZoom("out")}
+                  onTouchEnd={stopZoom}
+                  disabled={zoomLevel <= 10}
+                  className="p-2 bg-gray-700 text-white hover:bg-gray-600 transition-all disabled:opacity-30 disabled:cursor-not-allowed rounded select-none"
+                  title="Zoom Out (Ctrl+- or Ctrl+Scroll)"
+                >
+                  <ZoomOut size={16} />
+                </button>
+                <button
+                  onClick={handleZoomReset}
+                  className="px-3 py-2 bg-gray-700 text-white hover:bg-gray-600 transition-all text-[10px] font-bold rounded min-w-[60px] select-none"
+                  title="Reset Zoom (Ctrl+0)"
+                >
+                  {zoomLevel}%
+                </button>
+                <button
+                  onMouseDown={() => startZoom("in")}
+                  onMouseUp={stopZoom}
+                  onMouseLeave={stopZoom}
+                  onTouchStart={() => startZoom("in")}
+                  onTouchEnd={stopZoom}
+                  className="p-2 bg-gray-700 text-white hover:bg-gray-600 transition-all rounded select-none"
+                  title="Zoom In (Ctrl++ or Ctrl+Scroll)"
+                >
+                  <ZoomIn size={16} />
+                </button>
+              </div>
+
+              {!TRANSCRIPT_TEMPLATE_LOCKED && (
+                <div className="flex items-center gap-2 bg-gray-800 px-3 py-2 rounded-lg border border-white/10">
+                  <button
+                    onClick={() => setEditorMode((prev) => !prev)}
+                    className={`px-3 py-2 text-[10px] font-black uppercase tracking-widest transition-all rounded ${editorMode ? "bg-amber-500 text-black" : "bg-gray-700 text-white hover:bg-gray-600"}`}
+                  >
+                    {editorMode ? "Editor On" : "Edit Template"}
+                  </button>
+                  <label className="text-[9px] font-black uppercase text-gray-300">
+                    Rows
+                  </label>
+                  <input
+                    type="number"
+                    min={1}
+                    max={60}
+                    value={templateLayout.rows}
+                    onChange={(e) => {
+                      const value = Number(e.target.value);
+                      if (Number.isFinite(value)) {
+                        setTemplateLayout((prev) => ({
+                          ...prev,
+                          rows: Math.max(1, Math.min(60, value)),
+                        }));
+                      }
+                    }}
+                    className="w-16 px-2 py-1 bg-gray-700 border border-white/20 text-white text-[10px] font-black"
+                  />
+                  {editorMode && (
+                    <span className="text-[9px] font-black uppercase text-amber-300">
+                      {selectedBlock
+                        ? `Selected: ${selectedBlock}`
+                        : "Click block to select"}
+                    </span>
+                  )}
+                  {editorMode && selectedBlock && (
+                    <div className="flex items-center gap-1">
+                      <button
+                        onClick={() =>
+                          updateBlockPosition(selectedBlock, { align: "left" })
+                        }
+                        className="px-2 py-1 text-[9px] font-black bg-gray-700 text-white border border-white/20"
+                      >
+                        L
+                      </button>
+                      <button
+                        onClick={() =>
+                          updateBlockPosition(selectedBlock, {
+                            align: "center",
+                          })
+                        }
+                        className="px-2 py-1 text-[9px] font-black bg-gray-700 text-white border border-white/20"
+                      >
+                        C
+                      </button>
+                      <button
+                        onClick={() =>
+                          updateBlockPosition(selectedBlock, { align: "right" })
+                        }
+                        className="px-2 py-1 text-[9px] font-black bg-gray-700 text-white border border-white/20"
+                      >
+                        R
+                      </button>
+                    </div>
+                  )}
+                </div>
+              )}
+
+              <button
+                onClick={() => handlePrint("print")}
+                className="flex items-center gap-2 px-8 py-3.5 bg-[#4B0082] text-white text-[10px] font-black uppercase tracking-widest hover:bg-black transition-all shadow-lg border border-white/10"
+              >
+                <Printer size={18} /> Print Record
+              </button>
+              <button
+                onClick={() => handlePrint("download")}
+                className="flex items-center gap-2 px-8 py-3.5 bg-emerald-600 text-white text-[10px] font-black uppercase tracking-widest hover:bg-emerald-700 transition-all shadow-lg border border-white/10"
+              >
+                <Download size={18} /> PDF Archive
+              </button>
+              <button
+                onClick={handleDownloadWord}
+                className="flex items-center gap-2 px-8 py-3.5 bg-blue-600 text-white text-[10px] font-black uppercase tracking-widest hover:bg-blue-700 transition-all shadow-lg border border-white/10"
+              >
+                <Download size={18} /> Word
+              </button>
+              <button
+                onClick={handleDownloadSVG}
+                className="flex items-center gap-2 px-8 py-3.5 bg-purple-600 text-white text-[10px] font-black uppercase tracking-widest hover:bg-purple-700 transition-all shadow-lg border border-white/10"
+              >
+                <Download size={18} /> SVG
+              </button>
+              <button
+                onClick={() => handleShare("whatsapp")}
+                className="flex items-center gap-2 px-8 py-3.5 bg-[#25D366] text-white text-[10px] font-black uppercase tracking-widest hover:bg-emerald-600 transition-all shadow-lg border border-white/10"
+              >
+                <MessageCircle size={18} /> Send Data
+              </button>
+            </div>
+            <button
+              onClick={() => setShowTranscript(false)}
+              className="p-4 bg-red-600 text-white hover:bg-red-700 transition-all shadow-xl group"
+            >
+              <X
+                size={24}
+                className="group-hover:rotate-90 transition-transform"
+              />
+            </button>
+          </div>
+
+          {/* Transcript Container - This gets zoomed */}
+          <div className="w-full flex justify-center p-4 md:p-8 pt-8 md:pt-12">
+            <div
+              className="transcript-zoom-wrapper"
+              style={{
+                transform: `scale(${zoomLevel / 100})`,
+                transformOrigin: "top center",
+                transition: "transform 0.2s ease-out",
+                willChange: "transform",
+              }}
+            >
+              <div
+                id="official-transcript-root"
                 className="bg-white shadow-2xl relative flex flex-col font-serif p-6 text-gray-950 print:m-0 print:shadow-none border-[6px] border-gray-100 border-double"
-                style={{ 
-                  width: '210mm',
-                  height: '297mm',
-                  padding: '8mm',
-                  boxSizing: 'border-box',
-                  overflow: 'hidden'
+                style={{
+                  width: "210mm",
+                  height: "297mm",
+                  padding: "8mm",
+                  boxSizing: "border-box",
+                  overflow: "hidden",
                 }}
               >
-                 
-                 {/* ENHANCED SECURITY LAYER - Multi-pattern anti-forgery system */}
-                 <div className="absolute inset-0 pointer-events-none z-0 overflow-hidden">
-                    <svg width="100%" height="100%" xmlns="http://www.w3.org/2000/svg" className="w-full h-full opacity-[0.25]">
-                      <defs>
-                        {/* Holographic gradient - simulates color-shifting ink */}
-                        <linearGradient id="holographicShift" x1="0%" y1="0%" x2="100%" y2="100%">
-                          <stop offset="0%" stopColor="#FF00FF" stopOpacity="0.15" />
-                          <stop offset="25%" stopColor="#00FFFF" stopOpacity="0.15" />
-                          <stop offset="50%" stopColor="#FFFF00" stopOpacity="0.15" />
-                          <stop offset="75%" stopColor="#FF00FF" stopOpacity="0.15" />
-                          <stop offset="100%" stopColor="#00FFFF" stopOpacity="0.15" />
-                        </linearGradient>
-
-                        {/* Security pastel background */}
-                        <linearGradient id="securityPastel" x1="0%" y1="0%" x2="100%" y2="100%">
-                          <stop offset="0%" stopColor="#fdf2f8" />
-                          <stop offset="25%" stopColor="#f0f9ff" />
-                          <stop offset="50%" stopColor="#f0fdf4" />
-                          <stop offset="75%" stopColor="#fffbeb" />
-                          <stop offset="100%" stopColor="#faf5ff" />
-                        </linearGradient>
-
-                        {/* Guilloche wave pattern */}
-                        <pattern id="blendedSecurityPattern" x="0" y="0" width="300" height="300" patternUnits="userSpaceOnUse">
-                           <path d="M0,150 Q75,50 150,150 T300,150" fill="none" stroke="#4B0082" strokeWidth="0.4" opacity="0.4" />
-                        </pattern>
-
-                        {/* VOID Pantograph - shows "VOID" when photocopied */}
-                        <pattern id="voidPantograph" x="0" y="0" width="200" height="100" patternUnits="userSpaceOnUse">
-                          {/* Fine lines that break on photocopy */}
-                          <line x1="0" y1="20" x2="200" y2="20" stroke="#4B0082" strokeWidth="0.15" opacity="0.3" />
-                          <line x1="0" y1="40" x2="200" y2="40" stroke="#4B0082" strokeWidth="0.15" opacity="0.3" />
-                          <line x1="0" y1="60" x2="200" y2="60" stroke="#4B0082" strokeWidth="0.15" opacity="0.3" />
-                          <line x1="0" y1="80" x2="200" y2="80" stroke="#4B0082" strokeWidth="0.15" opacity="0.3" />
-                          {/* "VOID" text (visible on photocopy) */}
-                          <text x="50" y="55" fontSize="48" fontWeight="900" fill="#FF0000" opacity="0.02" fontFamily="sans-serif">VOID</text>
-                        </pattern>
-
-                        {/* Copy Detection Pattern - breaks on reproduction */}
-                        <pattern id="copyDetection" x="0" y="0" width="50" height="50" patternUnits="userSpaceOnUse">
-                          <circle cx="25" cy="25" r="1" fill="#4B0082" opacity="0.15" />
-                          <circle cx="0" cy="0" r="0.5" fill="#FFD700" opacity="0.1" />
-                          <circle cx="50" cy="50" r="0.5" fill="#FFD700" opacity="0.1" />
-                        </pattern>
-
-                        {/* Latent image pattern - visible at angles */}
-                        <pattern id="latentImage" x="0" y="0" width="100" height="100" patternUnits="userSpaceOnUse">
-                          <path d="M0,50 L100,50" stroke="#4B0082" strokeWidth="0.2" opacity="0.25" />
-                          <path d="M50,0 L50,100" stroke="#4B0082" strokeWidth="0.2" opacity="0.25" />
-                          <circle cx="50" cy="50" r="20" fill="none" stroke="#FFD700" strokeWidth="0.3" opacity="0.2" />
-                        </pattern>
-
-                        {/* Microprint pattern */}
-                        <pattern id="microprint" x="0" y="0" width="150" height="20" patternUnits="userSpaceOnUse">
-                          <text x="0" y="15" fontSize="3" fill="#4B0082" opacity="0.3" fontFamily="monospace">BMI-SECURE</text>
-                          <text x="75" y="15" fontSize="3" fill="#4B0082" opacity="0.3" fontFamily="monospace">AUTHENTIC</text>
-                        </pattern>
-                      </defs>
-
-                      {/* Layer 1: Pastel background */}
-                      <rect width="100%" height="100%" fill="url(#securityPastel)" />
-                      
-                      {/* Layer 2: Guilloche pattern */}
-                      <rect width="100%" height="100%" fill="url(#blendedSecurityPattern)" />
-                      
-                      {/* Layer 3: VOID Pantograph (anti-photocopy) */}
-                      <rect width="100%" height="100%" fill="url(#voidPantograph)" />
-                      
-                      {/* Layer 4: Copy detection dots */}
-                      <rect width="100%" height="100%" fill="url(#copyDetection)" />
-                      
-                      {/* Layer 5: Latent image */}
-                      <rect width="100%" height="100%" fill="url(#latentImage)" />
-                      
-                      {/* Layer 6: Microprint */}
-                      <rect width="100%" height="100%" fill="url(#microprint)" />
-                      
-                      {/* Layer 7: Holographic overlay */}
-                      <rect width="100%" height="100%" fill="url(#holographicShift)" className="mix-blend-overlay" />
-                    </svg>
-
-                    {/* Holographic foil effect (CSS-based) */}
-                    <div className="absolute inset-0 bg-gradient-to-br from-transparent via-purple-200/5 to-transparent opacity-30 mix-blend-overlay pointer-events-none" 
-                         style={{ 
-                           background: 'linear-gradient(135deg, transparent 0%, rgba(255,0,255,0.05) 25%, rgba(0,255,255,0.05) 50%, rgba(255,255,0,0.05) 75%, transparent 100%)',
-                           animation: 'holographic-shift 10s ease-in-out infinite'
-                         }} />
-
-                    {/* Large Center Logo Watermark */}
-                    <div className="absolute inset-0 flex items-center justify-center opacity-[0.08] pointer-events-none">
-                      <img
-                        src={logo || "/BMI.svg"}
-                        className="h-[32%] w-auto object-contain"
-                        alt=""
-                        style={{ 
-                          filter: 'grayscale(100%) contrast(0.7)',
-                          transform: 'translateY(18%)'
-                        }}
-                        onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }}
-                      />
-                    </div>
-
-                    {/* Logo Watermark - Repeating BMI logo pattern */}
-                    <div className="absolute inset-0 flex flex-wrap items-center justify-center gap-32 opacity-[0.03] pointer-events-none">
-                      {Array.from({ length: 12 }).map((_, i) => (
-                        <img
-                          key={`watermark-${i}`}
-                          src={logo || "/BMI.svg"}
-                          className="w-32 h-32 object-contain grayscale"
-                          alt=""
-                          style={{ 
-                            transform: `rotate(${i % 2 === 0 ? '-30deg' : '30deg'})`,
-                            filter: 'grayscale(100%) contrast(0.5)'
-                          }}
-                          onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }}
+                {/* ENHANCED SECURITY LAYER - Multi-pattern anti-forgery system */}
+                <div className="absolute inset-0 pointer-events-none z-0 overflow-hidden">
+                  <svg
+                    width="100%"
+                    height="100%"
+                    xmlns="http://www.w3.org/2000/svg"
+                    className="w-full h-full opacity-[0.25]"
+                  >
+                    <defs>
+                      {/* Holographic gradient - simulates color-shifting ink */}
+                      <linearGradient
+                        id="holographicShift"
+                        x1="0%"
+                        y1="0%"
+                        x2="100%"
+                        y2="100%"
+                      >
+                        <stop
+                          offset="0%"
+                          stopColor="#FF00FF"
+                          stopOpacity="0.15"
                         />
-                      ))}
-                    </div>
-                 </div>
+                        <stop
+                          offset="25%"
+                          stopColor="#00FFFF"
+                          stopOpacity="0.15"
+                        />
+                        <stop
+                          offset="50%"
+                          stopColor="#FFFF00"
+                          stopOpacity="0.15"
+                        />
+                        <stop
+                          offset="75%"
+                          stopColor="#FF00FF"
+                          stopOpacity="0.15"
+                        />
+                        <stop
+                          offset="100%"
+                          stopColor="#00FFFF"
+                          stopOpacity="0.15"
+                        />
+                      </linearGradient>
 
-                 <div
-                   className={`-mt-1 mb-1 ${editorOutlineClass('microTop')}`}
-                   style={getBlockStyle('microTop')}
-                   onClick={() => editorMode && setSelectedBlock('microTop')}
-                   onMouseDown={(e) => startBlockDrag('microTop', e)}
-                 >
-                   <MicroText text={`BMI UNIVERSITY OFFICIAL ACADEMIC TRANSCRIPT • SECURITY VALIDATED RECORD • DO NOT REPRODUCE • UV PROTECTED INK • ANTI-FORGERY • ID: ${securityData?.serialNumber || 'PENDING'}`} />
-                 </div>
+                      {/* Security pastel background */}
+                      <linearGradient
+                        id="securityPastel"
+                        x1="0%"
+                        y1="0%"
+                        x2="100%"
+                        y2="100%"
+                      >
+                        <stop offset="0%" stopColor="#fdf2f8" />
+                        <stop offset="25%" stopColor="#f0f9ff" />
+                        <stop offset="50%" stopColor="#f0fdf4" />
+                        <stop offset="75%" stopColor="#fffbeb" />
+                        <stop offset="100%" stopColor="#faf5ff" />
+                      </linearGradient>
 
-                 {/* Seal — top left, mirrors the QR code on the right */}
-                 <div className="absolute top-8 left-8 flex flex-col items-center gap-1 z-20">
+                      {/* Guilloche wave pattern */}
+                      <pattern
+                        id="blendedSecurityPattern"
+                        x="0"
+                        y="0"
+                        width="300"
+                        height="300"
+                        patternUnits="userSpaceOnUse"
+                      >
+                        <path
+                          d="M0,150 Q75,50 150,150 T300,150"
+                          fill="none"
+                          stroke="#4B0082"
+                          strokeWidth="0.4"
+                          opacity="0.4"
+                        />
+                      </pattern>
+
+                      {/* VOID Pantograph - shows "VOID" when photocopied */}
+                      <pattern
+                        id="voidPantograph"
+                        x="0"
+                        y="0"
+                        width="200"
+                        height="100"
+                        patternUnits="userSpaceOnUse"
+                      >
+                        {/* Fine lines that break on photocopy */}
+                        <line
+                          x1="0"
+                          y1="20"
+                          x2="200"
+                          y2="20"
+                          stroke="#4B0082"
+                          strokeWidth="0.15"
+                          opacity="0.3"
+                        />
+                        <line
+                          x1="0"
+                          y1="40"
+                          x2="200"
+                          y2="40"
+                          stroke="#4B0082"
+                          strokeWidth="0.15"
+                          opacity="0.3"
+                        />
+                        <line
+                          x1="0"
+                          y1="60"
+                          x2="200"
+                          y2="60"
+                          stroke="#4B0082"
+                          strokeWidth="0.15"
+                          opacity="0.3"
+                        />
+                        <line
+                          x1="0"
+                          y1="80"
+                          x2="200"
+                          y2="80"
+                          stroke="#4B0082"
+                          strokeWidth="0.15"
+                          opacity="0.3"
+                        />
+                        {/* "VOID" text (visible on photocopy) */}
+                        <text
+                          x="50"
+                          y="55"
+                          fontSize="48"
+                          fontWeight="900"
+                          fill="#FF0000"
+                          opacity="0.02"
+                          fontFamily="sans-serif"
+                        >
+                          VOID
+                        </text>
+                      </pattern>
+
+                      {/* Copy Detection Pattern - breaks on reproduction */}
+                      <pattern
+                        id="copyDetection"
+                        x="0"
+                        y="0"
+                        width="50"
+                        height="50"
+                        patternUnits="userSpaceOnUse"
+                      >
+                        <circle
+                          cx="25"
+                          cy="25"
+                          r="1"
+                          fill="#4B0082"
+                          opacity="0.15"
+                        />
+                        <circle
+                          cx="0"
+                          cy="0"
+                          r="0.5"
+                          fill="#FFD700"
+                          opacity="0.1"
+                        />
+                        <circle
+                          cx="50"
+                          cy="50"
+                          r="0.5"
+                          fill="#FFD700"
+                          opacity="0.1"
+                        />
+                      </pattern>
+
+                      {/* Latent image pattern - visible at angles */}
+                      <pattern
+                        id="latentImage"
+                        x="0"
+                        y="0"
+                        width="100"
+                        height="100"
+                        patternUnits="userSpaceOnUse"
+                      >
+                        <path
+                          d="M0,50 L100,50"
+                          stroke="#4B0082"
+                          strokeWidth="0.2"
+                          opacity="0.25"
+                        />
+                        <path
+                          d="M50,0 L50,100"
+                          stroke="#4B0082"
+                          strokeWidth="0.2"
+                          opacity="0.25"
+                        />
+                        <circle
+                          cx="50"
+                          cy="50"
+                          r="20"
+                          fill="none"
+                          stroke="#FFD700"
+                          strokeWidth="0.3"
+                          opacity="0.2"
+                        />
+                      </pattern>
+
+                      {/* Microprint pattern */}
+                      <pattern
+                        id="microprint"
+                        x="0"
+                        y="0"
+                        width="150"
+                        height="20"
+                        patternUnits="userSpaceOnUse"
+                      >
+                        <text
+                          x="0"
+                          y="15"
+                          fontSize="3"
+                          fill="#4B0082"
+                          opacity="0.3"
+                          fontFamily="monospace"
+                        >
+                          BMI-SECURE
+                        </text>
+                        <text
+                          x="75"
+                          y="15"
+                          fontSize="3"
+                          fill="#4B0082"
+                          opacity="0.3"
+                          fontFamily="monospace"
+                        >
+                          AUTHENTIC
+                        </text>
+                      </pattern>
+                    </defs>
+
+                    {/* Layer 1: Pastel background */}
+                    <rect
+                      width="100%"
+                      height="100%"
+                      fill="url(#securityPastel)"
+                    />
+
+                    {/* Layer 2: Guilloche pattern */}
+                    <rect
+                      width="100%"
+                      height="100%"
+                      fill="url(#blendedSecurityPattern)"
+                    />
+
+                    {/* Layer 3: VOID Pantograph (anti-photocopy) */}
+                    <rect
+                      width="100%"
+                      height="100%"
+                      fill="url(#voidPantograph)"
+                    />
+
+                    {/* Layer 4: Copy detection dots */}
+                    <rect
+                      width="100%"
+                      height="100%"
+                      fill="url(#copyDetection)"
+                    />
+
+                    {/* Layer 5: Latent image */}
+                    <rect width="100%" height="100%" fill="url(#latentImage)" />
+
+                    {/* Layer 6: Microprint */}
+                    <rect width="100%" height="100%" fill="url(#microprint)" />
+
+                    {/* Layer 7: Holographic overlay */}
+                    <rect
+                      width="100%"
+                      height="100%"
+                      fill="url(#holographicShift)"
+                      className="mix-blend-overlay"
+                    />
+                  </svg>
+
+                  {/* Holographic foil effect (CSS-based) */}
+                  <div
+                    className="absolute inset-0 bg-gradient-to-br from-transparent via-purple-200/5 to-transparent opacity-30 mix-blend-overlay pointer-events-none"
+                    style={{
+                      background:
+                        "linear-gradient(135deg, transparent 0%, rgba(255,0,255,0.05) 25%, rgba(0,255,255,0.05) 50%, rgba(255,255,0,0.05) 75%, transparent 100%)",
+                      animation: "holographic-shift 10s ease-in-out infinite",
+                    }}
+                  />
+
+                  {/* Large Center Logo Watermark */}
+                  <div className="absolute inset-0 flex items-center justify-center opacity-[0.08] pointer-events-none">
                     <img
-                       src="/BMI SEAL.png"
-                       className="w-16 h-16 object-cover scale-110"
-                       alt="BMI University Seal"
-                       onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }}
+                      src={logo || "/BMI.svg"}
+                      className="h-[32%] w-auto object-contain"
+                      alt=""
+                      style={{
+                        filter: "grayscale(100%) contrast(0.7)",
+                        transform: "translateY(18%)",
+                      }}
+                      onError={(e) => {
+                        (e.target as HTMLImageElement).style.display = "none";
+                      }}
                     />
-                 </div>
-
-                 <div className="absolute top-8 right-8 flex flex-col items-center gap-1 group z-20">
-                    <div className="p-1 bg-white border border-gray-900 shadow-sm relative">
-                       {securityData?.qrCodeDataUrl ? (
-                         <img 
-                            src={securityData.qrCodeDataUrl}
-                            className="w-16 h-16"
-                            alt="Security QR"
-                         />
-                       ) : (
-                         <img 
-                            src={`https://api.qrserver.com/v1/create-qr-code/?size=150x150&ecc=H&margin=1&data=${encodeURIComponent(`BMI UNIVERSITY - OFFICIAL ACADEMIC RECORD\nSTUDENT: ${selectedStudent.first_name} ${selectedStudent.last_name}\nID: ${selectedStudent.id}\nSTATUS: VERIFIED`)}`}
-                            className="w-16 h-16"
-                            alt="Security QR"
-                         />
-                       )}
-                    </div>
-                 </div>
-
-                 <div
-                   className={`flex flex-col items-center border-b-2 border-gray-900 pb-2 mb-3 relative z-10 ${editorOutlineClass('headerTitle')}`}
-                   style={getBlockStyle('headerTitle')}
-                   onClick={() => editorMode && setSelectedBlock('headerTitle')}
-                   onMouseDown={(e) => startBlockDrag('headerTitle', e)}
-                 >
-                    <img 
-                      src={logo || "/BMI.svg"} 
-                      className="h-14 mb-1.5 object-contain filter contrast-125" 
-                      alt="BMI Logo"
-                      onError={(e) => { (e.target as HTMLImageElement).src = "/BMI.svg" }}
-                    />
-                    <h1 className="text-[30px] leading-none font-serif font-black tracking-tight text-gray-900 uppercase">BMI UNIVERSITY</h1>
-                    <p className="text-[8px] font-sans font-black text-gray-600 uppercase tracking-[0.35em] mt-0.5">OFFICE OF THE REGISTRAR</p>
-                    <div className="mt-1.5 px-7 py-0.5 border-y border-gray-900 bg-gradient-to-r from-purple-50/80 via-white to-purple-50/80">
-                      <h2 className="text-[13px] font-serif font-black uppercase tracking-[0.26em] leading-tight">
-                        {transcriptType} Academic Transcript
-                        {transcriptType === 'Provisional' && <span className="ml-3 bg-red-600 px-2 py-0.5 text-[10px] text-white">| PERIOD: {selectedTerm.toUpperCase()}</span>}
-                      </h2>
-                    </div>
-                 </div>
-                 
-                 <div
-                    className={`mb-1.5 px-4 relative z-10 ${editorOutlineClass('studentName')}`}
-                    style={getBlockStyle('studentName')}
-                    onClick={() => editorMode && setSelectedBlock('studentName')}
-                    onMouseDown={(e) => startBlockDrag('studentName', e)}
-                  >
-                     <div className="border-y border-gray-300 py-1 flex items-center">
-                       <span className="text-[8px] font-montserrat font-medium text-gray-400 uppercase tracking-widest absolute left-4">STUDENT NAME:</span>
-                       <div className="w-full text-center">
-                         <span className="text-[19px] leading-none font-serif font-bold text-[#4B0082] uppercase tracking-[0.15em]">
-                           {selectedStudent.full_name || `${selectedStudent.first_name} ${selectedStudent.last_name}`}
-                         </span>
-                       </div>
-                     </div>
                   </div>
 
-                  <div
-                    className={`grid grid-cols-2 gap-x-12 gap-y-1 mb-2 text-[9px] relative z-10 px-4 ${editorOutlineClass('studentMeta')}`}
-                    style={getBlockStyle('studentMeta')}
-                    onClick={() => editorMode && setSelectedBlock('studentMeta')}
-                    onMouseDown={(e) => startBlockDrag('studentMeta', e)}
-                  >
-                     {/* Left Column */}
-                     <div className="flex flex-col gap-1">
-                        <div className="flex justify-between border-b border-gray-100 pb-0.5">
-                           <span className="text-gray-400 font-montserrat text-[8px] uppercase tracking-wider font-medium">STUDENT ID:</span>
-                           <span className="uppercase text-gray-950 font-montserrat font-bold tracking-wide">{selectedStudent.admission_no || selectedStudent.student_code || selectedStudent.id}</span>
-                        </div>
-                        <div className="flex justify-between border-b border-gray-100 pb-0.5">
-                           <span className="text-gray-400 font-montserrat text-[8px] uppercase tracking-wider font-medium">SCHOOL:</span>
-                           <span className="uppercase text-gray-950 font-montserrat font-bold tracking-wide">{selectedStudent.faculty || "SCHOOL OF THEOLOGY"}</span>
-                        </div>
-                        <div className="flex justify-between border-b border-gray-100 pb-0.5">
-                           <span className="text-gray-400 font-montserrat text-[8px] uppercase tracking-wider font-medium">PROGRAM:</span>
-                           <span className="uppercase text-gray-950 font-montserrat font-bold tracking-wide">DIPLOMA IN CHRISTIAN MINISTRY AND THEOLOGY</span>
-                        </div>
-                        <div className="flex justify-between border-b border-gray-100 pb-0.5">
-                           <span className="text-gray-400 font-montserrat text-[8px] uppercase tracking-wider font-medium">ADMISSION DATE:</span>
-                           <span className="uppercase text-gray-950 font-montserrat font-bold tracking-wide">4TH FEB 2024</span>
-                        </div>
-                     </div>
-                     {/* Right Column */}
-                     <div className="flex flex-col gap-1">
-                        <div className="flex justify-between border-b border-gray-100 pb-0.5">
-                           <span className="text-gray-400 font-montserrat text-[8px] uppercase tracking-wider font-medium">AWARD TYPE:</span>
-                           <span className="uppercase text-gray-950 font-montserrat font-bold tracking-wide">DIPLOMA</span>
-                        </div>
-                        <div className="flex justify-between border-b border-gray-100 pb-0.5">
-                           <span className="text-gray-400 font-montserrat text-[8px] uppercase tracking-wider font-medium">DEPARTMENT:</span>
-                           <span className="uppercase text-gray-950 font-montserrat font-bold tracking-wide">{selectedStudent.department || "DEPARTMENT OF PRACTICAL THEOLOGY"}</span>
-                        </div>
-                        <div className="flex justify-between border-b border-gray-100 pb-0.5">
-                           <span className="text-gray-400 font-montserrat text-[8px] uppercase tracking-wider font-medium">MODE OF STUDY:</span>
-                           <span className="uppercase text-gray-950 font-montserrat font-bold tracking-wide">FULL-TIME</span>
-                        </div>
-                        <div className="flex justify-between border-b border-gray-100 pb-0.5">
-                           <span className="text-gray-400 font-montserrat text-[8px] uppercase tracking-wider font-medium">GRADUATION DATE:</span>
-                           <span className="uppercase text-gray-950 font-montserrat font-bold tracking-wide">1ST MAY 2026</span>
-                        </div>
-                     </div>
+                  {/* Logo Watermark - Repeating BMI logo pattern */}
+                  <div className="absolute inset-0 flex flex-wrap items-center justify-center gap-32 opacity-[0.03] pointer-events-none">
+                    {Array.from({ length: 12 }).map((_, i) => (
+                      <img
+                        key={`watermark-${i}`}
+                        src={logo || "/BMI.svg"}
+                        className="w-32 h-32 object-contain grayscale"
+                        alt=""
+                        style={{
+                          transform: `rotate(${i % 2 === 0 ? "-30deg" : "30deg"})`,
+                          filter: "grayscale(100%) contrast(0.5)",
+                        }}
+                        onError={(e) => {
+                          (e.target as HTMLImageElement).style.display = "none";
+                        }}
+                      />
+                    ))}
+                  </div>
+                </div>
+
+                <div
+                  className={`-mt-1 mb-1 ${editorOutlineClass("microTop")}`}
+                  style={getBlockStyle("microTop")}
+                  onClick={() => editorMode && setSelectedBlock("microTop")}
+                  onMouseDown={(e) => startBlockDrag("microTop", e)}
+                >
+                  <MicroText
+                    text={`BMI UNIVERSITY OFFICIAL ACADEMIC TRANSCRIPT • SECURITY VALIDATED RECORD • DO NOT REPRODUCE • UV PROTECTED INK • ANTI-FORGERY • ID: ${securityData?.serialNumber || "PENDING"}`}
+                  />
+                </div>
+
+                {/* Seal — top left, mirrors the QR code on the right */}
+                <div className="absolute top-8 left-8 flex flex-col items-center gap-1 z-20">
+                  <img
+                    src="/BMI SEAL.png"
+                    className="w-16 h-16 object-cover scale-110"
+                    alt="BMI University Seal"
+                    onError={(e) => {
+                      (e.target as HTMLImageElement).style.display = "none";
+                    }}
+                  />
+                </div>
+
+                <div className="absolute top-8 right-8 flex flex-col items-center gap-1 group z-20">
+                  <div className="p-1 bg-white border border-gray-900 shadow-sm relative">
+                    {securityData?.qrCodeDataUrl ? (
+                      <img
+                        src={securityData.qrCodeDataUrl}
+                        className="w-16 h-16"
+                        alt="Security QR"
+                      />
+                    ) : (
+                      <img
+                        src={`https://api.qrserver.com/v1/create-qr-code/?size=150x150&ecc=H&margin=1&data=${encodeURIComponent(`BMI UNIVERSITY - OFFICIAL ACADEMIC RECORD\nSTUDENT: ${selectedStudent.first_name} ${selectedStudent.last_name}\nID: ${selectedStudent.id}\nSTATUS: VERIFIED`)}`}
+                        className="w-16 h-16"
+                        alt="Security QR"
+                      />
+                    )}
+                  </div>
+                </div>
+
+                <div
+                  className={`flex flex-col items-center border-b-2 border-gray-900 pb-2 mb-3 relative z-10 ${editorOutlineClass("headerTitle")}`}
+                  style={getBlockStyle("headerTitle")}
+                  onClick={() => editorMode && setSelectedBlock("headerTitle")}
+                  onMouseDown={(e) => startBlockDrag("headerTitle", e)}
+                >
+                  <img
+                    src={logo || "/BMI.svg"}
+                    className="h-14 mb-1.5 object-contain filter contrast-125"
+                    alt="BMI Logo"
+                    onError={(e) => {
+                      (e.target as HTMLImageElement).src = "/BMI.svg";
+                    }}
+                  />
+                  <h1 className="text-[30px] leading-none font-serif font-black tracking-tight text-gray-900 uppercase">
+                    BMI UNIVERSITY
+                  </h1>
+                  <p className="text-[8px] font-sans font-black text-gray-600 uppercase tracking-[0.35em] mt-0.5">
+                    OFFICE OF THE REGISTRAR
+                  </p>
+                  <div className="mt-1.5 px-7 py-0.5 border-y border-gray-900 bg-gradient-to-r from-purple-50/80 via-white to-purple-50/80">
+                    <h2 className="text-[13px] font-serif font-black uppercase tracking-[0.26em] leading-tight">
+                      {transcriptType} Academic Transcript
+                      {transcriptType === "Provisional" && (
+                        <span className="ml-3 bg-red-600 px-2 py-0.5 text-[10px] text-white">
+                          | PERIOD: {selectedTerm.toUpperCase()}
+                        </span>
+                      )}
+                    </h2>
+                  </div>
+                </div>
+
+                <div
+                  className={`mb-1.5 px-4 relative z-10 ${editorOutlineClass("studentName")}`}
+                  style={getBlockStyle("studentName")}
+                  onClick={() => editorMode && setSelectedBlock("studentName")}
+                  onMouseDown={(e) => startBlockDrag("studentName", e)}
+                >
+                  <div className="border-y border-gray-300 py-1 flex items-center">
+                    <span className="text-[8px] font-montserrat font-medium text-gray-400 uppercase tracking-widest absolute left-4">
+                      STUDENT NAME:
+                    </span>
+                    <div className="w-full text-center">
+                      <span className="text-[19px] leading-none font-serif font-bold text-[#4B0082] uppercase tracking-[0.15em]">
+                        {selectedStudent.full_name ||
+                          `${selectedStudent.first_name} ${selectedStudent.last_name}`}
+                      </span>
+                    </div>
+                  </div>
+                </div>
+
+                <div
+                  className={`grid grid-cols-2 gap-x-12 gap-y-1 mb-2 text-[9px] relative z-10 px-4 ${editorOutlineClass("studentMeta")}`}
+                  style={getBlockStyle("studentMeta")}
+                  onClick={() => editorMode && setSelectedBlock("studentMeta")}
+                  onMouseDown={(e) => startBlockDrag("studentMeta", e)}
+                >
+                  {/* Left Column */}
+                  <div className="flex flex-col gap-1">
+                    <div className="flex justify-between border-b border-gray-100 pb-0.5">
+                      <span className="text-gray-400 font-montserrat text-[8px] uppercase tracking-wider font-medium">
+                        STUDENT ID:
+                      </span>
+                      <span className="uppercase text-gray-950 font-montserrat font-bold tracking-wide">
+                        {selectedStudent.admission_no ||
+                          selectedStudent.student_code ||
+                          selectedStudent.id}
+                      </span>
+                    </div>
+                    <div className="flex justify-between border-b border-gray-100 pb-0.5">
+                      <span className="text-gray-400 font-montserrat text-[8px] uppercase tracking-wider font-medium">
+                        SCHOOL:
+                      </span>
+                      <span className="uppercase text-gray-950 font-montserrat font-bold tracking-wide">
+                        {selectedStudent.faculty || "SCHOOL OF THEOLOGY"}
+                      </span>
+                    </div>
+                    <div className="flex justify-between border-b border-gray-100 pb-0.5">
+                      <span className="text-gray-400 font-montserrat text-[8px] uppercase tracking-wider font-medium">
+                        PROGRAM:
+                      </span>
+                      <span className="uppercase text-gray-950 font-montserrat font-bold tracking-wide">
+                        DIPLOMA IN CHRISTIAN MINISTRY AND THEOLOGY
+                      </span>
+                    </div>
+                    <div className="flex justify-between border-b border-gray-100 pb-0.5">
+                      <span className="text-gray-400 font-montserrat text-[8px] uppercase tracking-wider font-medium">
+                        ADMISSION DATE:
+                      </span>
+                      <span className="uppercase text-gray-950 font-montserrat font-bold tracking-wide">
+                        4TH FEB 2024
+                      </span>
+                    </div>
+                  </div>
+                  {/* Right Column */}
+                  <div className="flex flex-col gap-1">
+                    <div className="flex justify-between border-b border-gray-100 pb-0.5">
+                      <span className="text-gray-400 font-montserrat text-[8px] uppercase tracking-wider font-medium">
+                        AWARD TYPE:
+                      </span>
+                      <span className="uppercase text-gray-950 font-montserrat font-bold tracking-wide">
+                        DIPLOMA
+                      </span>
+                    </div>
+                    <div className="flex justify-between border-b border-gray-100 pb-0.5">
+                      <span className="text-gray-400 font-montserrat text-[8px] uppercase tracking-wider font-medium">
+                        DEPARTMENT:
+                      </span>
+                      <span className="uppercase text-gray-950 font-montserrat font-bold tracking-wide">
+                        {selectedStudent.department ||
+                          "DEPARTMENT OF PRACTICAL THEOLOGY"}
+                      </span>
+                    </div>
+                    <div className="flex justify-between border-b border-gray-100 pb-0.5">
+                      <span className="text-gray-400 font-montserrat text-[8px] uppercase tracking-wider font-medium">
+                        MODE OF STUDY:
+                      </span>
+                      <span className="uppercase text-gray-950 font-montserrat font-bold tracking-wide">
+                        FULL-TIME
+                      </span>
+                    </div>
+                    <div className="flex justify-between border-b border-gray-100 pb-0.5">
+                      <span className="text-gray-400 font-montserrat text-[8px] uppercase tracking-wider font-medium">
+                        GRADUATION DATE:
+                      </span>
+                      <span className="uppercase text-gray-950 font-montserrat font-bold tracking-wide">
+                        1ST MAY 2026
+                      </span>
+                    </div>
+                  </div>
+                </div>
+
+                <div
+                  className={`border border-gray-900 mb-3 relative z-10 shadow-sm overflow-hidden ${editorOutlineClass("table")}`}
+                  style={getBlockStyle("table")}
+                  onClick={() => editorMode && setSelectedBlock("table")}
+                  onMouseDown={(e) => startBlockDrag("table", e)}
+                >
+                  <table className="w-full text-left text-[10px] border-collapse">
+                    <thead>
+                      <tr className="border-b border-gray-900 font-black uppercase bg-gray-50">
+                        <th className="py-1.5 px-3 border-r border-gray-900 w-28">
+                          Course Code
+                        </th>
+                        <th className="py-1.5 px-3 border-r border-gray-900">
+                          Course Description
+                        </th>
+                        <th className="py-1.5 px-3 border-r border-gray-900 w-24 text-center">
+                          Hours
+                        </th>
+                        <th className="py-1.5 px-3 w-16 text-center">Grade</th>
+                      </tr>
+                    </thead>
+                    <tbody className="bg-white/80">
+                      {fixedRows.map((rec, i) => (
+                        <tr
+                          key={i}
+                          className="border-b border-gray-200 hover:bg-purple-50/20 transition-colors"
+                          style={{ height: `${TABLE_ROW_MM}mm` }}
+                        >
+                          <td className="py-0.5 px-3 border-r border-gray-900 font-mono font-bold text-gray-700 leading-none">
+                            {rec?.courseCode ?? ""}
+                          </td>
+                          <td className="py-0.5 px-3 border-r border-gray-900 uppercase font-bold text-gray-800 leading-none">
+                            {rec?.courseName ?? ""}
+                          </td>
+                          <td className="py-0.5 px-3 border-r border-gray-900 text-center font-bold leading-none">
+                            {rec ? formatNumber(rec.credits, 2) : ""}
+                          </td>
+                          <td className="py-0.5 px-3 text-center font-black text-gray-900 leading-none">
+                            {rec?.grade ?? ""}
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+
+                {hiddenCourseCount > 0 && (
+                  <div className="mt-1 mb-2 text-center text-[8px] font-black uppercase tracking-widest text-red-600 relative z-10">
+                    {hiddenCourseCount} course{hiddenCourseCount > 1 ? "s" : ""}{" "}
+                    omitted to preserve single-page A4 format
+                  </div>
+                )}
+
+                <div
+                  className={`border border-gray-200 mt-2 p-2 relative z-10 flex text-[9px] font-black ${editorOutlineClass("metrics")}`}
+                  style={getBlockStyle("metrics")}
+                  onClick={() => editorMode && setSelectedBlock("metrics")}
+                  onMouseDown={(e) => startBlockDrag("metrics", e)}
+                >
+                  {/* Left - GPA */}
+                  <div className="flex-1 flex flex-col justify-center border-r border-gray-200 px-3 relative min-h-[30px]">
+                    <span className="absolute top-0 left-3 text-[7px] text-gray-400 font-sans tracking-widest uppercase font-black">
+                      PERFORMANCE METRICS
+                    </span>
+                    <div className="flex justify-between items-end h-full pt-4">
+                      <span className="text-gray-600">
+                        Semester GPA:{" "}
+                        <span className="text-gray-950 font-black">
+                          {currentRecords.length
+                            ? (
+                                currentRecords.reduce(
+                                  (a, b) =>
+                                    a +
+                                    (b.points ||
+                                      (b.score >= 70
+                                        ? 4
+                                        : b.score >= 60
+                                          ? 3
+                                          : b.score >= 50
+                                            ? 2
+                                            : b.score >= 40
+                                              ? 1
+                                              : 0)),
+                                  0,
+                                ) / currentRecords.length
+                              ).toFixed(2)
+                            : "0.00"}
+                        </span>
+                      </span>
+                      <span className="text-gray-600">
+                        Cumulative GPA:{" "}
+                        <span className="text-[#4B0082] font-black">
+                          {allRecords.length
+                            ? (
+                                allRecords.reduce(
+                                  (a, b) =>
+                                    a +
+                                    (b.points ||
+                                      (b.score >= 70
+                                        ? 4
+                                        : b.score >= 60
+                                          ? 3
+                                          : b.score >= 50
+                                            ? 2
+                                            : b.score >= 40
+                                              ? 1
+                                              : 0)),
+                                  0,
+                                ) / allRecords.length
+                              ).toFixed(2)
+                            : "0.00"}
+                        </span>
+                      </span>
+                    </div>
+                  </div>
+                  {/* Middle - Averages */}
+                  <div className="flex-[1.2] flex justify-center items-end border-r border-gray-200 px-3 pb-0.5">
+                    <div className="flex gap-6">
+                      <span className="text-gray-600">
+                        Current Avg:{" "}
+                        <span className="text-gray-950 font-black">
+                          {stats.current}%
+                        </span>
+                      </span>
+                      <span className="text-gray-600">
+                        Cumulative Avg:{" "}
+                        <span className="text-[#4B0082] font-black">
+                          {stats.cumulative}%
+                        </span>
+                      </span>
+                    </div>
+                  </div>
+                  {/* Right - Classification */}
+                  <div className="flex-1 flex flex-col justify-center items-center px-3 relative min-h-[30px]">
+                    <span className="absolute top-0 right-3 text-[7px] text-gray-400 font-sans tracking-widest uppercase font-black text-right w-full">
+                      FINAL CLASSIFICATION
+                    </span>
+                    <div className="h-full flex items-end justify-center w-full pt-4">
+                      <span className="text-[#4B0082] text-[11px] font-black uppercase tracking-wider">
+                        {parseFloat(stats.cumulative) >= 70
+                          ? "DISTINCTION"
+                          : parseFloat(stats.cumulative) >= 60
+                            ? "CREDIT"
+                            : parseFloat(stats.cumulative) >= 50
+                              ? "PASS"
+                              : "FAIL"}
+                      </span>
+                    </div>
+                  </div>
+                </div>
+
+                <div
+                  className={`mt-3 relative z-10 ${editorOutlineClass("recommendation")}`}
+                  style={getBlockStyle("recommendation")}
+                  onClick={() =>
+                    editorMode && setSelectedBlock("recommendation")
+                  }
+                  onMouseDown={(e) => startBlockDrag("recommendation", e)}
+                >
+                  <div className="flex items-start gap-4 px-2 pb-3 border-b-2 border-gray-900">
+                    <span className="flex-shrink-0 text-[8px] font-black uppercase text-gray-400 tracking-widest pt-1">
+                      RECOMMENDATION:
+                    </span>
+                    <div className="border-l-[3px] border-[#4B0082] pl-3 py-0.5">
+                      <p className="uppercase leading-snug text-gray-950 font-serif font-bold text-[10px] tracking-tight">
+                        {getAcademicRecommendation()}
+                      </p>
+                    </div>
+                  </div>
+                </div>
+
+                <div
+                  className={`border border-gray-200 px-3 py-2 text-[8px] font-bold relative z-10 mt-3 text-center ${editorOutlineClass("grading")}`}
+                  style={getBlockStyle("grading")}
+                  onClick={() => editorMode && setSelectedBlock("grading")}
+                  onMouseDown={(e) => startBlockDrag("grading", e)}
+                >
+                  <span className="underline uppercase text-gray-500 mr-3">
+                    GRADING:
+                  </span>
+                  <span className="opacity-80 tracking-wide">
+                    A (70–100%) &nbsp;|&nbsp; B (60–69%) &nbsp;|&nbsp; C
+                    (50–59%) &nbsp;|&nbsp; D (40–49%) &nbsp;|&nbsp;{" "}
+                    <span className="text-red-500 font-black">F (&lt;40%)</span>
+                  </span>
+                </div>
+
+                <MicroText
+                  text={`DO NOT REPRODUCE THIS DOCUMENT • BMI UNIVERSITY ACADEMIC RECORD SECURE VALIDATION LINE • VERIFY AT: ${securityData?.verificationUrl || "BMI.EDU/VERIFY"}`}
+                />
+
+                {/* Forensic tracking layer - invisible to naked eye */}
+                <div className="relative z-10 h-[2px] overflow-hidden bg-gradient-to-r from-transparent via-gray-100/30 to-transparent">
+                  <div className="text-[1px] text-gray-300 opacity-20 whitespace-nowrap tracking-widest font-mono">
+                    FORENSIC-ID:{securityData?.contentHash || "PENDING-HASH"}
+                    -CHAIN:{securityData?.blockchainAnchor || "PENDING-ANCHOR"}
+                  </div>
+                </div>
+
+                <div
+                  className={`flex justify-between mt-10 relative z-10 mb-4 px-8 ${editorOutlineClass("signatures")}`}
+                  style={getBlockStyle("signatures")}
+                  onClick={() => editorMode && setSelectedBlock("signatures")}
+                  onMouseDown={(e) => startBlockDrag("signatures", e)}
+                >
+                  {/* Dean of Faculty & Academics */}
+                  <div className="flex flex-col items-start w-[32%]">
+                    <div className="w-full border-b border-gray-900" />
+                    <span className="font-serif italic text-sm text-gray-900 whitespace-nowrap mt-1.5">
+                      {getDeanName(selectedStudent.program_code)}
+                    </span>
+                    <span className="text-[7px] font-black uppercase tracking-widest mt-0.5 text-gray-500">
+                      DEAN, {selectedStudent.faculty || "SCHOOL OF THEOLOGY"}
+                    </span>
                   </div>
 
-                  <div
-                   className={`border border-gray-900 mb-3 relative z-10 shadow-sm overflow-hidden ${editorOutlineClass('table')}`}
-                   style={getBlockStyle('table')}
-                   onClick={() => editorMode && setSelectedBlock('table')}
-                   onMouseDown={(e) => startBlockDrag('table', e)}
-                 >
-                   <table className="w-full text-left text-[10px] border-collapse">
-                      <thead>
-                         <tr className="border-b border-gray-900 font-black uppercase bg-gray-50">
-                            <th className="py-1.5 px-3 border-r border-gray-900 w-28">Course Code</th>
-                            <th className="py-1.5 px-3 border-r border-gray-900">Course Description</th>
-                            <th className="py-1.5 px-3 border-r border-gray-900 w-24 text-center">Hours</th>
-                            <th className="py-1.5 px-3 w-16 text-center">Grade</th>
-                         </tr>
-                      </thead>
-                      <tbody className="bg-white/80">
-                         {fixedRows.map((rec, i) => (
-                           <tr key={i} className="border-b border-gray-200 hover:bg-purple-50/20 transition-colors" style={{ height: `${TABLE_ROW_MM}mm` }}>
-                              <td className="py-0.5 px-3 border-r border-gray-900 font-mono font-bold text-gray-700 leading-none">{rec?.courseCode ?? ''}</td>
-                              <td className="py-0.5 px-3 border-r border-gray-900 uppercase font-bold text-gray-800 leading-none">{rec?.courseName ?? ''}</td>
-                              <td className="py-0.5 px-3 border-r border-gray-900 text-center font-bold leading-none">{rec ? formatNumber(rec.credits, 2) : ''}</td>
-                              <td className="py-0.5 px-3 text-center font-black text-gray-900 leading-none">{rec?.grade ?? ''}</td>
-                           </tr>
-                         ))}
-                      </tbody>
-                   </table>
-                 </div>
+                  {/* University Registrar */}
+                  <div className="flex flex-col items-end w-[35%] relative">
+                    <div className="w-full border-b border-gray-900 relative z-10" />
+                    <span className="font-serif italic text-sm text-gray-900 whitespace-nowrap mt-1.5 w-full text-right relative z-10">
+                      Dr. Lilian Young
+                    </span>
+                    <span className="text-[7px] font-black uppercase tracking-widest mt-0.5 text-gray-500 w-full text-right relative z-10">
+                      UNIVERSITY REGISTRAR
+                    </span>
+                  </div>
+                </div>
 
-                 {hiddenCourseCount > 0 && (
-                   <div className="mt-1 mb-2 text-center text-[8px] font-black uppercase tracking-widest text-red-600 relative z-10">
-                     {hiddenCourseCount} course{hiddenCourseCount > 1 ? 's' : ''} omitted to preserve single-page A4 format
-                   </div>
-                 )}
+                <div
+                  className={`flex justify-between items-center px-4 mt-8 mb-2 relative z-10 ${editorOutlineClass("footer")}`}
+                  style={getBlockStyle("footer")}
+                  onClick={() => editorMode && setSelectedBlock("footer")}
+                  onMouseDown={(e) => startBlockDrag("footer", e)}
+                >
+                  <div className="flex flex-col text-[10px] text-gray-500 font-playfair font-bold uppercase tracking-widest leading-[1.8]">
+                    <span>
+                      ISSUED:{" "}
+                      {securityData?.issuedAt
+                        ? new Date(securityData.issuedAt)
+                            .toLocaleDateString("en-US", {
+                              year: "numeric",
+                              month: "short",
+                              day: "numeric",
+                            })
+                            .toUpperCase()
+                        : new Date()
+                            .toLocaleDateString("en-US", {
+                              year: "numeric",
+                              month: "short",
+                              day: "numeric",
+                            })
+                            .toUpperCase()}
+                    </span>
+                    <span>
+                      ID:{" "}
+                      {securityData?.serialNumber ||
+                        `BMI-TR-${selectedStudent.id.toUpperCase()}`}
+                    </span>
+                  </div>
 
-                 <div
-                   className={`border border-gray-200 mt-2 p-2 relative z-10 flex text-[9px] font-black ${editorOutlineClass('metrics')}`}
-                   style={getBlockStyle('metrics')}
-                   onClick={() => editorMode && setSelectedBlock('metrics')}
-                   onMouseDown={(e) => startBlockDrag('metrics', e)}
-                 >
-                    {/* Left - GPA */}
-                    <div className="flex-1 flex flex-col justify-center border-r border-gray-200 px-3 relative min-h-[30px]">
-                       <span className="absolute top-0 left-3 text-[7px] text-gray-400 font-sans tracking-widest uppercase font-black">PERFORMANCE METRICS</span>
-                       <div className="flex justify-between items-end h-full pt-4">
-                          <span className="text-gray-600">Semester GPA: <span className="text-gray-950 font-black">{currentRecords.length ? (currentRecords.reduce((a, b) => a + (b.points || (b.score>=70?4:b.score>=60?3:b.score>=50?2:b.score>=40?1:0)), 0) / currentRecords.length).toFixed(2) : "0.00"}</span></span>
-                          <span className="text-gray-600">Cumulative GPA: <span className="text-[#4B0082] font-black">{allRecords.length ? (allRecords.reduce((a, b) => a + (b.points || (b.score>=70?4:b.score>=60?3:b.score>=50?2:b.score>=40?1:0)), 0) / allRecords.length).toFixed(2) : "0.00"}</span></span>
-                       </div>
+                  <div className="w-[35%] flex justify-end mr-4">
+                    {/* Digital Validation Box */}
+                    <div className="border border-purple-200 bg-purple-50/30 px-4 py-2.5 rounded-none flex flex-col items-center justify-center w-full relative z-10">
+                      <div className="flex items-center gap-1.5">
+                        <ShieldCheck size={11} className="text-[#4B0082]" />
+                        <span className="text-[#4B0082] text-[9px] font-black uppercase tracking-widest">
+                          DIGITAL VALIDATION ACTIVE
+                        </span>
+                      </div>
+                      <span className="text-[6px] font-bold text-gray-400 uppercase tracking-[0.2em] mt-0.5">
+                        CERTIFIED TRUE COPY • E-TRANSCRIPT
+                      </span>
                     </div>
-                    {/* Middle - Averages */}
-                    <div className="flex-[1.2] flex justify-center items-end border-r border-gray-200 px-3 pb-0.5">
-                       <div className="flex gap-6">
-                          <span className="text-gray-600">Current Avg: <span className="text-gray-950 font-black">{stats.current}%</span></span>
-                          <span className="text-gray-600">Cumulative Avg: <span className="text-[#4B0082] font-black">{stats.cumulative}%</span></span>
-                       </div>
-                    </div>
-                    {/* Right - Classification */}
-                    <div className="flex-1 flex flex-col justify-center items-center px-3 relative min-h-[30px]">
-                       <span className="absolute top-0 right-3 text-[7px] text-gray-400 font-sans tracking-widest uppercase font-black text-right w-full">FINAL CLASSIFICATION</span>
-                       <div className="h-full flex items-end justify-center w-full pt-4">
-                          <span className="text-[#4B0082] text-[11px] font-black uppercase tracking-wider">{parseFloat(stats.cumulative) >= 70 ? 'DISTINCTION' : parseFloat(stats.cumulative) >= 60 ? 'CREDIT' : parseFloat(stats.cumulative) >= 50 ? 'PASS' : 'FAIL'}</span>
-                       </div>
-                    </div>
-                 </div>
-
-                 <div
-                   className={`mt-3 relative z-10 ${editorOutlineClass('recommendation')}`}
-                   style={getBlockStyle('recommendation')}
-                   onClick={() => editorMode && setSelectedBlock('recommendation')}
-                   onMouseDown={(e) => startBlockDrag('recommendation', e)}
-                 >
-                    <div className="flex items-start gap-4 px-2 pb-3 border-b-2 border-gray-900">
-                       <span className="flex-shrink-0 text-[8px] font-black uppercase text-gray-400 tracking-widest pt-1">RECOMMENDATION:</span>
-                       <div className="border-l-[3px] border-[#4B0082] pl-3 py-0.5">
-                          <p className="uppercase leading-snug text-gray-950 font-serif font-bold text-[10px] tracking-tight">{getAcademicRecommendation()}</p>
-                       </div>
-                    </div>
-                 </div>
-
-                 <div
-                   className={`border border-gray-200 px-3 py-2 text-[8px] font-bold relative z-10 mt-3 text-center ${editorOutlineClass('grading')}`}
-                   style={getBlockStyle('grading')}
-                   onClick={() => editorMode && setSelectedBlock('grading')}
-                   onMouseDown={(e) => startBlockDrag('grading', e)}
-                 >
-                    <span className="underline uppercase text-gray-500 mr-3">GRADING:</span>
-                    <span className="opacity-80 tracking-wide">A (70–100%) &nbsp;|&nbsp; B (60–69%) &nbsp;|&nbsp; C (50–59%) &nbsp;|&nbsp; D (40–49%) &nbsp;|&nbsp; <span className="text-red-500 font-black">F (&lt;40%)</span></span>
-                 </div>
-
-                 <MicroText text={`DO NOT REPRODUCE THIS DOCUMENT • BMI UNIVERSITY ACADEMIC RECORD SECURE VALIDATION LINE • VERIFY AT: ${securityData?.verificationUrl || 'BMI.EDU/VERIFY'}`} />
-
-                 {/* Forensic tracking layer - invisible to naked eye */}
-                 <div className="relative z-10 h-[2px] overflow-hidden bg-gradient-to-r from-transparent via-gray-100/30 to-transparent">
-                    <div className="text-[1px] text-gray-300 opacity-20 whitespace-nowrap tracking-widest font-mono">
-                      FORENSIC-ID:{securityData?.contentHash || 'PENDING-HASH'}-CHAIN:{securityData?.blockchainAnchor || 'PENDING-ANCHOR'}
-                    </div>
-                 </div>
-
-                 <div
-                   className={`flex justify-between mt-10 relative z-10 mb-4 px-8 ${editorOutlineClass('signatures')}`}
-                   style={getBlockStyle('signatures')}
-                   onClick={() => editorMode && setSelectedBlock('signatures')}
-                   onMouseDown={(e) => startBlockDrag('signatures', e)}
-                 >
-                    {/* Dean of Faculty & Academics */}
-                    <div className="flex flex-col items-start w-[32%]">
-                       <div className="w-full border-b border-gray-900" />
-                       <span className="font-serif italic text-sm text-gray-900 whitespace-nowrap mt-1.5">{getDeanName(selectedStudent.program_code)}</span>
-                       <span className="text-[7px] font-black uppercase tracking-widest mt-0.5 text-gray-500">DEAN, {selectedStudent.faculty || "SCHOOL OF THEOLOGY"}</span>
-                    </div>
-
-                    {/* University Registrar */}
-                    <div className="flex flex-col items-end w-[35%] relative">
-                       <div className="w-full border-b border-gray-900 relative z-10" />
-                       <span className="font-serif italic text-sm text-gray-900 whitespace-nowrap mt-1.5 w-full text-right relative z-10">Dr. Lilian Young</span>
-                       <span className="text-[7px] font-black uppercase tracking-widest mt-0.5 text-gray-500 w-full text-right relative z-10">UNIVERSITY REGISTRAR</span>
-                    </div>
-                 </div>
-
-                 <div
-                   className={`flex justify-between items-center px-4 mt-8 mb-2 relative z-10 ${editorOutlineClass('footer')}`}
-                   style={getBlockStyle('footer')}
-                   onClick={() => editorMode && setSelectedBlock('footer')}
-                   onMouseDown={(e) => startBlockDrag('footer', e)}
-                 >
-                    <div className="flex flex-col text-[10px] text-gray-500 font-playfair font-bold uppercase tracking-widest leading-[1.8]">
-                       <span>ISSUED: {securityData?.issuedAt ? new Date(securityData.issuedAt).toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: 'numeric' }).toUpperCase() : new Date().toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: 'numeric' }).toUpperCase()}</span>
-                       <span>ID: {securityData?.serialNumber || `BMI-TR-${selectedStudent.id.toUpperCase()}`}</span>
-                    </div>
-
-                    <div className="w-[35%] flex justify-end mr-4">
-                       {/* Digital Validation Box */}
-                       <div className="border border-purple-200 bg-purple-50/30 px-4 py-2.5 rounded-none flex flex-col items-center justify-center w-full relative z-10">
-                          <div className="flex items-center gap-1.5">
-                             <ShieldCheck size={11} className="text-[#4B0082]" />
-                             <span className="text-[#4B0082] text-[9px] font-black uppercase tracking-widest">DIGITAL VALIDATION ACTIVE</span>
-                          </div>
-                          <span className="text-[6px] font-bold text-gray-400 uppercase tracking-[0.2em] mt-0.5">CERTIFIED TRUE COPY • E-TRANSCRIPT</span>
-                       </div>
-                    </div>
-                 </div>
+                  </div>
+                </div>
               </div>
-           </div>
-           </div>
-           </div>
-        )
-        }
+            </div>
+          </div>
+        </div>
+      )}
 
-        <style>{`
+      <style>{`
         @media print {
           .no-print { display: none !important; }
         }
-        
+
         #official-transcript-root {
           user-select: none;
           -webkit-user-select: none;
@@ -2405,14 +3406,3 @@ export const Transcripts: React.FC<TranscriptsProps> = (props) => {
     </div>
   );
 };
-
-
-
-
-
-
-
-
-
-
-

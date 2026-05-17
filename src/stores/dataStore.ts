@@ -9,14 +9,21 @@
  * - Intelligent polling (only when logged in)
  * - Optimistic updates for create operations
  */
-import { create } from 'zustand';
-import { getStudents } from '../services/studentService';
-import { getStaff } from '../services/staffService';
-import { getCourses } from '../services/courseService';
-import { getLibraryItems } from '../services/libraryService';
-import { getTransactions, createTransaction } from '../services/financeService';
-import { getAllCampuses } from '../services/campusService';
-import type { Student, StaffMember, Transaction, Course, LibraryItem, Campus } from '../types';
+import { create } from "zustand";
+import { getStudents } from "../services/studentService";
+import { getStaff } from "../services/staffService";
+import { getCourses } from "../services/courseService";
+import { getLibraryItems } from "../services/libraryService";
+import { getTransactions, createTransaction } from "../services/financeService";
+import { getAllCampuses } from "../services/campusService";
+import type {
+  Student,
+  StaffMember,
+  Transaction,
+  Course,
+  LibraryItem,
+  Campus,
+} from "../types";
 
 interface DataState {
   // Entity collections
@@ -100,7 +107,11 @@ export const useDataStore = create<DataState>((set, get) => ({
         set({ students: [], isLoadingStudents: false, error: result.error });
       }
     } catch (error) {
-      set({ students: [], isLoadingStudents: false, error: 'Failed to fetch students' });
+      set({
+        students: [],
+        isLoadingStudents: false,
+        error: "Failed to fetch students",
+      });
     }
   },
 
@@ -172,7 +183,7 @@ export const useDataStore = create<DataState>((set, get) => ({
 
   fetchAllCoreData: async () => {
     try {
-      const [stuRes, st, co, lib, tx] = await Promise.all([
+      const [stuRes, st, co, lib, tx, ca] = await Promise.all([
         getStudents({ perPage: 1000 }),
         getStaff({ perPage: 500 }),
         getCourses({ perPage: 500 }),
@@ -190,7 +201,8 @@ export const useDataStore = create<DataState>((set, get) => ({
         lastFetchedAt: Date.now(),
       });
     } catch (e) {
-      // Silently ignore — polling will retry
+      // Polling will retry — log for diagnostics in dev
+      console.warn("[dataStore] fetchAllCoreData error:", e);
     }
   },
 
@@ -202,11 +214,11 @@ export const useDataStore = create<DataState>((set, get) => ({
     try {
       const res = await createTransaction({
         ref: `TX-${Date.now()}`,
-        name: 'Quick Entry',
-        desc: 'Ad-hoc Payment',
+        name: "Quick Entry",
+        desc: "Ad-hoc Payment",
         amt,
-        status: 'Paid',
-        date: new Date().toISOString().split('T')[0],
+        status: "Paid",
+        date: new Date().toISOString().split("T")[0],
       });
       if (res.success && res.data) {
         set((state) => ({
@@ -214,7 +226,7 @@ export const useDataStore = create<DataState>((set, get) => ({
         }));
       }
     } catch (e) {
-      console.error('[Finance] quick entry failed', e);
+      console.error("[Finance] quick entry failed", e);
     }
   },
 
@@ -224,24 +236,27 @@ export const useDataStore = create<DataState>((set, get) => ({
   setCourses: (courses) => set({ courses }),
   setLibrary: (library) => set({ library }),
 
-  clearAll: () => set({
-    students: [],
-    staff: [],
-    transactions: [],
-    courses: [],
-    library: [],
-    campuses: [],
-    error: null,
-    lastFetchedAt: null,
-  }),
+  clearAll: () =>
+    set({
+      students: [],
+      staff: [],
+      transactions: [],
+      courses: [],
+      library: [],
+      campuses: [],
+      error: null,
+      lastFetchedAt: null,
+    }),
   setCampuses: (campuses) => set({ campuses }),
 
   getStats: () => {
     const state = get();
     return {
       students: state.students.length,
-      admissions: state.students.filter(s => s.status === 'Applicant').length,
-      tuition: state.transactions.filter(t => t.status === 'Paid').reduce((acc, curr) => acc + curr.amt, 0),
+      admissions: state.students.filter((s) => s.status === "Applicant").length,
+      tuition: state.transactions
+        .filter((t) => t.status === "Paid")
+        .reduce((acc, curr) => acc + curr.amt, 0),
       events: 5, // Mock — could be replaced with API data
     };
   },

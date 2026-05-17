@@ -3,7 +3,7 @@
  * Centralizes auth state: token, user, login status.
  * Removes prop-drilling of auth state through App → ViewRenderer → Components.
  */
-import { create } from 'zustand';
+import { create } from "zustand";
 import {
   login as authLogin,
   logout as authLogout,
@@ -12,7 +12,7 @@ import {
   getToken,
   getCurrentUser,
   type User,
-} from '../services/authService';
+} from "../services/authService";
 
 interface AuthState {
   isLoggedIn: boolean;
@@ -23,7 +23,11 @@ interface AuthState {
   /** Check stored session on app startup */
   checkSession: () => Promise<void>;
   /** Login with credentials */
-  login: (email: string, password: string, rememberMe?: boolean) => Promise<{ success: boolean; error?: string }>;
+  login: (
+    email: string,
+    password: string,
+    rememberMe?: boolean,
+  ) => Promise<{ success: boolean; error?: string }>;
   /** Logout and clear state */
   logout: () => Promise<void>;
   /** Refresh the access token */
@@ -37,32 +41,27 @@ export const useAuthStore = create<AuthState>((set, get) => ({
   token: null,
 
   checkSession: async () => {
-    let isMounted = true;
-    const timeoutId = setTimeout(() => {
-      if (isMounted) {
-        set({ isLoggedIn: false, isAuthenticating: false });
-      }
-    }, 4000);
+    // Guard against the session check taking too long (e.g. server offline)
+    const timeoutPromise = new Promise<boolean>((resolve) =>
+      setTimeout(() => resolve(false), 4000),
+    );
 
     try {
-      const isValid = await verifySession();
-      clearTimeout(timeoutId);
-      if (isMounted) {
-        set({
-          isLoggedIn: isValid,
-          isAuthenticating: false,
-          user: isValid ? getCurrentUser() : null,
-          token: isValid ? getToken() : null,
-        });
-      }
+      const isValid = await Promise.race([verifySession(), timeoutPromise]);
+      set({
+        isLoggedIn: isValid,
+        isAuthenticating: false,
+        user: isValid ? getCurrentUser() : null,
+        token: isValid ? getToken() : null,
+      });
     } catch {
-      clearTimeout(timeoutId);
-      if (isMounted) {
-        set({ isLoggedIn: false, isAuthenticating: false, user: null, token: null });
-      }
+      set({
+        isLoggedIn: false,
+        isAuthenticating: false,
+        user: null,
+        token: null,
+      });
     }
-
-    return () => { isMounted = false; };
   },
 
   login: async (email, password, rememberMe = false) => {
@@ -79,7 +78,7 @@ export const useAuthStore = create<AuthState>((set, get) => ({
       }
       return { success: false, error: result.error };
     } catch (error) {
-      return { success: false, error: 'Network error' };
+      return { success: false, error: "Network error" };
     }
   },
 

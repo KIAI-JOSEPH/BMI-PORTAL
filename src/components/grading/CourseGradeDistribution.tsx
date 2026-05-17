@@ -3,11 +3,11 @@
  * Displays grade distribution analytics with charts and statistics
  */
 
-import React, { useState, useEffect } from 'react';
-import { X, BarChart3, TrendingUp, Users } from 'lucide-react';
-import { Grade, GradeDistribution } from '../../grading/types';
-import { getCourseGrades } from '../../grading/services/GradeAPIService';
-import { calculateGradeDistribution } from '../../grading/engines/GradeAnalyticsEngine';
+import React, { useState, useEffect } from "react";
+import { X, BarChart3, TrendingUp, Users } from "lucide-react";
+import { Grade, GradeDistribution } from "../../grading/types";
+import { getCourseGrades } from "../../grading/services/GradeAPIService";
+import { calculateGradeDistribution } from "../../grading/engines/GradeAnalyticsEngine";
 
 interface CourseGradeDistributionProps {
   courseCode: string;
@@ -26,7 +26,9 @@ const CourseGradeDistribution: React.FC<CourseGradeDistributionProps> = ({
   isOpen,
   onClose,
 }) => {
-  const [distribution, setDistribution] = useState<GradeDistribution | null>(null);
+  const [distribution, setDistribution] = useState<GradeDistribution | null>(
+    null,
+  );
   const [grades, setGrades] = useState<Grade[]>([]);
   const [isLoading, setIsLoading] = useState(false);
 
@@ -42,33 +44,32 @@ const CourseGradeDistribution: React.FC<CourseGradeDistributionProps> = ({
       const response = await getCourseGrades(courseCode);
       if (response.success && response.data) {
         const courseGrades = response.data.items.filter(
-          g => g.academicYear === academicYear && g.semester === semester
+          (g) => g.academicYear === academicYear && g.semester === semester,
         );
         setGrades(courseGrades);
-        
-        const analyticsEngine = new GradeAnalyticsEngine();
-        const dist = analyticsEngine.calculateGradeDistribution(
+
+        const dist = calculateGradeDistribution(
           courseGrades,
           courseCode,
           courseName,
           academicYear,
-          semester
+          semester,
         );
         setDistribution(dist);
       }
     } catch (error) {
-      console.error('Failed to load course grades:', error);
+      console.error("Failed to load course grades:", error);
     } finally {
       setIsLoading(false);
     }
   };
 
   const getGradeColor = (grade: string) => {
-    if (grade.startsWith('A')) return 'bg-green-600';
-    if (grade.startsWith('B')) return 'bg-blue-600';
-    if (grade.startsWith('C')) return 'bg-amber-600';
-    if (grade.startsWith('D')) return 'bg-orange-600';
-    return 'bg-red-600';
+    if (grade.startsWith("A")) return "bg-green-600";
+    if (grade.startsWith("B")) return "bg-blue-600";
+    if (grade.startsWith("C")) return "bg-amber-600";
+    if (grade.startsWith("D")) return "bg-orange-600";
+    return "bg-red-600";
   };
 
   if (!isOpen) return null;
@@ -79,7 +80,9 @@ const CourseGradeDistribution: React.FC<CourseGradeDistributionProps> = ({
         {/* Header */}
         <div className="bg-gray-900 text-white px-6 py-4 flex justify-between items-center">
           <div>
-            <h2 className="text-xl font-black uppercase tracking-widest">Grade Distribution</h2>
+            <h2 className="text-xl font-black uppercase tracking-widest">
+              Grade Distribution
+            </h2>
             <p className="text-xs text-gray-400 mt-1">
               {courseCode} - {courseName} ({semester} {academicYear})
             </p>
@@ -104,35 +107,48 @@ const CourseGradeDistribution: React.FC<CourseGradeDistributionProps> = ({
               <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
                 <div className="bg-gradient-to-br from-[#4B0082] to-[#7B1FA2] text-white p-4 rounded-lg text-center">
                   <Users size={24} className="mx-auto mb-2 opacity-80" />
-                  <p className="text-2xl font-black">{distribution.statistics.totalStudents}</p>
-                  <p className="text-xs uppercase tracking-widest opacity-80">Students</p>
+                  <p className="text-2xl font-black">
+                    {distribution.statistics.totalStudents}
+                  </p>
+                  <p className="text-xs uppercase tracking-widest opacity-80">
+                    Students
+                  </p>
                 </div>
-                
+
                 <div className="bg-white dark:bg-gray-900 border-2 border-gray-200 dark:border-gray-700 p-4 rounded-lg text-center">
-                  <p className="text-xs uppercase tracking-widest text-gray-500 dark:text-gray-400 mb-2">Mean</p>
+                  <p className="text-xs uppercase tracking-widest text-gray-500 dark:text-gray-400 mb-2">
+                    Mean
+                  </p>
                   <p className="text-2xl font-black text-gray-900 dark:text-white">
                     {distribution.statistics.mean.toFixed(1)}%
                   </p>
                 </div>
 
                 <div className="bg-white dark:bg-gray-900 border-2 border-gray-200 dark:border-gray-700 p-4 rounded-lg text-center">
-                  <p className="text-xs uppercase tracking-widest text-gray-500 dark:text-gray-400 mb-2">Median</p>
+                  <p className="text-xs uppercase tracking-widest text-gray-500 dark:text-gray-400 mb-2">
+                    Median
+                  </p>
                   <p className="text-2xl font-black text-gray-900 dark:text-white">
                     {distribution.statistics.median.toFixed(1)}%
                   </p>
                 </div>
 
                 <div className="bg-white dark:bg-gray-900 border-2 border-gray-200 dark:border-gray-700 p-4 rounded-lg text-center">
-                  <p className="text-xs uppercase tracking-widest text-gray-500 dark:text-gray-400 mb-2">Std Dev</p>
+                  <p className="text-xs uppercase tracking-widest text-gray-500 dark:text-gray-400 mb-2">
+                    Std Dev
+                  </p>
                   <p className="text-2xl font-black text-gray-900 dark:text-white">
                     {distribution.statistics.standardDeviation.toFixed(1)}
                   </p>
                 </div>
 
                 <div className="bg-white dark:bg-gray-900 border-2 border-gray-200 dark:border-gray-700 p-4 rounded-lg text-center">
-                  <p className="text-xs uppercase tracking-widest text-gray-500 dark:text-gray-400 mb-2">Range</p>
+                  <p className="text-xs uppercase tracking-widest text-gray-500 dark:text-gray-400 mb-2">
+                    Range
+                  </p>
                   <p className="text-sm font-black text-gray-900 dark:text-white">
-                    {distribution.statistics.min.toFixed(0)} - {distribution.statistics.max.toFixed(0)}
+                    {distribution.statistics.min.toFixed(0)} -{" "}
+                    {distribution.statistics.max.toFixed(0)}
                   </p>
                 </div>
               </div>
@@ -143,19 +159,36 @@ const CourseGradeDistribution: React.FC<CourseGradeDistributionProps> = ({
                   <BarChart3 size={20} />
                   Grade Distribution
                 </h3>
-                
+
                 <div className="space-y-4">
                   {Object.entries(distribution.distribution)
                     .sort((a, b) => {
-                      const gradeOrder = ['A+', 'A', 'A-', 'B+', 'B', 'B-', 'C+', 'C', 'C-', 'D+', 'D', 'F'];
-                      return gradeOrder.indexOf(a[0]) - gradeOrder.indexOf(b[0]);
+                      const gradeOrder = [
+                        "A+",
+                        "A",
+                        "A-",
+                        "B+",
+                        "B",
+                        "B-",
+                        "C+",
+                        "C",
+                        "C-",
+                        "D+",
+                        "D",
+                        "F",
+                      ];
+                      return (
+                        gradeOrder.indexOf(a[0]) - gradeOrder.indexOf(b[0])
+                      );
                     })
                     .map(([grade, count]) => {
                       const percentage = distribution.percentages[grade] || 0;
                       return (
                         <div key={grade} className="flex items-center gap-4">
                           <div className="w-12 text-center">
-                            <span className="text-lg font-black text-gray-900 dark:text-white">{grade}</span>
+                            <span className="text-lg font-black text-gray-900 dark:text-white">
+                              {grade}
+                            </span>
                           </div>
                           <div className="flex-1">
                             <div className="flex items-center gap-2 mb-1">
@@ -193,19 +226,36 @@ const CourseGradeDistribution: React.FC<CourseGradeDistributionProps> = ({
                   </h3>
                   <div className="space-y-3">
                     {(() => {
-                      const passingGrades = ['A+', 'A', 'A-', 'B+', 'B', 'B-', 'C+', 'C', 'C-', 'D+', 'D'];
-                      const passingCount = Object.entries(distribution.distribution)
+                      const passingGrades = [
+                        "A+",
+                        "A",
+                        "A-",
+                        "B+",
+                        "B",
+                        "B-",
+                        "C+",
+                        "C",
+                        "C-",
+                        "D+",
+                        "D",
+                      ];
+                      const passingCount = Object.entries(
+                        distribution.distribution,
+                      )
                         .filter(([grade]) => passingGrades.includes(grade))
-                        .reduce((sum, [, count]) => sum + count, 0);
-                      const failingCount = distribution.distribution['F'] || 0;
+                        .reduce((sum, [, count]) => sum + (count as number), 0);
+                      const failingCount = distribution.distribution["F"] || 0;
                       const total = passingCount + failingCount;
-                      const passRate = total > 0 ? (passingCount / total) * 100 : 0;
-                      
+                      const passRate =
+                        total > 0 ? (passingCount / total) * 100 : 0;
+
                       return (
                         <>
                           <div>
                             <div className="flex justify-between text-sm mb-1">
-                              <span className="font-bold text-green-600">Passing</span>
+                              <span className="font-bold text-green-600">
+                                Passing
+                              </span>
                               <span className="font-black text-gray-900 dark:text-white">
                                 {passingCount} ({passRate.toFixed(1)}%)
                               </span>
@@ -219,7 +269,9 @@ const CourseGradeDistribution: React.FC<CourseGradeDistributionProps> = ({
                           </div>
                           <div>
                             <div className="flex justify-between text-sm mb-1">
-                              <span className="font-bold text-red-600">Failing</span>
+                              <span className="font-bold text-red-600">
+                                Failing
+                              </span>
                               <span className="font-black text-gray-900 dark:text-white">
                                 {failingCount} ({(100 - passRate).toFixed(1)}%)
                               </span>
@@ -244,17 +296,44 @@ const CourseGradeDistribution: React.FC<CourseGradeDistributionProps> = ({
                   </h3>
                   <div className="space-y-2">
                     {[
-                      { label: 'A Range', grades: ['A+', 'A', 'A-'], color: 'text-green-600' },
-                      { label: 'B Range', grades: ['B+', 'B', 'B-'], color: 'text-blue-600' },
-                      { label: 'C Range', grades: ['C+', 'C', 'C-'], color: 'text-amber-600' },
-                      { label: 'D Range', grades: ['D+', 'D'], color: 'text-orange-600' },
-                      { label: 'F', grades: ['F'], color: 'text-red-600' },
+                      {
+                        label: "A Range",
+                        grades: ["A+", "A", "A-"],
+                        color: "text-green-600",
+                      },
+                      {
+                        label: "B Range",
+                        grades: ["B+", "B", "B-"],
+                        color: "text-blue-600",
+                      },
+                      {
+                        label: "C Range",
+                        grades: ["C+", "C", "C-"],
+                        color: "text-amber-600",
+                      },
+                      {
+                        label: "D Range",
+                        grades: ["D+", "D"],
+                        color: "text-orange-600",
+                      },
+                      { label: "F", grades: ["F"], color: "text-red-600" },
                     ].map(({ label, grades, color }) => {
-                      const count = grades.reduce((sum, g) => sum + (distribution.distribution[g] || 0), 0);
-                      const percentage = grades.reduce((sum, g) => sum + (distribution.percentages[g] || 0), 0);
+                      const count = grades.reduce(
+                        (sum, g) => sum + (distribution.distribution[g] || 0),
+                        0,
+                      );
+                      const percentage = grades.reduce(
+                        (sum, g) => sum + (distribution.percentages[g] || 0),
+                        0,
+                      );
                       return (
-                        <div key={label} className="flex justify-between items-center py-2 border-b border-gray-100 dark:border-gray-800 last:border-0">
-                          <span className={`text-sm font-bold ${color}`}>{label}</span>
+                        <div
+                          key={label}
+                          className="flex justify-between items-center py-2 border-b border-gray-100 dark:border-gray-800 last:border-0"
+                        >
+                          <span className={`text-sm font-bold ${color}`}>
+                            {label}
+                          </span>
                           <span className="text-sm font-black text-gray-900 dark:text-white">
                             {count} ({percentage.toFixed(1)}%)
                           </span>
@@ -273,24 +352,44 @@ const CourseGradeDistribution: React.FC<CourseGradeDistributionProps> = ({
                 </h3>
                 <div className="space-y-2 text-sm text-blue-800 dark:text-blue-300">
                   {distribution.statistics.mean >= 80 && (
-                    <p>✓ Class average is strong at {distribution.statistics.mean.toFixed(1)}%</p>
+                    <p>
+                      ✓ Class average is strong at{" "}
+                      {distribution.statistics.mean.toFixed(1)}%
+                    </p>
                   )}
                   {distribution.statistics.mean < 70 && (
-                    <p>⚠ Class average is below 70% - consider reviewing course difficulty</p>
+                    <p>
+                      ⚠ Class average is below 70% - consider reviewing course
+                      difficulty
+                    </p>
                   )}
                   {distribution.statistics.standardDeviation > 15 && (
-                    <p>⚠ High standard deviation ({distribution.statistics.standardDeviation.toFixed(1)}) indicates varied performance</p>
+                    <p>
+                      ⚠ High standard deviation (
+                      {distribution.statistics.standardDeviation.toFixed(1)})
+                      indicates varied performance
+                    </p>
                   )}
                   {distribution.statistics.standardDeviation < 10 && (
-                    <p>✓ Low standard deviation indicates consistent performance across students</p>
+                    <p>
+                      ✓ Low standard deviation indicates consistent performance
+                      across students
+                    </p>
                   )}
                   {(() => {
-                    const failRate = (distribution.percentages['F'] || 0);
+                    const failRate = distribution.percentages["F"] || 0;
                     if (failRate > 20) {
-                      return <p>⚠ High failure rate ({failRate.toFixed(1)}%) - intervention may be needed</p>;
+                      return (
+                        <p>
+                          ⚠ High failure rate ({failRate.toFixed(1)}%) -
+                          intervention may be needed
+                        </p>
+                      );
                     }
                     if (failRate === 0) {
-                      return <p>✓ No failing grades - excellent class performance</p>;
+                      return (
+                        <p>✓ No failing grades - excellent class performance</p>
+                      );
                     }
                     return null;
                   })()}
@@ -299,7 +398,9 @@ const CourseGradeDistribution: React.FC<CourseGradeDistributionProps> = ({
             </div>
           ) : (
             <div className="flex items-center justify-center h-64">
-              <p className="text-gray-500 dark:text-gray-400">No grade data available</p>
+              <p className="text-gray-500 dark:text-gray-400">
+                No grade data available
+              </p>
             </div>
           )}
         </div>
