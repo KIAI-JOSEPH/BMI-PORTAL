@@ -4,17 +4,17 @@
  * Do not edit unless explicitly instructed.
  */
 
-import React, { useState, useRef, useEffect } from 'react';
-import { 
-  Camera, 
-  X, 
-  RotateCcw, 
-  Flashlight, 
+import React, { useState, useRef, useEffect } from "react";
+import {
+  Camera,
+  X,
+  RotateCcw,
+  Flashlight,
   FlashlightOff,
   Upload,
   AlertCircle,
-  CheckCircle2
-} from 'lucide-react';
+  CheckCircle2,
+} from "lucide-react";
 
 interface QRScannerProps {
   onScan: (data: string) => void;
@@ -24,9 +24,11 @@ interface QRScannerProps {
 
 const QRScanner: React.FC<QRScannerProps> = ({ onScan, onClose, isOpen }) => {
   const [hasPermission, setHasPermission] = useState<boolean | null>(null);
-  const [error, setError] = useState<string>('');
+  const [error, setError] = useState<string>("");
   const [isFlashOn, setIsFlashOn] = useState(false);
-  const [facingMode, setFacingMode] = useState<'user' | 'environment'>('environment');
+  const [facingMode, setFacingMode] = useState<"user" | "environment">(
+    "environment",
+  );
   const [isScanning, setIsScanning] = useState(false);
   const videoRef = useRef<HTMLVideoElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
@@ -47,15 +49,15 @@ const QRScanner: React.FC<QRScannerProps> = ({ onScan, onClose, isOpen }) => {
 
   const startCamera = async () => {
     try {
-      setError('');
-      
+      setError("");
+
       // Request camera permission
       const stream = await navigator.mediaDevices.getUserMedia({
         video: {
           facingMode: facingMode,
           width: { ideal: 1280 },
-          height: { ideal: 720 }
-        }
+          height: { ideal: 720 },
+        },
       });
 
       streamRef.current = stream;
@@ -70,17 +72,16 @@ const QRScanner: React.FC<QRScannerProps> = ({ onScan, onClose, isOpen }) => {
       setTimeout(() => {
         startScanning();
       }, 1000);
-
     } catch (err) {
-      console.error('Camera access error:', err);
+      console.error("Camera access error:", err);
       setHasPermission(false);
-      setError('Unable to access camera. Please check permissions.');
+      setError("Unable to access camera. Please check permissions.");
     }
   };
 
   const stopCamera = () => {
     if (streamRef.current) {
-      streamRef.current.getTracks().forEach(track => track.stop());
+      streamRef.current.getTracks().forEach((track) => track.stop());
       streamRef.current = null;
     }
     setIsScanning(false);
@@ -88,7 +89,7 @@ const QRScanner: React.FC<QRScannerProps> = ({ onScan, onClose, isOpen }) => {
 
   const startScanning = () => {
     if (!videoRef.current || !canvasRef.current) return;
-    
+
     setIsScanning(true);
     scanQRCode();
   };
@@ -98,7 +99,7 @@ const QRScanner: React.FC<QRScannerProps> = ({ onScan, onClose, isOpen }) => {
 
     const video = videoRef.current;
     const canvas = canvasRef.current;
-    const context = canvas.getContext('2d');
+    const context = canvas.getContext("2d");
 
     if (!context || video.readyState !== video.HAVE_ENOUGH_DATA) {
       setTimeout(scanQRCode, 100);
@@ -115,23 +116,24 @@ const QRScanner: React.FC<QRScannerProps> = ({ onScan, onClose, isOpen }) => {
     try {
       // In a real implementation, you would use a QR code library like jsQR
       // For demo purposes, we'll simulate QR detection
-      
+
       // Get image data from canvas
       const imageData = context.getImageData(0, 0, canvas.width, canvas.height);
-      
+
       // Simulate QR code detection (in real app, use jsQR library)
       // const qrCode = jsQR(imageData.data, imageData.width, imageData.height);
-      
+
       // For demo, we'll simulate finding a QR code occasionally
-      if (Math.random() < 0.1) { // 10% chance to simulate detection
-        const mockQRData = 'https://localhost:3000/verify?id=BMI-2024-000101&hash=a1b2c3d4';
+      if (Math.random() < 0.1) {
+        // 10% chance to simulate detection
+        const mockQRData =
+          "https://localhost:3000/verify?id=BMI-2024-000101&hash=a1b2c3d4";
         onScan(mockQRData);
         setIsScanning(false);
         return;
       }
-
     } catch (err) {
-      console.error('QR scanning error:', err);
+      console.error("QR scanning error:", err);
     }
 
     // Continue scanning
@@ -147,19 +149,19 @@ const QRScanner: React.FC<QRScannerProps> = ({ onScan, onClose, isOpen }) => {
       const track = streamRef.current.getVideoTracks()[0];
       const capabilities = track.getCapabilities();
 
-      if (capabilities.torch) {
+      if ((capabilities as any).torch) {
         await track.applyConstraints({
-          advanced: [{ torch: !isFlashOn } as any]
+          advanced: [{ torch: !isFlashOn } as any],
         });
         setIsFlashOn(!isFlashOn);
       }
     } catch (err) {
-      console.error('Flash toggle error:', err);
+      console.error("Flash toggle error:", err);
     }
   };
 
   const switchCamera = () => {
-    setFacingMode(facingMode === 'user' ? 'environment' : 'user');
+    setFacingMode(facingMode === "user" ? "environment" : "user");
   };
 
   const handleFileUpload = (event: React.ChangeEvent<HTMLInputElement>) => {
@@ -173,7 +175,7 @@ const QRScanner: React.FC<QRScannerProps> = ({ onScan, onClose, isOpen }) => {
         if (!canvasRef.current) return;
 
         const canvas = canvasRef.current;
-        const context = canvas.getContext('2d');
+        const context = canvas.getContext("2d");
         if (!context) return;
 
         canvas.width = img.width;
@@ -184,12 +186,13 @@ const QRScanner: React.FC<QRScannerProps> = ({ onScan, onClose, isOpen }) => {
           // In real implementation, use jsQR to decode from image
           // const imageData = context.getImageData(0, 0, canvas.width, canvas.height);
           // const qrCode = jsQR(imageData.data, imageData.width, imageData.height);
-          
+
           // For demo, simulate successful scan
-          const mockQRData = 'https://localhost:3000/verify?id=BMI-2024-000102&hash=b2c3d4e5';
+          const mockQRData =
+            "https://localhost:3000/verify?id=BMI-2024-000102&hash=b2c3d4e5";
           onScan(mockQRData);
         } catch (err) {
-          setError('Could not read QR code from image');
+          setError("Could not read QR code from image");
         }
       };
       img.src = e.target?.result as string;
@@ -230,7 +233,8 @@ const QRScanner: React.FC<QRScannerProps> = ({ onScan, onClose, isOpen }) => {
               <AlertCircle size={48} className="mx-auto text-red-400 mb-4" />
               <p className="text-red-600 mb-4">{error}</p>
               <p className="text-sm text-gray-600 mb-4">
-                Please enable camera access in your browser settings and refresh the page.
+                Please enable camera access in your browser settings and refresh
+                the page.
               </p>
               <button
                 onClick={startCamera}
@@ -251,7 +255,7 @@ const QRScanner: React.FC<QRScannerProps> = ({ onScan, onClose, isOpen }) => {
                   playsInline
                   muted
                 />
-                
+
                 {/* Scanning Overlay */}
                 <div className="absolute inset-0 flex items-center justify-center">
                   <div className="w-48 h-48 border-2 border-[#FFD700] rounded-lg relative">
@@ -259,7 +263,7 @@ const QRScanner: React.FC<QRScannerProps> = ({ onScan, onClose, isOpen }) => {
                     <div className="absolute top-0 right-0 w-6 h-6 border-t-4 border-r-4 border-[#FFD700]"></div>
                     <div className="absolute bottom-0 left-0 w-6 h-6 border-b-4 border-l-4 border-[#FFD700]"></div>
                     <div className="absolute bottom-0 right-0 w-6 h-6 border-b-4 border-r-4 border-[#FFD700]"></div>
-                    
+
                     {isScanning && (
                       <div className="absolute inset-0 flex items-center justify-center">
                         <div className="w-full h-0.5 bg-[#FFD700] animate-pulse"></div>
@@ -291,7 +295,11 @@ const QRScanner: React.FC<QRScannerProps> = ({ onScan, onClose, isOpen }) => {
                   className="p-3 bg-gray-100 hover:bg-gray-200 rounded-lg transition-all"
                   title="Toggle Flash"
                 >
-                  {isFlashOn ? <FlashlightOff size={20} /> : <Flashlight size={20} />}
+                  {isFlashOn ? (
+                    <FlashlightOff size={20} />
+                  ) : (
+                    <Flashlight size={20} />
+                  )}
                 </button>
 
                 <button

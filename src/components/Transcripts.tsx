@@ -2284,14 +2284,14 @@ export const Transcripts: React.FC<TranscriptsProps> = (props) => {
                   <div className="p-8 flex flex-col md:flex-row justify-between items-center gap-8">
                     <div className="flex items-center gap-8">
                       <div
-                        className={`w-28 h-28 rounded-none ${selectedStudent.avatarColor} border-2 border-[#FFD700] p-1 shadow-2xl overflow-hidden`}
+                        className={`w-28 h-28 rounded-none ${selectedStudent.avatar_color} border-2 border-[#FFD700] p-1 shadow-2xl overflow-hidden`}
                       >
                         {selectedStudent.photo ? (
                           <img
                             src={selectedStudent.photo}
                             className="w-full h-full object-cover"
                             style={{
-                              transform: `scale(${selectedStudent.photoZoom})`,
+                              transform: `scale(${selectedStudent.photo_zoom})`,
                             }}
                           />
                         ) : (

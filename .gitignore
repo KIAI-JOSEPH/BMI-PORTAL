@@ -48,6 +48,16 @@ data/pb_data/
 *.db-wal
 *.db-shm
 
+# Runtime log artifacts (committed by mistake)
+build_output.log
+err.log
+out.log
+backend/err.log
+backend/out.log
+
+# Scratch / exploratory workspace
+scratch/
+
 # Certificates and private keys
 *.pem
 *.key

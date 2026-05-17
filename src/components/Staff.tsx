@@ -52,7 +52,7 @@ const Staff: React.FC<StaffProps> = ({ staff, setStaff }) => {
   const [viewMode, setViewMode] = useState<"grid" | "table">("table");
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [imagePreview, setImagePreview] = useState<string | null>(null);
-  const [newStaff, setNewStaff] = useState({
+  const [newStaff, setNewStaff] = useState<Record<string, any>>({
     staff_number: "",
     first_name: "",
     last_name: "",
@@ -61,6 +61,11 @@ const Staff: React.FC<StaffProps> = ({ staff, setStaff }) => {
     status: "Full-time",
     category: "Academic",
     role: "",
+    name: "",
+    department: "",
+    office: "",
+    officeHours: "",
+    specialization: "",
   });
 
   useEffect(() => {
@@ -133,7 +138,7 @@ const Staff: React.FC<StaffProps> = ({ staff, setStaff }) => {
     e.preventDefault();
     if (!newStaff.name || !newStaff.email) return;
 
-    const member: StaffMember = {
+    const member = {
       ...newStaff,
       id: `STF-${Math.floor(Math.random() * 900) + 100}`,
       avatarColor: "bg-indigo-600",
@@ -143,22 +148,25 @@ const Staff: React.FC<StaffProps> = ({ staff, setStaff }) => {
       photo: imagePreview || undefined,
       office: newStaff.office || "N/A",
       officeHours: newStaff.officeHours || "N/A",
-    };
+    } as StaffMember;
 
     setStaff([member, ...staff]);
     setIsModalOpen(false);
     setImagePreview(null);
     setNewStaff({
-      name: "",
-      role: "",
-      department: "School of Theology",
+      staff_number: "",
+      first_name: "",
+      last_name: "",
       email: "",
       phone: "",
       status: "Full-time",
       category: "Academic",
-      specialization: "",
+      role: "",
+      name: "",
+      department: "",
       office: "",
       officeHours: "",
+      specialization: "",
     });
   };
 

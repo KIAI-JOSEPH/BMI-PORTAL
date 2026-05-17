@@ -3,20 +3,35 @@
  * Main component for managing student grades with the new grading system
  */
 
-import React, { useState, useEffect, useMemo } from 'react';
-import { Plus, Search, Filter, Download, Upload, TrendingUp, Eye, User, BarChart2, FileText } from 'lucide-react';
-import GradeEntryModal, { GradeFormData } from './grading/GradeEntryModal';
-import GradeDetailsView from './grading/GradeDetailsView';
-import StudentGradeReport from './grading/StudentGradeReport';
-import CourseGradeDistribution from './grading/CourseGradeDistribution';
-import GradeAppealForm, { AppealFormData } from './grading/GradeAppealForm';
-import GradeAppealReview from './grading/GradeAppealReview';
-import { createGrade, updateGrade, deleteGrade } from '../grading/services/GradeAPIService';
-import { getAcademicRecords } from '../services/academicRecordsService';
-import { Grade } from '../grading/types';
-import { Student, Course } from '../types';
-import { BulkEntryModal } from './BulkEntryModal';
-import { postGradeBatch } from '../services/batchService';
+import React, { useState, useEffect, useMemo } from "react";
+import {
+  Plus,
+  Search,
+  Filter,
+  Download,
+  Upload,
+  TrendingUp,
+  Eye,
+  User,
+  BarChart2,
+  FileText,
+} from "lucide-react";
+import GradeEntryModal, { GradeFormData } from "./grading/GradeEntryModal";
+import GradeDetailsView from "./grading/GradeDetailsView";
+import StudentGradeReport from "./grading/StudentGradeReport";
+import CourseGradeDistribution from "./grading/CourseGradeDistribution";
+import GradeAppealForm, { AppealFormData } from "./grading/GradeAppealForm";
+import GradeAppealReview from "./grading/GradeAppealReview";
+import {
+  createGrade,
+  updateGrade,
+  deleteGrade,
+} from "../grading/services/GradeAPIService";
+import { getAcademicRecords } from "../services/academicRecordsService";
+import { Grade } from "../grading/types";
+import { Student, Course } from "../types";
+import { BulkEntryModal } from "./BulkEntryModal";
+import { postGradeBatch } from "../services/batchService";
 
 interface GradesProps {
   students?: Student[];
@@ -28,18 +43,28 @@ const Grades: React.FC<GradesProps> = ({ students = [], courses = [] }) => {
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [isDetailsOpen, setIsDetailsOpen] = useState(false);
   const [isStudentReportOpen, setIsStudentReportOpen] = useState(false);
-  const [isCourseDistributionOpen, setIsCourseDistributionOpen] = useState(false);
+  const [isCourseDistributionOpen, setIsCourseDistributionOpen] =
+    useState(false);
   const [isAppealFormOpen, setIsAppealFormOpen] = useState(false);
   const [isAppealReviewOpen, setIsAppealReviewOpen] = useState(false);
   const [selectedGradeId, setSelectedGradeId] = useState<string | null>(null);
-  const [selectedGradeForAppeal, setSelectedGradeForAppeal] = useState<Grade | null>(null);
-  const [selectedStudent, setSelectedStudent] = useState<{ id: string; name: string } | null>(null);
-  const [selectedCourse, setSelectedCourse] = useState<{ code: string; name: string; year: string; semester: string } | null>(null);
+  const [selectedGradeForAppeal, setSelectedGradeForAppeal] =
+    useState<Grade | null>(null);
+  const [selectedStudent, setSelectedStudent] = useState<{
+    id: string;
+    name: string;
+  } | null>(null);
+  const [selectedCourse, setSelectedCourse] = useState<{
+    code: string;
+    name: string;
+    year: string;
+    semester: string;
+  } | null>(null);
   const [editingGrade, setEditingGrade] = useState<GradeFormData | null>(null);
   const [isLoading, setIsLoading] = useState(false);
-  const [searchTerm, setSearchTerm] = useState('');
-  const [filterSemester, setFilterSemester] = useState('');
-  const [filterYear, setFilterYear] = useState('');
+  const [searchTerm, setSearchTerm] = useState("");
+  const [filterSemester, setFilterSemester] = useState("");
+  const [filterYear, setFilterYear] = useState("");
   const [bulkOpen, setBulkOpen] = useState(false);
 
   const studentOptions = useMemo(
@@ -47,20 +72,20 @@ const Grades: React.FC<GradesProps> = ({ students = [], courses = [] }) => {
       students.map((s) => ({
         id: s.id,
         name: `${s.first_name} ${s.last_name}`.trim(),
-        admissionNo: s.student_number || s.id,
+        admissionNo: s.student_number ?? s.id,
       })),
-    [students]
+    [students],
   );
 
   const courseOptions = useMemo(
     () =>
       courses.map((c) => ({
         code: c.code,
-        name: c.name,
-        fullName: c.name,
-        credits: c.credits,
+        name: c.title,
+        fullName: c.title,
+        credits: c.credit_hours,
       })),
-    [courses]
+    [courses],
   );
 
   useEffect(() => {
@@ -71,40 +96,40 @@ const Grades: React.FC<GradesProps> = ({ students = [], courses = [] }) => {
     setIsLoading(true);
     try {
       const result = await getAcademicRecords({
-        academicYear: filterYear   || undefined,
-        semester:     filterSemester || undefined,
-        perPage:      500,
+        academicYear: filterYear || undefined,
+        semester: filterSemester || undefined,
+        perPage: 500,
       });
       // Map AcademicRecordFlat → Grade shape expected by GradeEntryModal / table
       const mapped = result.items.map((r) => ({
-        id:           r.id,
-        studentId:    r.studentId,
-        studentName:  r.studentName,
-        admissionNo:  r.studentCode,
-        courseId:     r.courseId,
-        courseCode:   r.courseCode,
-        courseName:   r.courseTitle,
-        credits:      r.creditHours,
+        id: r.id,
+        studentId: r.studentId,
+        studentName: r.studentName,
+        admissionNo: r.studentCode,
+        courseId: r.courseId,
+        courseCode: r.courseCode,
+        courseName: r.courseTitle,
+        credits: r.creditHours,
         numericGrade: r.totalScore,
-        percentage:   r.totalScore,
-        letterGrade:  r.grade,
-        gradePoints:  r.gradePoint,
-        gpa:          r.gradePoint,
+        percentage: r.totalScore,
+        letterGrade: r.grade,
+        gradePoints: r.gradePoint,
+        gpa: r.gradePoint,
         academicYear: r.academicYear,
-        semester:     r.semester,
-        status:       'Verified',
-        isRetake:     false,
-        components:   [],
-        gradingScaleId:   'US_4_0',
-        gradingScaleType: 'US_4_0',
-        createdAt:    '',
-        updatedAt:    '',
-        createdBy:    'system',
-        lastModifiedBy: 'system',
+        semester: r.semester,
+        status: "Verified",
+        isRetake: false,
+        components: [],
+        gradingScaleId: "US_4_0",
+        gradingScaleType: "US_4_0",
+        createdAt: "",
+        updatedAt: "",
+        createdBy: "system",
+        lastModifiedBy: "system",
       })) as any[];
       setGrades(mapped);
     } catch (error) {
-      console.error('Failed to load grades:', error);
+      console.error("Failed to load grades:", error);
     } finally {
       setIsLoading(false);
     }
@@ -120,12 +145,12 @@ const Grades: React.FC<GradesProps> = ({ students = [], courses = [] }) => {
         // Create new grade
         await createGrade(gradeData as any);
       }
-      
+
       await loadGrades();
       setIsModalOpen(false);
       setEditingGrade(null);
     } catch (error) {
-      console.error('Failed to save grade:', error);
+      console.error("Failed to save grade:", error);
     } finally {
       setIsLoading(false);
     }
@@ -150,14 +175,14 @@ const Grades: React.FC<GradesProps> = ({ students = [], courses = [] }) => {
   };
 
   const handleDeleteGrade = async (gradeId: string) => {
-    if (!confirm('Are you sure you want to delete this grade?')) return;
-    
+    if (!confirm("Are you sure you want to delete this grade?")) return;
+
     setIsLoading(true);
     try {
       await deleteGrade(gradeId);
       await loadGrades();
     } catch (error) {
-      console.error('Failed to delete grade:', error);
+      console.error("Failed to delete grade:", error);
     } finally {
       setIsLoading(false);
     }
@@ -173,33 +198,43 @@ const Grades: React.FC<GradesProps> = ({ students = [], courses = [] }) => {
     setIsStudentReportOpen(true);
   };
 
-  const handleViewCourseDistribution = (courseCode: string, courseName: string, year: string, semester: string) => {
+  const handleViewCourseDistribution = (
+    courseCode: string,
+    courseName: string,
+    year: string,
+    semester: string,
+  ) => {
     setSelectedCourse({ code: courseCode, name: courseName, year, semester });
     setIsCourseDistributionOpen(true);
   };
 
   const handleSubmitAppeal = async (appealData: AppealFormData) => {
     // TODO: Implement API call to submit appeal
-    console.log('Submitting appeal:', appealData);
+    console.log("Submitting appeal:", appealData);
     // await submitGradeAppeal(appealData);
   };
 
-  const handleApproveAppeal = async (appealId: string, revisedGrade: string, notes: string) => {
+  const handleApproveAppeal = async (
+    appealId: string,
+    revisedGrade: string,
+    notes: string,
+  ) => {
     // TODO: Implement API call to approve appeal
-    console.log('Approving appeal:', { appealId, revisedGrade, notes });
+    console.log("Approving appeal:", { appealId, revisedGrade, notes });
     // await approveGradeAppeal(appealId, revisedGrade, notes);
   };
 
   const handleDenyAppeal = async (appealId: string, notes: string) => {
     // TODO: Implement API call to deny appeal
-    console.log('Denying appeal:', { appealId, notes });
+    console.log("Denying appeal:", { appealId, notes });
     // await denyGradeAppeal(appealId, notes);
   };
 
-  const filteredGrades = grades.filter(grade =>
-    grade.studentName.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    grade.courseCode.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    grade.courseName.toLowerCase().includes(searchTerm.toLowerCase())
+  const filteredGrades = grades.filter(
+    (grade) =>
+      grade.studentName.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      grade.courseCode.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      grade.courseName.toLowerCase().includes(searchTerm.toLowerCase()),
   );
 
   return (
@@ -239,7 +274,10 @@ const Grades: React.FC<GradesProps> = ({ students = [], courses = [] }) => {
       {/* Filters */}
       <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
         <div className="relative">
-          <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400" size={20} />
+          <Search
+            className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400"
+            size={20}
+          />
           <input
             type="text"
             placeholder="Search students or courses..."
@@ -248,7 +286,7 @@ const Grades: React.FC<GradesProps> = ({ students = [], courses = [] }) => {
             className="w-full pl-10 pr-4 py-3 bg-white dark:bg-gray-800 border-2 border-gray-200 dark:border-gray-700 rounded-none text-sm font-bold outline-none focus:border-[#4B0082] dark:text-white"
           />
         </div>
-        
+
         <select
           value={filterYear}
           onChange={(e) => setFilterYear(e.target.value)}
@@ -287,14 +325,18 @@ const Grades: React.FC<GradesProps> = ({ students = [], courses = [] }) => {
         <button
           onClick={() => {
             // Get unique students from grades
-            const uniqueStudents = Array.from(new Set(grades.map(g => g.studentId)))
-              .map(id => {
-                const grade = grades.find(g => g.studentId === id);
-                return { id, name: grade?.studentName || '' };
-              });
-            
+            const uniqueStudents = Array.from(
+              new Set(grades.map((g) => g.studentId)),
+            ).map((id) => {
+              const grade = grades.find((g) => g.studentId === id);
+              return { id, name: grade?.studentName || "" };
+            });
+
             if (uniqueStudents.length > 0) {
-              handleViewStudentReport(String(uniqueStudents[0].id), uniqueStudents[0].name);
+              handleViewStudentReport(
+                String(uniqueStudents[0].id),
+                uniqueStudents[0].name,
+              );
             }
           }}
           className="px-6 py-3 bg-blue-600 text-white font-black text-xs uppercase tracking-widest hover:bg-blue-700 transition-all flex items-center gap-2"
@@ -305,20 +347,26 @@ const Grades: React.FC<GradesProps> = ({ students = [], courses = [] }) => {
         <button
           onClick={() => {
             // Get unique courses from grades
-            const uniqueCourses = Array.from(new Set(grades.map(g => g.courseCode)))
-              .map(code => {
-                const grade = grades.find(g => g.courseCode === code);
-                return {
-                  code,
-                  name: grade?.courseName || '',
-                  year: grade?.academicYear || '',
-                  semester: grade?.semester || ''
-                };
-              });
-            
+            const uniqueCourses = Array.from(
+              new Set(grades.map((g) => g.courseCode)),
+            ).map((code) => {
+              const grade = grades.find((g) => g.courseCode === code);
+              return {
+                code,
+                name: grade?.courseName || "",
+                year: grade?.academicYear || "",
+                semester: grade?.semester || "",
+              };
+            });
+
             if (uniqueCourses.length > 0) {
               const course = uniqueCourses[0];
-              handleViewCourseDistribution(String(course.code), String(course.name), String(course.year), String(course.semester));
+              handleViewCourseDistribution(
+                String(course.code),
+                String(course.name),
+                String(course.year),
+                String(course.semester),
+              );
             }
           }}
           className="px-6 py-3 bg-emerald-600 text-white font-black text-xs uppercase tracking-widest hover:bg-emerald-700 transition-all flex items-center gap-2"
@@ -338,7 +386,10 @@ const Grades: React.FC<GradesProps> = ({ students = [], courses = [] }) => {
       {/* Filters */}
       <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
         <div className="relative">
-          <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400" size={20} />
+          <Search
+            className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400"
+            size={20}
+          />
           <input
             type="text"
             placeholder="Search students or courses..."
@@ -347,7 +398,7 @@ const Grades: React.FC<GradesProps> = ({ students = [], courses = [] }) => {
             className="w-full pl-10 pr-4 py-3 bg-white dark:bg-gray-800 border-2 border-gray-200 dark:border-gray-700 rounded-none text-sm font-bold outline-none focus:border-[#4B0082] dark:text-white"
           />
         </div>
-        
+
         <select
           value={filterYear}
           onChange={(e) => setFilterYear(e.target.value)}
@@ -387,36 +438,66 @@ const Grades: React.FC<GradesProps> = ({ students = [], courses = [] }) => {
           <table className="w-full">
             <thead className="bg-gray-900 text-white">
               <tr>
-                <th className="px-6 py-4 text-left text-xs font-black uppercase tracking-widest">Student</th>
-                <th className="px-6 py-4 text-left text-xs font-black uppercase tracking-widest">Course</th>
-                <th className="px-6 py-4 text-left text-xs font-black uppercase tracking-widest">Semester</th>
-                <th className="px-6 py-4 text-center text-xs font-black uppercase tracking-widest">Grade</th>
-                <th className="px-6 py-4 text-center text-xs font-black uppercase tracking-widest">GPA</th>
-                <th className="px-6 py-4 text-center text-xs font-black uppercase tracking-widest">Status</th>
-                <th className="px-6 py-4 text-center text-xs font-black uppercase tracking-widest">Actions</th>
+                <th className="px-6 py-4 text-left text-xs font-black uppercase tracking-widest">
+                  Student
+                </th>
+                <th className="px-6 py-4 text-left text-xs font-black uppercase tracking-widest">
+                  Course
+                </th>
+                <th className="px-6 py-4 text-left text-xs font-black uppercase tracking-widest">
+                  Semester
+                </th>
+                <th className="px-6 py-4 text-center text-xs font-black uppercase tracking-widest">
+                  Grade
+                </th>
+                <th className="px-6 py-4 text-center text-xs font-black uppercase tracking-widest">
+                  GPA
+                </th>
+                <th className="px-6 py-4 text-center text-xs font-black uppercase tracking-widest">
+                  Status
+                </th>
+                <th className="px-6 py-4 text-center text-xs font-black uppercase tracking-widest">
+                  Actions
+                </th>
               </tr>
             </thead>
             <tbody className="divide-y divide-gray-200 dark:divide-gray-700">
               {filteredGrades.length === 0 ? (
                 <tr>
-                  <td colSpan={7} className="px-6 py-12 text-center text-gray-500 dark:text-gray-400">
+                  <td
+                    colSpan={7}
+                    className="px-6 py-12 text-center text-gray-500 dark:text-gray-400"
+                  >
                     <p className="text-sm font-bold">No grades found</p>
-                    <p className="text-xs mt-1">Add your first grade to get started</p>
+                    <p className="text-xs mt-1">
+                      Add your first grade to get started
+                    </p>
                   </td>
                 </tr>
               ) : (
                 filteredGrades.map((grade) => (
-                  <tr key={grade.id} className="hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors">
+                  <tr
+                    key={grade.id}
+                    className="hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors"
+                  >
                     <td className="px-6 py-4">
                       <div>
-                        <p className="text-sm font-bold text-gray-900 dark:text-white">{grade.studentName}</p>
-                        <p className="text-xs text-gray-500 dark:text-gray-400">{grade.admissionNo}</p>
+                        <p className="text-sm font-bold text-gray-900 dark:text-white">
+                          {grade.studentName}
+                        </p>
+                        <p className="text-xs text-gray-500 dark:text-gray-400">
+                          {grade.admissionNo}
+                        </p>
                       </div>
                     </td>
                     <td className="px-6 py-4">
                       <div>
-                        <p className="text-sm font-bold text-gray-900 dark:text-white">{grade.courseCode}</p>
-                        <p className="text-xs text-gray-500 dark:text-gray-400">{grade.courseName}</p>
+                        <p className="text-sm font-bold text-gray-900 dark:text-white">
+                          {grade.courseCode}
+                        </p>
+                        <p className="text-xs text-gray-500 dark:text-gray-400">
+                          {grade.courseName}
+                        </p>
                       </div>
                     </td>
                     <td className="px-6 py-4">
@@ -426,13 +507,19 @@ const Grades: React.FC<GradesProps> = ({ students = [], courses = [] }) => {
                     </td>
                     <td className="px-6 py-4 text-center">
                       <div className="flex flex-col items-center">
-                        <span className={`text-2xl font-black ${
-                          grade.letterGrade.startsWith('A') ? 'text-emerald-600' :
-                          grade.letterGrade.startsWith('B') ? 'text-blue-600' :
-                          grade.letterGrade.startsWith('C') ? 'text-amber-600' :
-                          grade.letterGrade.startsWith('D') ? 'text-orange-600' :
-                          'text-red-600'
-                        }`}>
+                        <span
+                          className={`text-2xl font-black ${
+                            grade.letterGrade.startsWith("A")
+                              ? "text-emerald-600"
+                              : grade.letterGrade.startsWith("B")
+                                ? "text-blue-600"
+                                : grade.letterGrade.startsWith("C")
+                                  ? "text-amber-600"
+                                  : grade.letterGrade.startsWith("D")
+                                    ? "text-orange-600"
+                                    : "text-red-600"
+                          }`}
+                        >
                           {grade.letterGrade}
                         </span>
                         <span className="text-xs text-gray-500 dark:text-gray-400">
@@ -446,12 +533,17 @@ const Grades: React.FC<GradesProps> = ({ students = [], courses = [] }) => {
                       </span>
                     </td>
                     <td className="px-6 py-4 text-center">
-                      <span className={`px-3 py-1 text-xs font-black uppercase tracking-widest ${
-                        grade.status === 'Finalized' ? 'bg-green-100 text-green-800 dark:bg-green-900/20 dark:text-green-400' :
-                        grade.status === 'Verified' ? 'bg-blue-100 text-blue-800 dark:bg-blue-900/20 dark:text-blue-400' :
-                        grade.status === 'Provisional' ? 'bg-amber-100 text-amber-800 dark:bg-amber-900/20 dark:text-amber-400' :
-                        'bg-gray-100 text-gray-800 dark:bg-gray-900/20 dark:text-gray-400'
-                      }`}>
+                      <span
+                        className={`px-3 py-1 text-xs font-black uppercase tracking-widest ${
+                          grade.status === "Finalized"
+                            ? "bg-green-100 text-green-800 dark:bg-green-900/20 dark:text-green-400"
+                            : grade.status === "Verified"
+                              ? "bg-blue-100 text-blue-800 dark:bg-blue-900/20 dark:text-blue-400"
+                              : grade.status === "Provisional"
+                                ? "bg-amber-100 text-amber-800 dark:bg-amber-900/20 dark:text-amber-400"
+                                : "bg-gray-100 text-gray-800 dark:bg-gray-900/20 dark:text-gray-400"
+                        }`}
+                      >
                         {grade.status}
                       </span>
                     </td>
@@ -569,16 +661,18 @@ const Grades: React.FC<GradesProps> = ({ students = [], courses = [] }) => {
         sampleLine='{"studentId":"STUDENT_ID_OR_NUMBER","courseCode":"THEO101","academicYear":"2024-2025","semester":"Fall","percentage":88}'
         onSubmit={async (lines) => {
           try {
-            const items = lines.map((l) => JSON.parse(l) as Record<string, unknown>);
+            const items = lines.map(
+              (l) => JSON.parse(l) as Record<string, unknown>,
+            );
             const r = await postGradeBatch(items);
             await loadGrades();
             const ok = (r.data?.failureCount ?? 0) === 0;
             return {
               ok,
-              message: `Created: ${r.data?.successCount ?? 0}, failed: ${r.data?.failureCount ?? 0}. ${(r.data?.errors || []).map((e) => `#${e.index}: ${e.error}`).join(' | ')}`,
+              message: `Created: ${r.data?.successCount ?? 0}, failed: ${r.data?.failureCount ?? 0}. ${(r.data?.errors || []).map((e) => `#${e.index}: ${e.error}`).join(" | ")}`,
             };
           } catch {
-            return { ok: false, message: 'Invalid JSON on one or more lines.' };
+            return { ok: false, message: "Invalid JSON on one or more lines." };
           }
         }}
       />

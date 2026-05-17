@@ -135,7 +135,7 @@ export const IDCard: React.FC<IDCardProps> = ({ students, logo }) => {
       const card = await documentService.createDocument<StudentIDCardType>(
         "id_card",
         student.id,
-        cardDataTyped,
+        cardDataTyped as any,
         {
           createdBy: "admin",
         },
@@ -470,7 +470,9 @@ export const IDCard: React.FC<IDCardProps> = ({ students, logo }) => {
                           Emergency Contact
                         </p>
                         <p className="text-sm font-semibold">
-                          {generatedCard.emergencyContact}
+                          {typeof generatedCard.emergencyContact === "string"
+                            ? generatedCard.emergencyContact
+                            : generatedCard.emergencyContact?.phone}
                         </p>
                       </div>
 

@@ -123,27 +123,32 @@ export interface TranscriptCourse {
 export interface StudentIDCard extends BaseDocument {
   type: "id_card";
   cardNumber?: string;
-  photoUrl: string;
-  firstName: string;
-  lastName: string;
+  photoUrl?: string;
+  firstName?: string;
+  lastName?: string;
   middleName?: string;
   studentId: string;
-  faculty: string;
-  department: string;
-  program: string;
-  academicLevel: string;
+  faculty?: string;
+  department?: string;
+  program?: string;
+  academicLevel?: string;
   bloodType?: string;
-  issueDate: string;
-  expiryDate: string;
+  bloodGroup?: string;
+  issueDate?: string;
+  expiryDate?: string;
   emergencyContact?: {
     name: string;
     phone: string;
     relationship: string;
   };
-  barcodeData: string;
+  barcodeData?: string;
   libraryNumber?: string;
   hostelName?: string;
   roomNumber?: string;
+  // ── Fields used by IDCard component ──
+  studentNumber?: string;
+  // Note: studentName is inherited as required from BaseDocument
+  student_number?: string;
 }
 
 /** Letter of Admission */
@@ -185,6 +190,7 @@ export interface GoodStandingLetter extends BaseDocument {
   letterBody: string;
   authorizedBy: string;
   authorizedTitle: string;
+  standingType?: string;
 }
 
 /** Course Registration Card */
@@ -337,6 +343,15 @@ export interface DocumentVerificationResult {
   };
   error?: string;
   code?: string;
+  // ── Flattened convenience fields used by DocumentVerifier component ──
+  documentType?: string;
+  serialNumber?: string;
+  status?: string;
+  issuedAt?: string;
+  verifiedAt?: string;
+  hashVerified?: boolean;
+  blockchainAnchor?: string;
+  verificationCount?: number;
 }
 
 /** Document Statistics */

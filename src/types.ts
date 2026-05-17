@@ -36,6 +36,13 @@ export interface Student {
   department?: string;
   /** Cumulative GPA computed from academic records */
   gpa?: number;
+  // ── Extra fields used by various components ──
+  /** Derived admission year (e.g. '2024') */
+  admissionYear?: string;
+  /** Enrolment/student number (alternate field name) */
+  student_number?: string;
+  /** Career pathway tag */
+  careerPath?: string;
 }
 
 /** Campus entity returned by the campuses API */
@@ -75,6 +82,17 @@ export interface StaffMember {
   expand?: {
     campus_id?: { name: string };
   };
+  // ── Additional fields used by some components ──
+  department?: string;
+  specialization?: string;
+  office?: string;
+  officeHours?: string;
+  photo?: string;
+  joinDate?: string;
+  /** Legacy: single `name` field, prefer first_name + last_name */
+  name?: string;
+  /** UI-assigned colour class */
+  avatarColor?: string;
 }
 
 export interface Transaction {
@@ -94,6 +112,21 @@ export interface Course {
   category?: string;
   credit_hours: number;
   module_id?: string;
+  // ── Additional fields used by some components ──
+  /** Alias for `title` used in some components */
+  name?: string;
+  /** Alias for `credit_hours` used in some components */
+  credits?: number;
+  faculty?: string;
+  department?: string;
+  /** Undergraduate | Postgraduate | Diploma */
+  level?: string;
+  description?: string;
+  syllabus?: string;
+  status?: string;
+  /** Contact hours per week (defaults to credit_hours * 3) */
+  hours?: number;
+  instructor?: string;
 }
 
 export interface LibraryItem {
