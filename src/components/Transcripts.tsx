@@ -25,6 +25,8 @@ import {
 import { Grade } from '../services/gradeService';
 import { getPrograms } from '../services/catalogService';
 import { getHtml2Pdf } from '../services/pdfService';
+import { DocumentService } from '../services/documentService';
+import type { DocumentSecurityFeatures } from '../types/documents';
 import { useDataStore } from '../stores/dataStore';
 import { useUIStore } from '../stores/uiStore';
 
@@ -102,6 +104,7 @@ export const Transcripts: React.FC<TranscriptsProps> = (props) => {
   const [editorMode, setEditorMode] = useState(false);
   const [selectedBlock, setSelectedBlock] = useState<EditableBlockKey | null>(null);
   const [templateLayout, setTemplateLayout] = useState<TranscriptTemplateLayout>(DEFAULT_TRANSCRIPT_TEMPLATE_LAYOUT);
+  const [securityData, setSecurityData] = useState<DocumentSecurityFeatures | null>(null);
   const dragRef = React.useRef<{ key: EditableBlockKey; startX: number; startY: number; originX: number; originY: number } | null>(null);
 
   const terms = ['Fall 2022', 'Spring 2023', 'Fall 2023', 'Spring 2024'];
@@ -207,6 +210,41 @@ export const Transcripts: React.FC<TranscriptsProps> = (props) => {
 
     fetchGrades();
   }, [selectedStudent]);
+
+  // Fetch or generate security features when a transcript is generated
+  useEffect(() => {
+    let active = true;
+    if (!showTranscript || !selectedStudent) {
+      setSecurityData(null);
+      return;
+    }
+
+    const initSecurity = async () => {
+      const docService = DocumentService.getInstance();
+      try {
+        const existingDocs = await docService.getDocumentsByStudent(selectedStudent.id);
+        let doc = existingDocs.find(
+          (d) => d.type === 'transcript' && d.status === 'issued'
+        );
+
+        if (!doc) {
+          doc = await docService.createDocument('transcript', selectedStudent.id, {
+            studentName: `${selectedStudent.first_name} ${selectedStudent.last_name}`,
+            transcriptType,
+            term: selectedTerm,
+          });
+        }
+        if (active) {
+          setSecurityData(doc.security);
+        }
+      } catch (err) {
+        console.error('[Transcripts] Error initializing security data:', err);
+      }
+    };
+
+    initSecurity();
+    return () => { active = false; };
+  }, [showTranscript, selectedStudent, transcriptType, selectedTerm]);
 
   const handleZoomIn = () => setZoomLevel(prev => prev + 10);
   const handleZoomOut = () => setZoomLevel(prev => Math.max(prev - 10, 10));
@@ -1316,7 +1354,7 @@ export const Transcripts: React.FC<TranscriptsProps> = (props) => {
                       children: [new Paragraph({
                         children: [
                           new TextRun({ text: 'Issued: ', size: 16, bold: true, color: '666666', font: 'Arial' }),
-                          new TextRun({ text: '1st May 2026', size: 16, font: 'Arial' }),
+                          new TextRun({ text: securityData?.issuedAt ? new Date(securityData.issuedAt).toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' }) : '1st May 2026', size: 16, font: 'Arial' }),
                         ],
                       })],
                     }),
@@ -1324,7 +1362,7 @@ export const Transcripts: React.FC<TranscriptsProps> = (props) => {
                       children: [new Paragraph({
                         children: [
                           new TextRun({ text: 'ID: ', size: 16, bold: true, color: '666666', font: 'Arial' }),
-                          new TextRun({ text: `BMI-TR-${selectedStudent.id.split('-').pop()}`, size: 16, font: 'Arial' }),
+                          new TextRun({ text: securityData?.serialNumber || `BMI-TR-${selectedStudent.id.split('-').pop()}`, size: 16, font: 'Arial' }),
                         ],
                       })],
                     }),
@@ -1342,7 +1380,7 @@ export const Transcripts: React.FC<TranscriptsProps> = (props) => {
             }),
             
             new Paragraph({
-              text: `Document ID: ${selectedStudent.id}-${transcriptType.toUpperCase()}-${new Date().getFullYear()}`,
+              text: `Document ID: ${securityData?.serialNumber || `${selectedStudent.id}-${transcriptType.toUpperCase()}-${new Date().getFullYear()}`}`,
               alignment: AlignmentType.CENTER,
               spacing: { before: 200 },
               border: {
@@ -1464,7 +1502,7 @@ export const Transcripts: React.FC<TranscriptsProps> = (props) => {
   
   <!-- Top microtext security line -->
   <text x="${width/2}" y="15" font-family="Arial, sans-serif" font-size="5" fill="#999999" text-anchor="middle" opacity="0.6">
-    BMI UNIVERSITY OFFICIAL ACADEMIC TRANSCRIPT • SECURITY VALIDATED RECORD • DO NOT REPRODUCE • AUTHENTIC DOCUMENT
+    BMI UNIVERSITY OFFICIAL ACADEMIC TRANSCRIPT • SECURITY VALIDATED RECORD • DO NOT REPRODUCE • AUTHENTIC DOCUMENT • ID: ${securityData?.serialNumber || 'PENDING'}
   </text>
   
   <!-- Logo -->
@@ -1577,8 +1615,8 @@ export const Transcripts: React.FC<TranscriptsProps> = (props) => {
   <!-- Footer -->
   <line x1="60" y1="${footerY}" x2="${width - 60}" y2="${footerY}" stroke="#C9A84C" stroke-width="1"/>
   
-  <text x="60" y="${footerY + 20}" font-family="Arial, sans-serif" font-size="8" fill="#6B7280">Issued: ${new Date().toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' })}</text>
-  <text x="${width/2}" y="${footerY + 20}" font-family="Courier New, monospace" font-size="8" fill="#6B7280" text-anchor="middle">ID: ${selectedStudent.id}-${transcriptType.toUpperCase()}-${new Date().getFullYear()}</text>
+  <text x="60" y="${footerY + 20}" font-family="Arial, sans-serif" font-size="8" fill="#6B7280">Issued: ${securityData?.issuedAt ? new Date(securityData.issuedAt).toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' }) : new Date().toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' })}</text>
+  <text x="${width/2}" y="${footerY + 20}" font-family="Courier New, monospace" font-size="8" fill="#6B7280" text-anchor="middle">ID: ${securityData?.serialNumber || `${selectedStudent.id}-${transcriptType.toUpperCase()}-${new Date().getFullYear()}`}</text>
   <text x="${width - 60}" y="${footerY + 20}" font-family="Arial, sans-serif" font-size="8" fill="#6B7280" text-anchor="end">Verified Archive</text>
   
   <!-- Document ID with gold border -->
@@ -1589,7 +1627,7 @@ export const Transcripts: React.FC<TranscriptsProps> = (props) => {
   
   <!-- Bottom microtext security line -->
   <text x="${width/2}" y="${height - 10}" font-family="Arial, sans-serif" font-size="5" fill="#999999" text-anchor="middle" opacity="0.6">
-    OFFICIAL TRANSCRIPT • TAMPER-EVIDENT SECURITY FEATURES • VERIFY AT BMI.EDU/VERIFY
+    OFFICIAL TRANSCRIPT • TAMPER-EVIDENT SECURITY FEATURES • VERIFY AT ${securityData?.verificationUrl || 'BMI.EDU/VERIFY'}
   </text>
 </svg>`;
 
@@ -2048,7 +2086,7 @@ export const Transcripts: React.FC<TranscriptsProps> = (props) => {
                    onClick={() => editorMode && setSelectedBlock('microTop')}
                    onMouseDown={(e) => startBlockDrag('microTop', e)}
                  >
-                   <MicroText text="BMI UNIVERSITY OFFICIAL ACADEMIC TRANSCRIPT • SECURITY VALIDATED RECORD • DO NOT REPRODUCE • UV PROTECTED INK • ANTI-FORGERY" />
+                   <MicroText text={`BMI UNIVERSITY OFFICIAL ACADEMIC TRANSCRIPT • SECURITY VALIDATED RECORD • DO NOT REPRODUCE • UV PROTECTED INK • ANTI-FORGERY • ID: ${securityData?.serialNumber || 'PENDING'}`} />
                  </div>
 
                  {/* Seal — top left, mirrors the QR code on the right */}
@@ -2063,11 +2101,19 @@ export const Transcripts: React.FC<TranscriptsProps> = (props) => {
 
                  <div className="absolute top-8 right-8 flex flex-col items-center gap-1 group z-20">
                     <div className="p-1 bg-white border border-gray-900 shadow-sm relative">
-                       <img 
-                          src={`https://api.qrserver.com/v1/create-qr-code/?size=150x150&ecc=H&margin=1&data=${encodeURIComponent(`BMI UNIVERSITY - OFFICIAL ACADEMIC RECORD\nSTUDENT: ${selectedStudent.first_name} ${selectedStudent.last_name}\nID: ${selectedStudent.id}\nSTATUS: VERIFIED`)}`}
-                          className="w-16 h-16"
-                          alt="Security QR"
-                       />
+                       {securityData?.qrCodeDataUrl ? (
+                         <img 
+                            src={securityData.qrCodeDataUrl}
+                            className="w-16 h-16"
+                            alt="Security QR"
+                         />
+                       ) : (
+                         <img 
+                            src={`https://api.qrserver.com/v1/create-qr-code/?size=150x150&ecc=H&margin=1&data=${encodeURIComponent(`BMI UNIVERSITY - OFFICIAL ACADEMIC RECORD\nSTUDENT: ${selectedStudent.first_name} ${selectedStudent.last_name}\nID: ${selectedStudent.id}\nSTATUS: VERIFIED`)}`}
+                            className="w-16 h-16"
+                            alt="Security QR"
+                         />
+                       )}
                     </div>
                  </div>
 
@@ -2094,68 +2140,68 @@ export const Transcripts: React.FC<TranscriptsProps> = (props) => {
                  </div>
                  
                  <div
-                   className={`mb-4 px-4 relative z-10 ${editorOutlineClass('studentName')}`}
-                   style={getBlockStyle('studentName')}
-                   onClick={() => editorMode && setSelectedBlock('studentName')}
-                   onMouseDown={(e) => startBlockDrag('studentName', e)}
-                 >
-                    <div className="border-y border-gray-300 py-2.5 flex items-center">
-                      <span className="text-[8px] font-sans font-black text-gray-400 uppercase tracking-widest absolute left-4">STUDENT NAME:</span>
-                      <div className="w-full text-center">
-                        <span className="text-[19px] leading-none font-serif font-bold text-[#4B0082] uppercase tracking-[0.15em]">
-                          {selectedStudent.full_name || `${selectedStudent.first_name} ${selectedStudent.last_name}`}
-                        </span>
-                      </div>
-                    </div>
-                 </div>
+                    className={`mb-1.5 px-4 relative z-10 ${editorOutlineClass('studentName')}`}
+                    style={getBlockStyle('studentName')}
+                    onClick={() => editorMode && setSelectedBlock('studentName')}
+                    onMouseDown={(e) => startBlockDrag('studentName', e)}
+                  >
+                     <div className="border-y border-gray-300 py-1 flex items-center">
+                       <span className="text-[8px] font-montserrat font-medium text-gray-400 uppercase tracking-widest absolute left-4">STUDENT NAME:</span>
+                       <div className="w-full text-center">
+                         <span className="text-[19px] leading-none font-serif font-bold text-[#4B0082] uppercase tracking-[0.15em]">
+                           {selectedStudent.full_name || `${selectedStudent.first_name} ${selectedStudent.last_name}`}
+                         </span>
+                       </div>
+                     </div>
+                  </div>
 
-                 <div
-                   className={`grid grid-cols-2 gap-x-12 gap-y-3 mb-4 text-[9px] font-bold relative z-10 px-4 ${editorOutlineClass('studentMeta')}`}
-                   style={getBlockStyle('studentMeta')}
-                   onClick={() => editorMode && setSelectedBlock('studentMeta')}
-                   onMouseDown={(e) => startBlockDrag('studentMeta', e)}
-                 >
-                    {/* Left Column */}
-                    <div className="flex flex-col gap-2.5">
-                       <div className="flex justify-between border-b border-gray-100 pb-1">
-                          <span className="text-gray-400 font-sans text-[8px] uppercase tracking-wider">STUDENT ID:</span>
-                          <span className="uppercase text-gray-950 font-black">{selectedStudent.admission_no || selectedStudent.student_code || selectedStudent.id}</span>
-                       </div>
-                       <div className="flex justify-between border-b border-gray-100 pb-1">
-                          <span className="text-gray-400 font-sans text-[8px] uppercase tracking-wider">SCHOOL:</span>
-                          <span className="uppercase text-gray-950 font-black">{selectedStudent.faculty || "SCHOOL OF THEOLOGY"}</span>
-                       </div>
-                       <div className="flex justify-between border-b border-gray-100 pb-1">
-                          <span className="text-gray-400 font-sans text-[8px] uppercase tracking-wider">PROGRAM:</span>
-                          <span className="uppercase text-gray-950 font-black">DIPLOMA IN CHRISTIAN MINISTRY AND THEOLOGY</span>
-                       </div>
-                       <div className="flex justify-between border-b border-gray-100 pb-1">
-                          <span className="text-gray-400 font-sans text-[8px] uppercase tracking-wider">ADMISSION DATE:</span>
-                          <span className="uppercase text-gray-950 font-black">4TH FEB 2024</span>
-                       </div>
-                    </div>
-                    {/* Right Column */}
-                    <div className="flex flex-col gap-2.5">
-                       <div className="flex justify-between border-b border-gray-100 pb-1">
-                          <span className="text-gray-400 font-sans text-[8px] uppercase tracking-wider">AWARD TYPE:</span>
-                          <span className="uppercase text-gray-950 font-black">DIPLOMA</span>
-                       </div>
-                       <div className="flex justify-between border-b border-gray-100 pb-1">
-                          <span className="text-gray-400 font-sans text-[8px] uppercase tracking-wider">DEPARTMENT:</span>
-                          <span className="uppercase text-gray-950 font-black">{selectedStudent.department || "DEPARTMENT OF PRACTICAL THEOLOGY"}</span>
-                       </div>
-                       <div className="flex justify-between border-b border-gray-100 pb-1">
-                          <span className="text-gray-400 font-sans text-[8px] uppercase tracking-wider">MODE OF STUDY:</span>
-                          <span className="uppercase text-gray-950 font-black">FULL-TIME</span>
-                       </div>
-                       <div className="flex justify-between border-b border-gray-100 pb-1">
-                          <span className="text-gray-400 font-sans text-[8px] uppercase tracking-wider">GRADUATION DATE:</span>
-                          <span className="uppercase text-gray-950 font-black">1ST MAY 2026</span>
-                       </div>
-                    </div>
-                 </div>
+                  <div
+                    className={`grid grid-cols-2 gap-x-12 gap-y-1 mb-2 text-[9px] relative z-10 px-4 ${editorOutlineClass('studentMeta')}`}
+                    style={getBlockStyle('studentMeta')}
+                    onClick={() => editorMode && setSelectedBlock('studentMeta')}
+                    onMouseDown={(e) => startBlockDrag('studentMeta', e)}
+                  >
+                     {/* Left Column */}
+                     <div className="flex flex-col gap-1">
+                        <div className="flex justify-between border-b border-gray-100 pb-0.5">
+                           <span className="text-gray-400 font-montserrat text-[8px] uppercase tracking-wider font-medium">STUDENT ID:</span>
+                           <span className="uppercase text-gray-950 font-montserrat font-bold tracking-wide">{selectedStudent.admission_no || selectedStudent.student_code || selectedStudent.id}</span>
+                        </div>
+                        <div className="flex justify-between border-b border-gray-100 pb-0.5">
+                           <span className="text-gray-400 font-montserrat text-[8px] uppercase tracking-wider font-medium">SCHOOL:</span>
+                           <span className="uppercase text-gray-950 font-montserrat font-bold tracking-wide">{selectedStudent.faculty || "SCHOOL OF THEOLOGY"}</span>
+                        </div>
+                        <div className="flex justify-between border-b border-gray-100 pb-0.5">
+                           <span className="text-gray-400 font-montserrat text-[8px] uppercase tracking-wider font-medium">PROGRAM:</span>
+                           <span className="uppercase text-gray-950 font-montserrat font-bold tracking-wide">DIPLOMA IN CHRISTIAN MINISTRY AND THEOLOGY</span>
+                        </div>
+                        <div className="flex justify-between border-b border-gray-100 pb-0.5">
+                           <span className="text-gray-400 font-montserrat text-[8px] uppercase tracking-wider font-medium">ADMISSION DATE:</span>
+                           <span className="uppercase text-gray-950 font-montserrat font-bold tracking-wide">4TH FEB 2024</span>
+                        </div>
+                     </div>
+                     {/* Right Column */}
+                     <div className="flex flex-col gap-1">
+                        <div className="flex justify-between border-b border-gray-100 pb-0.5">
+                           <span className="text-gray-400 font-montserrat text-[8px] uppercase tracking-wider font-medium">AWARD TYPE:</span>
+                           <span className="uppercase text-gray-950 font-montserrat font-bold tracking-wide">DIPLOMA</span>
+                        </div>
+                        <div className="flex justify-between border-b border-gray-100 pb-0.5">
+                           <span className="text-gray-400 font-montserrat text-[8px] uppercase tracking-wider font-medium">DEPARTMENT:</span>
+                           <span className="uppercase text-gray-950 font-montserrat font-bold tracking-wide">{selectedStudent.department || "DEPARTMENT OF PRACTICAL THEOLOGY"}</span>
+                        </div>
+                        <div className="flex justify-between border-b border-gray-100 pb-0.5">
+                           <span className="text-gray-400 font-montserrat text-[8px] uppercase tracking-wider font-medium">MODE OF STUDY:</span>
+                           <span className="uppercase text-gray-950 font-montserrat font-bold tracking-wide">FULL-TIME</span>
+                        </div>
+                        <div className="flex justify-between border-b border-gray-100 pb-0.5">
+                           <span className="text-gray-400 font-montserrat text-[8px] uppercase tracking-wider font-medium">GRADUATION DATE:</span>
+                           <span className="uppercase text-gray-950 font-montserrat font-bold tracking-wide">1ST MAY 2026</span>
+                        </div>
+                     </div>
+                  </div>
 
-                 <div
+                  <div
                    className={`border border-gray-900 mb-3 relative z-10 shadow-sm overflow-hidden ${editorOutlineClass('table')}`}
                    style={getBlockStyle('table')}
                    onClick={() => editorMode && setSelectedBlock('table')}
@@ -2243,12 +2289,12 @@ export const Transcripts: React.FC<TranscriptsProps> = (props) => {
                     <span className="opacity-80 tracking-wide">A (70–100%) &nbsp;|&nbsp; B (60–69%) &nbsp;|&nbsp; C (50–59%) &nbsp;|&nbsp; D (40–49%) &nbsp;|&nbsp; <span className="text-red-500 font-black">F (&lt;40%)</span></span>
                  </div>
 
-                 <MicroText text="DO NOT REPRODUCE THIS DOCUMENT • BMI UNIVERSITY ACADEMIC RECORD SECURE VALIDATION LINE • TAMPER-EVIDENT DESIGN • IDW-BMIV-82" />
+                 <MicroText text={`DO NOT REPRODUCE THIS DOCUMENT • BMI UNIVERSITY ACADEMIC RECORD SECURE VALIDATION LINE • VERIFY AT: ${securityData?.verificationUrl || 'BMI.EDU/VERIFY'}`} />
 
                  {/* Forensic tracking layer - invisible to naked eye */}
                  <div className="relative z-10 h-[2px] overflow-hidden bg-gradient-to-r from-transparent via-gray-100/30 to-transparent">
                     <div className="text-[1px] text-gray-300 opacity-20 whitespace-nowrap tracking-widest font-mono">
-                      FORENSIC-ID:{selectedStudent.id}-{Date.now().toString(36).toUpperCase()}-BMI-SEC-V2-CRYPTO-HASH-{Math.random().toString(36).substring(2, 15).toUpperCase()}
+                      FORENSIC-ID:{securityData?.contentHash || 'PENDING-HASH'}-CHAIN:{securityData?.blockchainAnchor || 'PENDING-ANCHOR'}
                     </div>
                  </div>
 
@@ -2270,27 +2316,29 @@ export const Transcripts: React.FC<TranscriptsProps> = (props) => {
                        <div className="w-full border-b border-gray-900 relative z-10" />
                        <span className="font-serif italic text-sm text-gray-900 whitespace-nowrap mt-1.5 w-full text-right relative z-10">Dr. Lilian Young</span>
                        <span className="text-[7px] font-black uppercase tracking-widest mt-0.5 text-gray-500 w-full text-right relative z-10">UNIVERSITY REGISTRAR</span>
-                       
-                       {/* Digital Validation Box */}
-                       <div className="mt-4 border border-purple-200 bg-purple-50/30 px-4 py-1.5 rounded-none flex flex-col items-center justify-center w-full relative z-10">
-                          <div className="flex items-center gap-1.5">
-                             <ShieldCheck size={10} className="text-[#4B0082]" />
-                             <span className="text-[#4B0082] text-[8px] font-black uppercase tracking-widest">DIGITAL VALIDATION ACTIVE</span>
-                          </div>
-                          <span className="text-[6px] font-bold text-gray-400 uppercase tracking-[0.2em] mt-0.5">CERTIFIED TRUE COPY • E-TRANSCRIPT</span>
-                       </div>
                     </div>
                  </div>
 
                  <div
-                   className={`flex justify-between items-end px-2 mt-2 relative z-10 ${editorOutlineClass('footer')}`}
+                   className={`flex justify-between items-center px-4 mt-8 mb-2 relative z-10 ${editorOutlineClass('footer')}`}
                    style={getBlockStyle('footer')}
                    onClick={() => editorMode && setSelectedBlock('footer')}
                    onMouseDown={(e) => startBlockDrag('footer', e)}
                  >
-                    <div className="flex flex-col text-[8px] text-gray-500 font-black uppercase tracking-widest leading-[1.6]">
-                       <span>ISSUED: {new Date().toLocaleDateString('en-GB', {day: 'numeric', month: 'short', year: 'numeric'}).toUpperCase().replace(/ /g, ' ')}</span>
-                       <span>ID: BMI-TR-{selectedStudent.id.toUpperCase()}</span>
+                    <div className="flex flex-col text-[10px] text-gray-500 font-playfair font-bold uppercase tracking-widest leading-[1.8]">
+                       <span>ISSUED: {securityData?.issuedAt ? new Date(securityData.issuedAt).toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: 'numeric' }).toUpperCase() : new Date().toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: 'numeric' }).toUpperCase()}</span>
+                       <span>ID: {securityData?.serialNumber || `BMI-TR-${selectedStudent.id.toUpperCase()}`}</span>
+                    </div>
+
+                    <div className="w-[35%] flex justify-end mr-4">
+                       {/* Digital Validation Box */}
+                       <div className="border border-purple-200 bg-purple-50/30 px-4 py-2.5 rounded-none flex flex-col items-center justify-center w-full relative z-10">
+                          <div className="flex items-center gap-1.5">
+                             <ShieldCheck size={11} className="text-[#4B0082]" />
+                             <span className="text-[#4B0082] text-[9px] font-black uppercase tracking-widest">DIGITAL VALIDATION ACTIVE</span>
+                          </div>
+                          <span className="text-[6px] font-bold text-gray-400 uppercase tracking-[0.2em] mt-0.5">CERTIFIED TRUE COPY • E-TRANSCRIPT</span>
+                       </div>
                     </div>
                  </div>
               </div>

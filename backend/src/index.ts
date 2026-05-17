@@ -2,6 +2,8 @@
 // 100% Open Source Backend API
 // License: MIT
 
+import { fileURLToPath } from 'url';
+import path from 'path';
 import { serve } from '@hono/node-server';
 import { Hono } from 'hono';
 import { cors } from 'hono/cors';
@@ -187,8 +189,19 @@ async function startServer() {
     logger.info('Connecting to PocketBase...');
     getPocketBase(); // Initialize connection
     
-    // Check PocketBase health
-    const pbHealthy = await pbHealthCheck();
+    // Check PocketBase health with a retry loop
+    let pbHealthy = false;
+    const maxRetries = 10;
+    const retryDelayMs = 1000;
+    
+    logger.info('Checking PocketBase health...');
+    for (let attempt = 1; attempt <= maxRetries; attempt++) {
+      pbHealthy = await pbHealthCheck();
+      if (pbHealthy) break;
+      logger.warn(`PocketBase not ready (attempt ${attempt}/${maxRetries}), retrying in ${retryDelayMs}ms...`);
+      await new Promise(resolve => setTimeout(resolve, retryDelayMs));
+    }
+    
     if (!pbHealthy) {
       logger.error('PocketBase is not available. Please ensure it is running.');
       logger.info('Start PocketBase: cd backend && ./pocketbase serve');
@@ -226,6 +239,30 @@ async function startServer() {
       logger.info('✓ User initialization complete');
     } catch (error) {
       logger.warn('User initialization failed:', error);
+    }
+
+    // Auto-populate Mukurweini and Giathugu campus data
+    try {
+      logger.info('Auto-populating Mukurweini and Giathugu campus data...');
+      const { exec } = await import('child_process');
+      const { promisify } = await import('util');
+      const execAsync = promisify(exec);
+      
+      const __filename = fileURLToPath(import.meta.url);
+      const __dirname = path.dirname(__filename);
+      const scriptPath = path.resolve(__dirname, '../../scripts/import-mukurweini-giathugu.ts');
+      
+      await execAsync(`npx tsx "${scriptPath}"`, {
+        env: {
+          ...process.env,
+          PB_URL: CONFIG.POCKETBASE_URL,
+          PB_EMAIL: CONFIG.POCKETBASE_ADMIN_EMAIL,
+          PB_PASSWORD: CONFIG.POCKETBASE_ADMIN_PASSWORD,
+        }
+      });
+      logger.info('✓ Mukurweini and Giathugu campus data auto-populated successfully');
+    } catch (error) {
+      logger.warn('Failed to auto-populate Mukurweini and Giathugu data:', error);
     }
     
     // Initialize connection pool

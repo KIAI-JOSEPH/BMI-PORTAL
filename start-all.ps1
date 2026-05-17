@@ -13,8 +13,8 @@ Set-Location "$rootDir\bin"
 Start-Process -FilePath ".\pocketbase.exe" -ArgumentList "serve", "--dir=pb_data" -WindowStyle Normal
 Set-Location $rootDir
 
-Write-Host "Waiting for PocketBase to start..." -ForegroundColor Gray
-Start-Sleep -Seconds 3
+Write-Host "Waiting for PocketBase to initialize..." -ForegroundColor Gray
+Start-Sleep -Seconds 4
 
 Write-Host ""
 Write-Host "[2/3] Starting Backend API..." -ForegroundColor Yellow
@@ -22,8 +22,8 @@ Set-Location "$rootDir\backend"
 Start-Process -FilePath "cmd.exe" -ArgumentList "/k", "npm run dev" -WindowStyle Normal
 Set-Location $rootDir
 
-Write-Host "Waiting for Backend to start..." -ForegroundColor Gray
-Start-Sleep -Seconds 5
+Write-Host "Waiting for Backend to initialize..." -ForegroundColor Gray
+Start-Sleep -Seconds 4
 
 Write-Host ""
 Write-Host "[3/3] Starting Frontend..." -ForegroundColor Yellow
@@ -48,24 +48,27 @@ while ($true) {
     
     $pbStatus = "DOWN"
     try {
-        # Check PocketBase
         $pb = Invoke-WebRequest -Uri "http://localhost:8090/api/health" -UseBasicParsing -TimeoutSec 2 -ErrorAction SilentlyContinue
         if ($pb.StatusCode -eq 200) { $pbStatus = "UP" }
-    } catch {}
+    } catch {
+        $pbStatus = "DOWN"
+    }
     
     $apiStatus = "DOWN"
     try {
-        # Check Backend
         $api = Invoke-WebRequest -Uri "http://localhost:3001/health" -UseBasicParsing -TimeoutSec 2 -ErrorAction SilentlyContinue
         if ($api.StatusCode -eq 200) { $apiStatus = "UP" }
-    } catch {}
+    } catch {
+        $apiStatus = "DOWN"
+    }
     
     $feStatus = "DOWN"
     try {
-        # Check Frontend
         $fe = Invoke-WebRequest -Uri "http://localhost:3000" -UseBasicParsing -TimeoutSec 2 -ErrorAction SilentlyContinue
         if ($fe.StatusCode -eq 200) { $feStatus = "UP" }
-    } catch {}
+    } catch {
+        $feStatus = "DOWN"
+    }
     
     Write-Host "Status: PocketBase $pbStatus | Backend API $apiStatus | Frontend $feStatus" -ForegroundColor Gray
 }

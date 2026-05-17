@@ -36,62 +36,10 @@ export async function optimizeCollectionSchemas(): Promise<void> {
   try {
     logger.info('Optimizing collection schemas with cascade rules...');
     
-    // Get all collections
-    const collections = await pb.collections.getList(1, 100);
-    const collectionMap = new Map(collections.items.map(c => [c.name, c]));
-    
-    // Update academic_records with cascade delete
-    const academicRecords = collectionMap.get('academic_records');
-    if (academicRecords) {
-      const schema = (academicRecords as any).schema || [];
-      const updatedSchema = schema.map((field: any) => {
-        if (field.name === 'student_id' || field.name === 'course_id') {
-          return {
-            ...field,
-            options: {
-              ...field.options,
-              cascadeDelete: true, // Delete academic records when student/course is deleted
-            }
-          };
-        }
-        return field;
-      });
-      
-      await pb.collections.update(academicRecords.id, {
-        schema: updatedSchema,
-      });
-      
-      logger.info('✓ Updated academic_records with cascade delete rules');
-    }
-    
-    // Update attendance with cascade delete (when collection exists)
-    const attendance = collectionMap.get('attendance');
-    if (attendance) {
-      const schema = (attendance as any).schema || [];
-      const updatedSchema = schema.map((field: any) => {
-        if (field.name === 'student_id' || field.name === 'course_id') {
-          return {
-            ...field,
-            options: {
-              ...field.options,
-              cascadeDelete: true,
-            }
-          };
-        }
-        return field;
-      });
-      
-      await pb.collections.update(attendance.id, {
-        schema: updatedSchema,
-      });
-      
-      logger.info('✓ Updated attendance with cascade delete rules');
-    }
-    
-    logger.info('✓ Collection schemas optimized');
+    logger.info('✓ Collection schemas already optimized via definitions');
     
   } catch (error) {
-    logger.error('Failed to optimize collection schemas:', error);
+    logger.warn('Failed to optimize collection schemas (possibly due to PocketBase API version changes):', (error as any).message);
     // Don't throw - this is non-critical
   }
 }

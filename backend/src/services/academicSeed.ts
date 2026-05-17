@@ -85,10 +85,10 @@ export async function seedAcademicReferenceDataIfEmpty(): Promise<void> {
     // Courses
     const courseIdByCode = new Map<string, string>();
     for (const c of SAMPLE_COURSES) {
-      const row = await findOrCreate('courses', 'course_code', c.course_code, {
-        course_code: c.course_code,
+      const row = await findOrCreate('courses', 'code', c.course_code, {
+        code: c.course_code,
         title: c.title,
-        credits: c.credits,
+        credit_hours: c.credits,
         is_elective: false,
         faculty: c.faculty,
         department: c.department,
@@ -107,7 +107,7 @@ export async function seedAcademicReferenceDataIfEmpty(): Promise<void> {
       // Check if link already exists
       try {
         await pb.collection('program_courses').getFirstListItem(
-          `program_code = "${programId}" && course_code = "${cid}"`
+          `program_code = "${programId}" && course_id = "${cid}"`
         );
         return; // already linked
       } catch {
@@ -115,7 +115,7 @@ export async function seedAcademicReferenceDataIfEmpty(): Promise<void> {
       }
       await pb.collection('program_courses').create({
         program_code: programId,
-        course_code: cid,
+        course_id: cid,
         is_required: true,
         sequence_order: order,
       });
