@@ -22,6 +22,7 @@ import ImportModal from "./ImportModal";
 import {
   deleteStudent as deleteStudentAPI,
   getStudents,
+  type StudentFilters,
 } from "../services/studentService";
 import { getPrograms } from "../services/catalogService";
 import { BulkEntryModal } from "./BulkEntryModal";
@@ -29,6 +30,7 @@ import { postStudentBatch } from "../services/batchService";
 import { getAllCampuses, Campus } from "../services/campusService";
 
 import { useDataStore } from "../stores/dataStore";
+import { usePagination } from "../hooks/usePagination";
 
 interface StudentsProps {
   students?: Student[];
@@ -87,6 +89,7 @@ const Students: React.FC<StudentsProps> = (props) => {
     undefined,
   );
   const [isSyncing, setIsSyncing] = useState(false);
+  const { page, perPage, meta, setPage, setMeta } = usePagination(50);
 
   useEffect(() => {
     let cancelled = false;
@@ -120,7 +123,71 @@ const Students: React.FC<StudentsProps> = (props) => {
     };
   }, []);
 
+  // ── Server-side filtered+paginated fetch ──────────────────────────────────
+  // Resets to page 1 whenever filters change, then re-fetches.
+  const [pagedStudents, setPagedStudents] = useState<Student[]>([]);
+  const [isFetching, setIsFetching] = useState(false);
+
+  useEffect(() => {
+    // When filter changes jump back to page 1 — the page change itself will
+    // trigger the fetch below.
+    setPage(1);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [
+    searchTerm,
+    statusFilter,
+    campusFilter,
+    programFilter,
+    academicLevelFilter,
+  ]);
+
+  useEffect(() => {
+    let cancelled = false;
+    setIsFetching(true);
+    const filters: StudentFilters = { page, perPage };
+    if (searchTerm) filters.search = searchTerm;
+    if (statusFilter !== "All Status") filters.status = statusFilter;
+    if (campusFilter !== "All Campuses") filters.campusId = campusFilter;
+
+    getStudents(filters)
+      .then((r) => {
+        if (cancelled) return;
+        if (r.success && r.data) {
+          setPagedStudents(r.data);
+          // If the response carries pagination meta, propagate it
+          const raw = r as {
+            meta?: { page: number; perPage: number; total: number };
+          };
+          if (raw.meta) setMeta(raw.meta);
+          else setMeta({ page, perPage, total: r.data.length });
+        }
+      })
+      .catch(() => {
+        /* fall back to store data */
+      })
+      .finally(() => {
+        if (!cancelled) setIsFetching(false);
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [
+    page,
+    perPage,
+    searchTerm,
+    statusFilter,
+    campusFilter,
+    programFilter,
+    academicLevelFilter,
+    setPage,
+    setMeta,
+  ]);
+
+  // Use server-fetched paginated list when available, else fall back to
+  // the store's in-memory list (e.g. when backend is unreachable).
   const filteredStudents = useMemo(() => {
+    if (pagedStudents.length > 0 || isFetching) return pagedStudents;
     return students.filter((student) => {
       const matchesSearch =
         `${student.full_name || `${student.first_name} ${student.last_name}`} ${student.student_code}`
@@ -144,7 +211,9 @@ const Students: React.FC<StudentsProps> = (props) => {
       );
     });
   }, [
+    pagedStudents,
     students,
+    isFetching,
     searchTerm,
     programFilter,
     statusFilter,
@@ -202,8 +271,11 @@ const Students: React.FC<StudentsProps> = (props) => {
           : campusFilter === "All Campuses"
             ? undefined
             : campusFilter;
+      // Sync fetches page 1 and stores result in the global store for
+      // other components that consume useDataStore().students
       const r = await getStudents({
-        perPage: 1000,
+        page: 1,
+        perPage: 50,
         campusId: activeCampusId,
       });
       if (r.success && r.data) setStudents(r.data);
@@ -211,12 +283,6 @@ const Students: React.FC<StudentsProps> = (props) => {
       setIsSyncing(false);
     }
   };
-
-  useEffect(() => {
-    const activeCampusId =
-      campusFilter === "All Campuses" ? undefined : campusFilter;
-    handleSyncApplications(activeCampusId);
-  }, [campusFilter]);
 
   const handleImportStudents = (
     newStudents: Student[],
@@ -239,7 +305,8 @@ const Students: React.FC<StudentsProps> = (props) => {
               Student Registry
             </h2>
             <p className="text-[8px] md:text-[9px] font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-widest">
-              Enrollment Data • Total: {students.length}
+              Enrollment Data • Total:{" "}
+              {meta.total > 0 ? meta.total.toLocaleString() : students.length}
             </p>
           </div>
         </div>
@@ -583,6 +650,63 @@ const Students: React.FC<StudentsProps> = (props) => {
             </div>
           </div>
         )}
+
+        {/* ── Pagination Bar ────────────────────────────────────── */}
+        {meta.totalPages > 1 && (
+          <div className="flex items-center justify-between bg-white dark:bg-gray-800 border border-gray-100 dark:border-gray-700 px-6 py-3 shadow-sm">
+            <span className="text-[10px] font-bold text-gray-500 uppercase tracking-widest">
+              Page {meta.page} of {meta.totalPages}
+              &nbsp;·&nbsp;{meta.total.toLocaleString()} students
+            </span>
+            <div className="flex items-center gap-2">
+              <button
+                onClick={() => setPage(1)}
+                disabled={meta.page === 1}
+                className="px-2 py-1 text-[10px] font-black uppercase border border-gray-200 dark:border-gray-700 disabled:opacity-40 hover:bg-[#4B0082] hover:text-white hover:border-[#4B0082] transition-all"
+              >
+                «
+              </button>
+              <button
+                onClick={() => setPage(Math.max(1, page - 1))}
+                disabled={meta.page <= 1}
+                className="px-3 py-1 text-[10px] font-black uppercase border border-gray-200 dark:border-gray-700 disabled:opacity-40 hover:bg-[#4B0082] hover:text-white hover:border-[#4B0082] transition-all"
+              >
+                Prev
+              </button>
+              {Array.from({ length: Math.min(5, meta.totalPages) }, (_, i) => {
+                const p =
+                  Math.max(1, Math.min(meta.totalPages - 4, page - 2)) + i;
+                return (
+                  <button
+                    key={p}
+                    onClick={() => setPage(p)}
+                    className={`px-3 py-1 text-[10px] font-black uppercase border transition-all ${
+                      p === meta.page
+                        ? "bg-[#4B0082] text-white border-[#4B0082]"
+                        : "border-gray-200 dark:border-gray-700 hover:bg-[#4B0082] hover:text-white hover:border-[#4B0082]"
+                    }`}
+                  >
+                    {p}
+                  </button>
+                );
+              })}
+              <button
+                onClick={() => setPage(Math.min(meta.totalPages, page + 1))}
+                disabled={meta.page >= meta.totalPages}
+                className="px-3 py-1 text-[10px] font-black uppercase border border-gray-200 dark:border-gray-700 disabled:opacity-40 hover:bg-[#4B0082] hover:text-white hover:border-[#4B0082] transition-all"
+              >
+                Next
+              </button>
+              <button
+                onClick={() => setPage(meta.totalPages)}
+                disabled={meta.page >= meta.totalPages}
+                className="px-2 py-1 text-[10px] font-black uppercase border border-gray-200 dark:border-gray-700 disabled:opacity-40 hover:bg-[#4B0082] hover:text-white hover:border-[#4B0082] transition-all"
+              >
+                »
+              </button>
+            </div>
+          </div>
+        )}
       </div>
 
       <StudentRegistrationModal
@@ -613,7 +737,7 @@ const Students: React.FC<StudentsProps> = (props) => {
               (l) => JSON.parse(l) as Record<string, unknown>,
             );
             const r = await postStudentBatch(items);
-            const list = await getStudents({ perPage: 1000 });
+            const list = await getStudents({ page: 1, perPage: 50 });
             if (list.success && list.data) setStudents(list.data);
             return {
               ok: (r.data?.failureCount ?? 0) === 0,

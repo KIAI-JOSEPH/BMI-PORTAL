@@ -7,7 +7,7 @@ export interface Student {
   full_name: string;
   first_name: string;
   last_name: string;
-  gender: 'Male' | 'Female';
+  gender: "Male" | "Female";
   date_of_birth?: string;
   nationality?: string;
   email: string;
@@ -15,7 +15,7 @@ export interface Student {
   admission_no?: string;
   admission_date: string;
   programme: string;
-  status: 'Active' | 'Inactive' | 'Graduated' | 'Suspended';
+  status: "Active" | "Inactive" | "Graduated" | "Suspended";
   avatar_color: string;
   photo?: string;
   photo_zoom: number;
@@ -36,8 +36,8 @@ export interface StaffMember {
   phone: string;
   role: string;
   department: string;
-  category: 'Academic' | 'Administrative' | 'Management';
-  status: 'Full-time' | 'Part-time' | 'On Leave';
+  category: "Academic" | "Administrative" | "Management";
+  status: "Full-time" | "Part-time" | "On Leave";
   specialization?: string;
   office?: string;
   officeHours?: string;
@@ -56,10 +56,10 @@ export interface Course {
   name: string; // Used in UI
   faculty: string;
   department: string;
-  level: 'Undergraduate' | 'Postgraduate' | 'Diploma' | 'Certificate';
+  level: "Undergraduate" | "Postgraduate" | "Diploma" | "Certificate";
   credits: number;
   credit_hours: number;
-  status: 'Published' | 'Draft' | 'Archived';
+  status: "Published" | "Draft" | "Archived";
   description: string;
   syllabus: string;
   module_id?: string;
@@ -79,7 +79,7 @@ export interface Certificate {
   issue_date: string;
   graduation_date: string;
   gpa: number;
-  status: 'ISSUED' | 'REVOKED' | 'SUSPENDED';
+  status: "ISSUED" | "REVOKED" | "SUSPENDED";
   content_hash: string;
   verification_count: number;
   created: string;
@@ -92,7 +92,7 @@ export interface Transaction {
   name: string;
   desc: string;
   amt: number;
-  status: 'Paid' | 'Pending' | 'Failed';
+  status: "Paid" | "Pending" | "Failed";
   date: string;
   student_id?: string;
   created: string;
@@ -103,9 +103,9 @@ export interface LibraryItem {
   id: string;
   title: string;
   author: string;
-  category: 'Theology' | 'ICT' | 'Business' | 'Education' | 'General';
-  type: 'PDF' | 'E-Book' | 'Hardcopy' | 'Journal' | 'Video';
-  status: 'Digital' | 'Available' | 'Borrowed' | 'Reserved';
+  category: "Theology" | "ICT" | "Business" | "Education" | "General";
+  type: "PDF" | "E-Book" | "Hardcopy" | "Journal" | "Video";
+  status: "Digital" | "Available" | "Borrowed" | "Reserved";
   year: string;
   description: string;
   downloadUrl: string;
@@ -119,7 +119,7 @@ export interface User {
   id: string;
   email: string;
   name: string;
-  role: 'admin' | 'registrar' | 'faculty' | 'student' | 'staff' | 'viewer';
+  role: "admin" | "registrar" | "faculty" | "student" | "staff" | "viewer";
   department?: string;
   studentId?: string;
   staffId?: string;
@@ -131,7 +131,14 @@ export interface User {
 
 export interface AuditLog {
   id: string;
-  action: 'CREATE' | 'UPDATE' | 'DELETE' | 'VIEW' | 'LOGIN' | 'LOGOUT' | 'VERIFY';
+  action:
+    | "CREATE"
+    | "UPDATE"
+    | "DELETE"
+    | "VIEW"
+    | "LOGIN"
+    | "LOGOUT"
+    | "VERIFY";
   resource: string;
   resourceId?: string;
   userId: string;
@@ -146,9 +153,13 @@ export interface JWTPayload {
   sub: string;
   email: string;
   role: string;
-  type?: 'access' | 'refresh';
+  type?: "access" | "refresh";
   iat: number;
   exp: number;
+  /** PocketBase record ID of the linked student (present when role === 'student') */
+  studentId?: string;
+  /** PocketBase record ID of the linked staff member (present when role === 'faculty' | 'staff') */
+  staffId?: string;
 }
 
 export interface ApiResponse<T> {
@@ -167,7 +178,7 @@ export interface ApiResponse<T> {
 export interface CertificateVerificationRequest {
   serial: string;
   hash?: string;
-  method: 'online' | 'offline' | 'qr_scan';
+  method: "online" | "offline" | "qr_scan";
 }
 
 export interface CertificateVerificationResult {
@@ -182,7 +193,7 @@ export interface CertificateVerificationResult {
     issue_date: string;
     graduation_date: string;
     gpa: number;
-    status: 'active' | 'revoked' | 'suspended';
+    status: "active" | "revoked" | "suspended";
   };
   verification?: {
     timestamp: string;
@@ -193,4 +204,3 @@ export interface CertificateVerificationResult {
   error?: string;
   code?: string;
 }
-

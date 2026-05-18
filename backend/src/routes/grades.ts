@@ -7,10 +7,16 @@ import { Hono } from "hono";
 import { z } from "zod";
 import { getPocketBase } from "../services/pocketbase.js";
 import { logger } from "../utils/logger.js";
-import { authMiddleware, requireRole } from "../middleware/auth.js";
+import { authMiddleware, requireRole, getUser } from "../middleware/auth.js";
+import type { AppEnv } from "../types/hono.js";
 
 import { calculateGradeResult } from "../utils/grading.js";
-import { sanitizeFilter, parseName } from "../utils/helpers.js";
+import {
+  sanitizeFilter,
+  parseName,
+  errorMessage,
+  pbRecord,
+} from "../utils/helpers.js";
 
 export interface ApiResponse<T> {
   success: boolean;
@@ -19,7 +25,7 @@ export interface ApiResponse<T> {
   message?: string;
 }
 
-const gradeRouter = new Hono();
+const gradeRouter = new Hono<AppEnv>();
 gradeRouter.use("*", authMiddleware);
 
 type GradeComponentScore = {
@@ -47,8 +53,12 @@ function calculatePercentageFromComponents(
   return (weightedSum / totalWeight) * 100;
 }
 
+type ExpandedRecord = Record<string, unknown> & {
+  expand?: Record<string, unknown | ExpandedRecord>;
+};
+
 function mapExpandedGradeToFrontendShape(
-  expanded: any,
+  expanded: ExpandedRecord,
   options: {
     components?: GradeComponentScore[];
     gradingScaleType?: string;
@@ -59,11 +69,14 @@ function mapExpandedGradeToFrontendShape(
   // Support BOTH data shapes:
   // Shape A (academic_records): expand.student_id, expand.course_id, field: total_score, grade, grade_point
   // Shape B (grades collection): expand.enrollment_id.expand.student_number, .course_code, field: percentage, grade_letter, gpa
-  const enroll = expanded.expand?.enrollment_id;
-  const student = expanded.expand?.student_id ?? enroll?.expand?.student_number;
-  const course = expanded.expand?.course_id ?? enroll?.expand?.course_code;
-  const module = course?.expand?.module_id;
-  const campus = student?.expand?.campus_id;
+  const enroll = expanded.expand?.enrollment_id as ExpandedRecord | undefined;
+  const student = (expanded.expand?.student_id ??
+    enroll?.expand?.student_number) as ExpandedRecord | undefined;
+  const course = (expanded.expand?.course_id ?? enroll?.expand?.course_code) as
+    | ExpandedRecord
+    | undefined;
+  const module = course?.expand?.module_id as ExpandedRecord | undefined;
+  const campus = student?.expand?.campus_id as ExpandedRecord | undefined;
 
   const percentage =
     typeof expanded.total_score === "number"
@@ -88,7 +101,12 @@ function mapExpandedGradeToFrontendShape(
         ? course.credits
         : 0;
 
-  const names = parseName(student?.full_name || expanded.student_full_name);
+  const names = parseName(
+    (student?.full_name || expanded.student_full_name) as
+      | string
+      | null
+      | undefined,
+  );
   const studentName = student
     ? `${student.first_name || names.first || ""} ${student.last_name || names.last || ""}`.trim() ||
       student.full_name ||
@@ -255,12 +273,12 @@ gradeRouter.post(
             program_code: programId,
           });
           studentUuid = student.id;
-        } catch (err: any) {
+        } catch (err: unknown) {
           logger.error("Failed to auto-create student:", err);
           return c.json(
             {
               success: false,
-              error: `Student ${studentId} not found and auto-creation failed: ${err.message}`,
+              error: `Student ${studentId} not found and auto-creation failed: ${errorMessage(err)}`,
             },
             404,
           );
@@ -308,11 +326,11 @@ gradeRouter.post(
             semester: data.semester,
           });
           enrollmentId = enrollment.id;
-        } catch (err: any) {
+        } catch (err: unknown) {
           return c.json(
             {
               success: false,
-              error: `Failed to link enrollment: ${err.message}`,
+              error: `Failed to link enrollment: ${errorMessage(err)}`,
             },
             500,
           );
@@ -324,7 +342,9 @@ gradeRouter.post(
         data.numericGrade ??
         data.percentage ??
         (data.components && data.components.length > 0
-          ? calculatePercentageFromComponents(data.components as any)
+          ? calculatePercentageFromComponents(
+              data.components as unknown as GradeComponentScore[],
+            )
           : 0);
       const { letterGrade, gradePoints } = calculateGradeResult(numericGrade);
 
@@ -360,9 +380,7 @@ gradeRouter.post(
         expand: "enrollment_id.student_number,enrollment_id.course_code",
       });
 
-      const user = (c as any).get("user") as
-        | { email?: string; sub?: string }
-        | undefined;
+      const user = getUser(c);
       const responseData = mapExpandedGradeToFrontendShape(expanded, {
         components: data.components as unknown as
           | GradeComponentScore[]
@@ -379,7 +397,7 @@ gradeRouter.post(
         data: responseData,
         message: "Grade saved successfully",
       });
-    } catch (error: any) {
+    } catch (error: unknown) {
       logger.error("Grade creation error:", error);
       return c.json({ success: false, error: "Failed to create grade" }, 500);
     }
@@ -447,7 +465,7 @@ gradeRouter.get(
           items,
         },
       });
-    } catch (error: any) {
+    } catch (error: unknown) {
       logger.error("Grade fetch error:", error);
       return c.json({ success: false, error: "Failed to fetch grades" }, 500);
     }
@@ -481,7 +499,7 @@ gradeRouter.get(
         success: true,
         data: responseData,
       });
-    } catch (error: any) {
+    } catch (error: unknown) {
       logger.error("Grade fetch error:", error);
       return c.json<ApiResponse<never>>(
         {
@@ -510,7 +528,10 @@ const gradeUpdateInputSchema = z.object({
   gradingScaleType: z.string().optional(),
 });
 
-async function updateGradeHandler(c: any, id: string) {
+async function updateGradeHandler(
+  c: import("hono").Context<AppEnv>,
+  id: string,
+) {
   const body = await c.req.json();
   const parsed = gradeUpdateInputSchema.safeParse(body);
 
@@ -553,9 +574,7 @@ async function updateGradeHandler(c: any, id: string) {
     expand: "enrollment_id.student_number,enrollment_id.course_code",
   });
 
-  const user = (c as any).get("user") as
-    | { email?: string; sub?: string }
-    | undefined;
+  const user = getUser(c);
   const responseData = mapExpandedGradeToFrontendShape(expanded, {
     components: data.components as unknown as GradeComponentScore[] | undefined,
     gradingScaleType: data.gradingScaleType,
@@ -607,7 +626,7 @@ gradeRouter.delete("/:id", requireRole("admin", "registrar"), async (c) => {
       data: { id },
       message: "Grade deleted successfully",
     });
-  } catch (error: any) {
+  } catch (error: unknown) {
     logger.error("Grade deletion error:", error);
     return c.json<ApiResponse<never>>(
       {
@@ -662,36 +681,36 @@ gradeRouter.get(
       >();
 
       for (const r of records) {
-        const student = (r as any).expand?.student_id;
-        const course = (r as any).expand?.course_id;
-        const module = course?.expand?.module_id;
-        const campus = student?.expand?.campus_id;
+        const rec = pbRecord<ExpandedRecord>(r);
+        const student = rec.expand?.student_id as ExpandedRecord | undefined;
+        const course = rec.expand?.course_id as ExpandedRecord | undefined;
+        const module = course?.expand?.module_id as ExpandedRecord | undefined;
+        const campus = student?.expand?.campus_id as ExpandedRecord | undefined;
 
         const credits =
           typeof course?.credit_hours === "number"
-            ? course.credit_hours
+            ? (course.credit_hours as number)
             : typeof course?.credits === "number"
-              ? course.credits
+              ? (course.credits as number)
               : 0;
         const gradePoint =
-          typeof (r as any).grade_point === "number"
-            ? (r as any).grade_point
-            : 0;
+          typeof rec.grade_point === "number" ? (rec.grade_point as number) : 0;
 
-        const key = `${(r as any).student_id}__${module?.name || "Unknown"}`;
+        const key = `${rec.student_id}__${String(module?.name ?? "Unknown")}`;
         const existing = map.get(key);
         if (existing) {
           existing.credits += credits;
           existing.points += gradePoint * credits;
         } else {
           map.set(key, {
-            studentId: (r as any).student_id,
-            studentCode: student?.student_code || "",
-            studentName:
-              student?.full_name ||
-              `${student?.first_name || ""} ${student?.last_name || ""}`.trim(),
-            campusName: campus?.name || "",
-            module: module?.name || "Unknown",
+            studentId: rec.student_id as string,
+            studentCode: String(student?.student_code ?? ""),
+            studentName: String(
+              student?.full_name ??
+                `${String(student?.first_name ?? "")} ${String(student?.last_name ?? "")}`.trim(),
+            ),
+            campusName: String(campus?.name ?? ""),
+            module: String(module?.name ?? "Unknown"),
             credits,
             points: gradePoint * credits,
           });
@@ -718,7 +737,7 @@ gradeRouter.get(
       );
 
       return c.json({ success: true, data: summary, total: summary.length });
-    } catch (error: any) {
+    } catch (error: unknown) {
       logger.error("GPA summary error:", error);
       return c.json(
         { success: false, error: "Failed to compute GPA summary" },
@@ -774,7 +793,7 @@ gradeRouter.get(
           totalPoints: parseFloat(totalPoints.toFixed(2)),
         },
       });
-    } catch (error: any) {
+    } catch (error: unknown) {
       logger.error("Transcript fetch error:", error);
       return c.json(
         { success: false, error: "Failed to fetch transcript" },

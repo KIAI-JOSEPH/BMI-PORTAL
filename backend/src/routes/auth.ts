@@ -95,7 +95,11 @@ async function generateTokens(user: User, rememberMe: boolean = false) {
 /**
  * Set Refresh Token Cookie
  */
-function setRefreshCookie(c: any, token: string, maxAgeDays: number = 7) {
+function setRefreshCookie(
+  c: import("hono").Context<AppEnv>,
+  token: string,
+  maxAgeDays: number = 7,
+) {
   setCookie(c, COOKIE_NAME, token, {
     httpOnly: true,
     secure: CONFIG.NODE_ENV === "production", // Only secure in production
@@ -175,11 +179,16 @@ authRouter.post(
           },
         },
       });
-    } catch (error: any) {
+    } catch (error: unknown) {
+      const pbError = error as {
+        status?: number;
+        message?: string;
+        data?: unknown;
+      };
       logger.error("Login error details:", {
-        status: error.status,
-        message: error.message,
-        data: error.data,
+        status: pbError.status,
+        message: pbError.message,
+        data: pbError.data,
         emailSent: email,
       });
       return c.json<ApiResponse<never>>(

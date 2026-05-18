@@ -47,11 +47,26 @@ const MONTHS = [
 const Dashboard: React.FC = () => {
   const navigate = useNavigate();
   const user = useAuthStore((s) => s.user);
-  const stats = useDataStore((s) => s.getStats());
+  // Select stable array references — never call computed methods directly
+  // in a Zustand selector because they return new objects every render and
+  // trigger useSyncExternalStore's infinite-loop detection.
   const transactions = useDataStore((s) => s.transactions);
   const students = useDataStore((s) => s.students);
   const addStudent = useDataStore((s) => s.addStudent);
   const addTransaction = useDataStore((s) => s.addTransaction);
+
+  // Compute stats locally from stable store references.
+  const stats = useMemo(
+    () => ({
+      students: students.length,
+      admissions: students.filter((s) => s.status === "Applicant").length,
+      tuition: transactions
+        .filter((t) => t.status === "Paid")
+        .reduce((acc, t) => acc + t.amt, 0),
+      events: 0,
+    }),
+    [students, transactions],
+  );
 
   // ── Fetch revenue trend from backend API (falls back to local compute) ──
   const [apiRevenueTrend, setApiRevenueTrend] = useState<
@@ -151,7 +166,9 @@ const Dashboard: React.FC = () => {
         .reduce((sum, t) => sum + (t.amt ?? 0), 0);
       return { month, revenue };
     });
-  }, [transactions]);
+    // apiRevenueTrend must be in deps — when the API data arrives the memo
+    // must re-evaluate so the chart switches from the local fallback to real data.
+  }, [transactions, apiRevenueTrend]);
 
   const userName = user?.name || "Administrator";
   const currentDate = new Date().toLocaleDateString("en-US", {
@@ -284,7 +301,10 @@ const Dashboard: React.FC = () => {
                 View Report
               </button>
             </div>
-            <div className="flex-1 w-full overflow-hidden">
+            {/* min-h-0 is required: flex children with height="100%" charts
+                need the parent's min-height collapsed to prevent recharts 3.x
+                RenderedTicksReporter from entering an infinite setState loop. */}
+            <div className="flex-1 min-h-0 w-full">
               <ResponsiveContainer width="100%" height="100%">
                 <AreaChart data={revenueTrend}>
                   <defs>
@@ -332,6 +352,7 @@ const Dashboard: React.FC = () => {
                     strokeWidth={3}
                     fillOpacity={1}
                     fill="url(#colorRevenue)"
+                    isAnimationActive={false}
                   />
                 </AreaChart>
               </ResponsiveContainer>

@@ -13,6 +13,7 @@
   "dependencies": {
     "@hono/node-server": "^1.13.7",
     "@hono/zod-openapi": "^0.18.3",
+    "@scalar/hono-api-reference": "^0.10.16",
     "bcryptjs": "^2.4.3",
     "dotenv": "^17.4.2",
     "helmet": "^8.0.0",

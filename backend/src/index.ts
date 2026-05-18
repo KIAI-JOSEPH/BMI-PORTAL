@@ -26,6 +26,10 @@ import { getPoolStats } from "./services/pocketbasePool.js";
 import { optimizeDatabase } from "./services/databaseOptimizer.js";
 import { CacheManager, QueryMonitor } from "./services/queryOptimizer.js";
 
+// OpenAPI docs
+import { apiReference } from "@scalar/hono-api-reference";
+import { openApiSpec } from "./openapi/spec.js";
+
 // Import routes
 import authRouter from "./routes/auth.js";
 import aiRouter from "./routes/ai.js";
@@ -189,6 +193,22 @@ app.route("/api/v1/inventory", inventoryRouter);
 app.route("/api/v1/visitors", visitorRouter);
 app.route("/api/v1/attendance", attendanceRouter);
 app.route("/api/v1/campuses", campusesRouter);
+
+// ── OpenAPI Documentation ────────────────────────────────────────────────────
+// GET /api/openapi.json  — machine-readable spec (useful for code generators)
+app.get("/api/openapi.json", (c) => {
+  return c.json(openApiSpec);
+});
+
+// GET /api/docs  — Scalar interactive API reference (MIT, self-hosted)
+app.get(
+  "/api/docs",
+  apiReference({
+    spec: { url: "/api/openapi.json" },
+    theme: "purple",
+    title: "BMI UMS API Reference",
+  }),
+);
 
 // 404 handler
 app.notFound((c) => {

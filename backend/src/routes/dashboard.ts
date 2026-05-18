@@ -4,7 +4,9 @@ import { getPocketBase } from "../services/pocketbase.js";
 import { authMiddleware } from "../middleware/auth.js";
 import { logger } from "../utils/logger.js";
 import { cache } from "../services/cacheService.js";
+import { pbRecord, errorMessage } from "../utils/helpers.js";
 import type { ApiResponse } from "../types/index.js";
+import type { Transaction, Student, Certificate } from "../types/index.js";
 
 const dashboardRouter = new Hono();
 
@@ -135,7 +137,7 @@ dashboardRouter.get("/stats", async (c) => {
             fields: "amt",
           });
         const totalRevenue = paidTxRecords.items.reduce(
-          (sum: number, t: any) => sum + (t.amt || 0),
+          (sum: number, t) => sum + (pbRecord<Transaction>(t).amt || 0),
           0,
         );
 
@@ -212,50 +214,53 @@ dashboardRouter.get("/recent-activity", async (c) => {
 
     const [recentStudents, recentTransactions, recentCertificates] =
       await Promise.all([
-        pb
-          .collection("students")
-          .getList(1, 5, {
-            sort: "-created",
-            fields: "id,firstName,lastName,created",
-          }),
-        pb
-          .collection("transactions")
-          .getList(1, 5, {
-            sort: "-date",
-            fields: "id,name,desc,date,amt,status",
-          }),
-        pb
-          .collection("certificates")
-          .getList(1, 5, {
-            sort: "-issue_date",
-            fields: "id,student_name,degree,issue_date",
-          }),
+        pb.collection("students").getList(1, 5, {
+          sort: "-created",
+          fields: "id,firstName,lastName,created",
+        }),
+        pb.collection("transactions").getList(1, 5, {
+          sort: "-date",
+          fields: "id,name,desc,date,amt,status",
+        }),
+        pb.collection("certificates").getList(1, 5, {
+          sort: "-issue_date",
+          fields: "id,student_name,degree,issue_date",
+        }),
       ]);
 
     const activity = [
-      ...recentStudents.items.map((s: any) => ({
-        type: "student",
-        action: "New student registered",
-        description: `${s.firstName} ${s.lastName}`,
-        timestamp: s.created,
-        id: s.id,
-      })),
-      ...recentTransactions.items.map((t: any) => ({
-        type: "finance",
-        action: "Payment recorded",
-        description: `${t.name} - ${t.desc}`,
-        timestamp: t.date,
-        id: t.id,
-        amount: t.amt,
-        status: t.status,
-      })),
-      ...recentCertificates.items.map((c: any) => ({
-        type: "certificate",
-        action: "Certificate issued",
-        description: `${c.student_name} - ${c.degree}`,
-        timestamp: c.issue_date,
-        id: c.id,
-      })),
+      ...recentStudents.items.map((r) => {
+        const s = pbRecord<Student>(r);
+        return {
+          type: "student",
+          action: "New student registered",
+          description: `${s.first_name} ${s.last_name}`,
+          timestamp: s.created,
+          id: s.id,
+        };
+      }),
+      ...recentTransactions.items.map((r) => {
+        const t = pbRecord<Transaction>(r);
+        return {
+          type: "finance",
+          action: "Payment recorded",
+          description: `${t.name} - ${t.desc}`,
+          timestamp: t.date,
+          id: t.id,
+          amount: t.amt,
+          status: t.status,
+        };
+      }),
+      ...recentCertificates.items.map((r) => {
+        const cert = pbRecord<Certificate>(r);
+        return {
+          type: "certificate",
+          action: "Certificate issued",
+          description: `${cert.student_name} - ${cert.degree}`,
+          timestamp: cert.issue_date,
+          id: cert.id,
+        };
+      }),
     ]
       .sort(
         (a, b) =>
@@ -323,7 +328,10 @@ dashboardRouter.get("/revenue-trend", async (c) => {
               fields: "amt",
             });
 
-            const revenue = paid.reduce((sum, t: any) => sum + (t.amt ?? 0), 0);
+            const revenue = paid.reduce(
+              (sum, t) => sum + (pbRecord<Transaction>(t).amt ?? 0),
+              0,
+            );
             return {
               month: MONTH_LABELS[d.getMonth()],
               year: d.getFullYear(),
@@ -399,12 +407,17 @@ dashboardRouter.get("/academic-stats", async (c) => {
     ]);
 
     // Grade distribution
+    interface AcademicRecord {
+      grade?: string;
+      total_score?: number;
+    }
     const gradeDist: Record<string, number> = {};
     let scoreSum = 0;
     for (const r of records.items) {
-      const g = (r as any).grade || "F";
+      const rec = pbRecord<AcademicRecord>(r);
+      const g = rec.grade || "F";
       gradeDist[g] = (gradeDist[g] || 0) + 1;
-      scoreSum += (r as any).total_score || 0;
+      scoreSum += rec.total_score || 0;
     }
     const avgScore =
       records.items.length > 0
@@ -413,14 +426,16 @@ dashboardRouter.get("/academic-stats", async (c) => {
 
     // Per-campus student counts
     const campusStats: Array<{ name: string; students: number }> = [];
+    interface CampusRecord {
+      id: string;
+      name: string;
+    }
     for (const campus of campusList) {
+      const rec = pbRecord<CampusRecord>(campus);
       const count = await pb.collection("students").getList(1, 1, {
-        filter: `campus_id = "${(campus as any).id}"`,
+        filter: `campus_id = "${rec.id}"`,
       });
-      campusStats.push({
-        name: (campus as any).name,
-        students: count.totalItems,
-      });
+      campusStats.push({ name: rec.name, students: count.totalItems });
     }
 
     return c.json({
@@ -440,8 +455,8 @@ dashboardRouter.get("/academic-stats", async (c) => {
         campusBreakdown: campusStats,
       },
     });
-  } catch (error: any) {
-    logger.error("Academic stats error:", error);
+  } catch (error: unknown) {
+    logger.error("Academic stats error:", errorMessage(error));
     return c.json(
       { success: false, error: "Failed to fetch academic stats" },
       500,

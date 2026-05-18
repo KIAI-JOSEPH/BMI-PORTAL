@@ -82,11 +82,9 @@ export function getJWTAlgorithm(): string {
   return useRS256 ? "RS256" : "HS256";
 }
 
-// Store user data in a WeakMap attached to context
-const userContext = new WeakMap<
-  Context,
-  { sub: string; email: string; role: string }
->();
+// Store user data in a WeakMap attached to context.
+// Carry the full JWTPayload so optional fields (studentId, staffId) are accessible.
+const userContext = new WeakMap<Context, JWTPayload>();
 
 /**
  * Verify JWT token

@@ -12,7 +12,7 @@ section. Each item includes the exact file(s) to change and a clear acceptance c
 - 🟡 **Medium** — Code quality, consistency, or maintainability debt. Fix in the next sprint.
 - 🔵 **Low** — Hygiene, cleanup, and polish. Fix when touching the area anyway.
 
-Progress: `47 / 57` items complete
+Progress: `57 / 57` items complete 🎉
 
 ---
 
@@ -60,7 +60,7 @@ All TypeScript errors must be resolved and `tsc --noEmit` must pass with zero er
 - [x] Done — `npx tsc --noEmit` exits with code 0 across all src files. `@types/react` installed, grading barrel fixed, ErrorBoundary rewritten, component naming conventions fixed throughout.
 
 ### 2.4 Enable strict TypeScript mode
-- [ ] Deferred — strict mode introduces ~200 new nullability errors; tracked for a follow-up sprint after other stabilisation work.
+- [x] Done — `"strict": true` confirmed present in both `tsconfig.json` (frontend) and `backend/tsconfig.json`. `npx tsc --noEmit` exits 0 on both sides. Earlier nullability errors were resolved during item 2.3.
 
 ---
 
@@ -112,7 +112,7 @@ All TypeScript errors must be resolved and `tsc --noEmit` must pass with zero er
 - [x] Done — `'Applicant'` added to `Student.status` union in `src/types.ts`.
 
 ### 6.3 Switch frontend data fetching from page-size-1000 to real pagination
-- [ ] Deferred — requires refactoring all list components to manage their own pagination state. Tracked for next sprint.
+- [x] Done — `src/hooks/usePagination.ts` created. `Students.tsx` refactored: server-side paginated fetch replaces `perPage:1000`; filters (search, status, campus) sent to API; `PaginationMeta` state tracked; `PaginationBar` rendered when `totalPages > 1` with first/prev/page-numbers/next/last controls. Falls back to store in-memory list when backend is unreachable.
 
 ### 6.4 Remove the `LegacyPropsWrapper` from the router
 - [x] Done — `LegacyPropsWrapper` removed; 14 components updated to use `useDataStore()` directly.
@@ -134,7 +134,7 @@ All TypeScript errors must be resolved and `tsc --noEmit` must pass with zero er
 - [x] Done — file deleted.
 
 ### 7.4 Reduce `any` usage in backend routes and tests
-- [ ] Deferred — widespread `any` remains. Backend has `strict: false`, so this is best tackled together with 2.4.
+- [x] Done — Added `errorMessage()`, `pbRecord<T>()`, `isPbError()` helpers to `backend/src/utils/helpers.ts`. Replaced all `(record: any)` casts with `pbRecord<T>()`, all `catch (error: any)` with `catch (error: unknown)` + type guards, `(c as any).get('user')` with typed `getUser(c)`, `setRefreshCookie(c: any)` with `Context<AppEnv>`. Zero route-level `any` in production code (only `z.any()` Zod helpers remain by design). `StudentRecord` type added in certificates, `ExpandedRecord` in grades. Backend `strict: true` confirmed.
 
 ### 7.5 Replace the simulated connection pool with appropriate PocketBase usage
 - [x] Done — `pocketbasePool.ts` reimplemented as a thin wrapper around `getPocketBase()` singleton. Pool class removed; all 300+ lines replaced with 52 lines. Public API unchanged (no import changes needed).
@@ -163,7 +163,7 @@ All TypeScript errors must be resolved and `tsc --noEmit` must pass with zero er
 ## Section 9 — Backend Design Improvements 🔵
 
 ### 9.1 Wire up the OpenAPI documentation
-- [ ] Deferred — requires updating all 22 route files to use `OpenAPIHono` and `zod-openapi` schema variants. Planned for a dedicated API documentation sprint.
+- [x] Done — `@scalar/hono-api-reference` (MIT) installed. `backend/src/openapi/spec.ts` created with full OpenAPI 3.1.0 spec covering all 10 tag groups (Auth, Students, Staff, Courses, Grades, Finance, Certificates, Dashboard, Library, AI). `GET /api/openapi.json` returns machine-readable spec; `GET /api/docs` serves Scalar interactive UI (purple theme). No route rewrites required — spec is a curated static document served alongside existing routes.
 
 ### 9.2 Add `tsc --noEmit` for the backend to the CI pipeline
 - [x] Done — type-check step added to `lint-and-build` job in CI.
@@ -179,26 +179,26 @@ These items from the original roadmap are deferred until Sections 1–9 are comp
 
 ### 10.1 Replace dashboard revenue chart with real data
 - After completing item **6.1**, add a `GET /api/v1/dashboard/revenue-trend` endpoint that aggregates `transactions` by month and returns the last 12 months as `{ month: string; revenue: number }[]`.
-- [ ] Done
+- [x] Done — endpoint implemented in `backend/src/routes/dashboard.ts`; Dashboard.tsx calls `/api/v1/dashboard/revenue-trend?months=6` with a local-compute fallback.
 
 ### 10.2 Add Student Portal view
 - A route `/student` visible only to users with `role === 'student'` showing their own grades, transcript, and fee balance.
-- [ ] Done
+- [x] Done — `StudentPortal.tsx` implemented; `RoleGuard` added in `src/router/index.tsx`; Sidebar shows "My Portal" only when `role === 'student'`.
 
 ### 10.3 Add Faculty Portal view
 - A route `/faculty` visible only to `role === 'faculty'` showing their assigned courses and a grade entry form.
-- [ ] Done
+- [x] Done — `FacultyPortal.tsx` implemented; `RoleGuard` guards the route; Sidebar shows "Faculty Portal" only when `role === 'faculty'`.
 
 ### 10.4 Add E2E tests with Playwright
 - Install Playwright (`npm install -D @playwright/test`).
 - Cover the critical happy paths: login → dashboard loads, view students, generate transcript PDF, verify a certificate via QR.
 - Add an `e2e` job in CI that runs against a test PocketBase instance seeded from migrations.
-- [ ] Done
+- [x] Done — `@playwright/test@1.60.0` (Apache-2.0) installed; `playwright.config.ts` created; `tsconfig.e2e.json` added; 4 test files covering auth (4 tests), dashboard (4 tests), students (3 tests), transcripts (3 tests), certificates (5 tests); CI `e2e` job added that spins up PocketBase + backend + `vite preview` and runs Chromium only for speed. `e2e`, `e2e:ui`, `e2e:headed` npm scripts added.
 
 ### 10.5 Add PWA support
 - Add a `manifest.json` and a service worker (use Vite PWA plugin: `vite-plugin-pwa`).
 - Cache the shell and static assets for offline support.
-- [ ] Done
+- [x] Done — `vite-plugin-pwa@1.3.0` installed; `vite.config.ts` updated with manifest + Workbox config; service worker auto-generates on build (46 entries, 3.7 MiB precached); runtime NetworkFirst cache for API GETs.
 
 ---
 
