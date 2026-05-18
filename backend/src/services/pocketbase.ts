@@ -653,15 +653,13 @@ async function createCollection(name: string): Promise<void> {
 
     if (existingCollection) {
       const collType = (existingCollection as any).type || "base";
+      // IMPORTANT: Rules are NEVER set here — they are managed exclusively by
+      // pb_migrations (see pb_migrations/1780000001_add_collection_rules.js).
+      // Overwriting rules on every startup defeats any hardening the migrations apply.
       await pb.collections.update(existingCollection.id, {
         name,
         type: collType,
         schema: fieldsArray,
-        listRule: "@request.auth.id != ''",
-        viewRule: "@request.auth.id != ''",
-        createRule: "@request.auth.id != ''",
-        updateRule: "@request.auth.id != ''",
-        deleteRule: "@request.auth.id != ''",
       });
       logger.info(`Collection '${name}' updated successfully`);
       return;
@@ -671,11 +669,15 @@ async function createCollection(name: string): Promise<void> {
       name,
       type: name === "users" ? "auth" : "base",
       schema: fieldsArray,
-      listRule: "@request.auth.id != ''",
-      viewRule: "@request.auth.id != ''",
-      createRule: "@request.auth.id != ''",
-      updateRule: "@request.auth.id != ''",
-      deleteRule: "@request.auth.id != ''",
+      // New collections get admin-only rules by default.
+      // The rules migration (pb_migrations/1780000001_add_collection_rules.js)
+      // will set proper role-based rules. We never default to @request.auth.id != ''
+      // as it grants any authenticated user full CRUD access to all records.
+      listRule: "@request.auth.role = 'admin'",
+      viewRule: "@request.auth.role = 'admin'",
+      createRule: "@request.auth.role = 'admin'",
+      updateRule: "@request.auth.role = 'admin'",
+      deleteRule: "@request.auth.role = 'admin'",
       options:
         name === "users"
           ? {

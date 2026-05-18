@@ -1,34 +1,41 @@
-# BMI UMS Backend Dockerfile
-FROM node:20-alpine
+# BMI UMS Backend — Multi-stage Dockerfile
+# Stage 1: Build (includes TypeScript compiler and all dev dependencies)
+FROM node:20-alpine AS builder
 
-# Install curl for healthchecks
 RUN apk add --no-cache curl
 
-# Create app directory
 WORKDIR /app
 
-# Copy package files
+# Install ALL dependencies (including devDependencies for TypeScript compilation)
 COPY package*.json ./
 COPY tsconfig.json ./
+RUN npm ci
 
-# Install dependencies
-RUN npm ci --only=production
-
-# Copy source code
+# Compile TypeScript → dist/
 COPY src ./src
-
-# Build TypeScript
 RUN npm run build
 
-# Create logs directory
+# ─────────────────────────────────────────────────────────────────────────────
+# Stage 2: Production image (only runtime dependencies + compiled output)
+FROM node:20-alpine AS production
+
+RUN apk add --no-cache curl
+
+WORKDIR /app
+
+# Install ONLY production dependencies
+COPY package*.json ./
+RUN npm ci --only=production
+
+# Copy compiled output from builder
+COPY --from=builder /app/dist ./dist
+
+# Persistent log directory
 RUN mkdir -p logs
 
-# Expose port
 EXPOSE 3001
 
-# Health check
 HEALTHCHECK --interval=30s --timeout=10s --start-period=30s --retries=3 \
     CMD curl -f http://localhost:3001/health || exit 1
 
-# Start the application
-CMD ["npm", "start"]
+CMD ["node", "dist/index.js"]

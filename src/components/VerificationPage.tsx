@@ -660,13 +660,12 @@ const VerificationPage: React.FC<VerificationPageProps> = ({ logo }) => {
           </span>
         </div>
         <p className="text-[10px] text-gray-400 font-medium">
-          This portal verifies documents issued by Bishop Medardo Isizoh
-          University. All verification attempts are logged for security
+          This portal verifies documents issued by Bethel Ministries International (BMI) University. All verification attempts are logged for security
           purposes.
         </p>
         <p className="text-[10px] text-gray-400">
-          Registrar: registrar@bmiuniversity.ac.ke &nbsp;·&nbsp;
-          <span className="font-mono">+254 XXX XXX XXX</span>
+          Email: admin@bmiuniversity.org &nbsp;·&nbsp;
+          <span>East Africa: +254-726-912577 &nbsp;·&nbsp; US: 704-607-5540</span>
         </p>
       </footer>
     </div>

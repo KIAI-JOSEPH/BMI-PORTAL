@@ -9,15 +9,16 @@ npm run tunnel
 ```
 
 This automatically:
-1. Kills the old cloudflared tunnel
-2. Gets a new public URL from Cloudflare
-3. Updates `VITE_VERIFY_URL` in `.env`
-4. Updates `VERIFY_PORTAL_URL` in `backend/.env`
-5. Rebuilds the frontend (URL baked into QR codes)
-6. Starts the local proxy (port 4000)
-7. Prints the live public URL
+1. Kills the old ngrok tunnel
+2. Reads your `NGROK_DOMAIN` from `.env`
+3. Starts an ngrok tunnel on port 4000
+4. Updates `VITE_VERIFY_URL` in `.env`
+5. Updates `VERIFY_PORTAL_URL` in `backend/.env`
+6. Rebuilds the frontend (URL baked into QR codes)
+7. Starts the local proxy (port 4000)
+8. Prints the live public URL
 
-**Limitation:** The URL changes every time you restart. Not suitable for printed documents.
+**Advantage:** Ngrok with a static domain provides a permanent URL, perfectly suitable for printed documents.
 
 ---
 

@@ -492,15 +492,15 @@ export const Transcripts: React.FC<TranscriptsProps> = (props) => {
   // Single-page A4 layout model (mm): fixed zones + computed table capacity.
   const A4_HEIGHT_MM = 297;
   const PAGE_PADDING_MM = 8;
-  const FIXED_TOP_MM = 92;
-  const FIXED_BOTTOM_MM = 50;
-  const TABLE_HEADER_MM = 10;
+  const FIXED_TOP_MM = 82; // Reduced from 92
+  const FIXED_BOTTOM_MM = 35; // Reduced from 50
+  const TABLE_HEADER_MM = 8; // Reduced from 10
   const FIXED_ROWS_PER_PAGE = Math.max(
     1,
     Math.min(60, templateLayout.rows || 25),
   );
   // Keep rows compact so all 25 are always visible in the single-page frame.
-  const TABLE_ROW_MM = 4.6;
+  const TABLE_ROW_MM = 4.4; // Reduced from 4.6
   const availableTableMm = Math.max(
     0,
     A4_HEIGHT_MM -
@@ -3063,27 +3063,27 @@ export const Transcripts: React.FC<TranscriptsProps> = (props) => {
                 </div>
 
                 <div
-                  className={`flex flex-col items-center border-b-2 border-gray-900 pb-2 mb-3 relative z-10 ${editorOutlineClass("headerTitle")}`}
+                  className={`flex flex-col items-center border-b-2 border-gray-900 pb-1 mb-1.5 relative z-10 ${editorOutlineClass("headerTitle")}`}
                   style={getBlockStyle("headerTitle")}
                   onClick={() => editorMode && setSelectedBlock("headerTitle")}
                   onMouseDown={(e) => startBlockDrag("headerTitle", e)}
                 >
                   <img
                     src={logo || "/BMI.svg"}
-                    className="h-14 mb-1.5 object-contain filter contrast-125"
+                    className="h-10 mb-1 object-contain filter contrast-125"
                     alt="BMI Logo"
                     onError={(e) => {
                       (e.target as HTMLImageElement).src = "/BMI.svg";
                     }}
                   />
-                  <h1 className="text-[30px] leading-none font-serif font-black tracking-tight text-gray-900 uppercase">
+                  <h1 className="text-[24px] leading-none font-serif font-black tracking-tight text-gray-900 uppercase">
                     BMI UNIVERSITY
                   </h1>
-                  <p className="text-[8px] font-sans font-black text-gray-600 uppercase tracking-[0.35em] mt-0.5">
+                  <p className="text-[7px] font-sans font-black text-gray-600 uppercase tracking-[0.35em] mt-0.5">
                     OFFICE OF THE REGISTRAR
                   </p>
-                  <div className="mt-1.5 px-7 py-0.5 border-y border-gray-900 bg-gradient-to-r from-purple-50/80 via-white to-purple-50/80">
-                    <h2 className="text-[13px] font-serif font-black uppercase tracking-[0.26em] leading-tight">
+                  <div className="mt-1 px-7 py-0.5 border-y border-gray-900 bg-gradient-to-r from-purple-50/80 via-white to-purple-50/80">
+                    <h2 className="text-[11px] font-serif font-black uppercase tracking-[0.26em] leading-tight">
                       {transcriptType} Academic Transcript
                       {transcriptType === "Provisional" && (
                         <span className="ml-3 bg-red-600 px-2 py-0.5 text-[10px] text-white">
@@ -3095,17 +3095,17 @@ export const Transcripts: React.FC<TranscriptsProps> = (props) => {
                 </div>
 
                 <div
-                  className={`mb-1.5 px-4 relative z-10 ${editorOutlineClass("studentName")}`}
+                  className={`mb-0.5 px-4 relative z-10 ${editorOutlineClass("studentName")}`}
                   style={getBlockStyle("studentName")}
                   onClick={() => editorMode && setSelectedBlock("studentName")}
                   onMouseDown={(e) => startBlockDrag("studentName", e)}
                 >
-                  <div className="border-y border-gray-300 py-1 flex items-center">
-                    <span className="text-[8px] font-montserrat font-medium text-gray-400 uppercase tracking-widest absolute left-4">
+                  <div className="border-y border-gray-300 py-0.5 flex items-center">
+                    <span className="text-[7px] font-montserrat font-medium text-gray-400 uppercase tracking-widest absolute left-4">
                       STUDENT NAME:
                     </span>
                     <div className="w-full text-center">
-                      <span className="text-[19px] leading-none font-serif font-bold text-[#4B0082] uppercase tracking-[0.15em]">
+                      <span className="text-[16px] leading-none font-serif font-bold text-[#4B0082] uppercase tracking-[0.15em]">
                         {selectedStudent.full_name ||
                           `${selectedStudent.first_name} ${selectedStudent.last_name}`}
                       </span>
@@ -3114,13 +3114,13 @@ export const Transcripts: React.FC<TranscriptsProps> = (props) => {
                 </div>
 
                 <div
-                  className={`grid grid-cols-2 gap-x-12 gap-y-1 mb-2 text-[9px] relative z-10 px-4 ${editorOutlineClass("studentMeta")}`}
+                  className={`grid grid-cols-2 gap-x-12 gap-y-0.5 mb-1 text-[9px] relative z-10 px-4 ${editorOutlineClass("studentMeta")}`}
                   style={getBlockStyle("studentMeta")}
                   onClick={() => editorMode && setSelectedBlock("studentMeta")}
                   onMouseDown={(e) => startBlockDrag("studentMeta", e)}
                 >
                   {/* Left Column */}
-                  <div className="flex flex-col gap-1">
+                  <div className="flex flex-col gap-0.5">
                     <div className="flex justify-between border-b border-gray-100 pb-0.5">
                       <span className="text-gray-400 font-montserrat text-[8px] uppercase tracking-wider font-medium">
                         STUDENT ID:
@@ -3157,7 +3157,7 @@ export const Transcripts: React.FC<TranscriptsProps> = (props) => {
                     </div>
                   </div>
                   {/* Right Column */}
-                  <div className="flex flex-col gap-1">
+                  <div className="flex flex-col gap-0.5">
                     <div className="flex justify-between border-b border-gray-100 pb-0.5">
                       <span className="text-gray-400 font-montserrat text-[8px] uppercase tracking-wider font-medium">
                         AWARD TYPE:
@@ -3195,7 +3195,7 @@ export const Transcripts: React.FC<TranscriptsProps> = (props) => {
                 </div>
 
                 <div
-                  className={`border border-gray-900 mb-3 relative z-10 shadow-sm overflow-hidden ${editorOutlineClass("table")}`}
+                  className={`border border-gray-900 mb-1 relative z-10 shadow-sm overflow-hidden ${editorOutlineClass("table")}`}
                   style={getBlockStyle("table")}
                   onClick={() => editorMode && setSelectedBlock("table")}
                   onMouseDown={(e) => startBlockDrag("table", e)}
@@ -3248,17 +3248,17 @@ export const Transcripts: React.FC<TranscriptsProps> = (props) => {
                 )}
 
                 <div
-                  className={`border border-gray-200 mt-2 p-2 relative z-10 flex text-[9px] font-black ${editorOutlineClass("metrics")}`}
+                  className={`border border-gray-200 mt-1 p-1.5 relative z-10 flex text-[9px] font-black ${editorOutlineClass("metrics")}`}
                   style={getBlockStyle("metrics")}
                   onClick={() => editorMode && setSelectedBlock("metrics")}
                   onMouseDown={(e) => startBlockDrag("metrics", e)}
                 >
                   {/* Left - GPA */}
-                  <div className="flex-1 flex flex-col justify-center border-r border-gray-200 px-3 relative min-h-[30px]">
+                  <div className="flex-1 flex flex-col justify-center border-r border-gray-200 px-3 relative min-h-[26px]">
                     <span className="absolute top-0 left-3 text-[7px] text-gray-400 font-sans tracking-widest uppercase font-black">
                       PERFORMANCE METRICS
                     </span>
-                    <div className="flex justify-between items-end h-full pt-4">
+                    <div className="flex justify-between items-end h-full pt-3">
                       <span className="text-gray-600">
                         Semester GPA:{" "}
                         <span className="text-gray-950 font-black">
@@ -3346,14 +3346,14 @@ export const Transcripts: React.FC<TranscriptsProps> = (props) => {
                 </div>
 
                 <div
-                  className={`mt-3 relative z-10 ${editorOutlineClass("recommendation")}`}
+                  className={`mt-1.5 relative z-10 ${editorOutlineClass("recommendation")}`}
                   style={getBlockStyle("recommendation")}
                   onClick={() =>
                     editorMode && setSelectedBlock("recommendation")
                   }
                   onMouseDown={(e) => startBlockDrag("recommendation", e)}
                 >
-                  <div className="flex items-start gap-4 px-2 pb-3 border-b-2 border-gray-900">
+                  <div className="flex items-start gap-4 px-2 pb-1.5 border-b border-gray-900">
                     <span className="flex-shrink-0 text-[8px] font-black uppercase text-gray-400 tracking-widest pt-1">
                       RECOMMENDATION:
                     </span>
@@ -3366,7 +3366,7 @@ export const Transcripts: React.FC<TranscriptsProps> = (props) => {
                 </div>
 
                 <div
-                  className={`border border-gray-200 px-3 py-2 text-[8px] font-bold relative z-10 mt-3 text-center ${editorOutlineClass("grading")}`}
+                  className={`border border-gray-200 px-3 py-1 text-[8px] font-bold relative z-10 mt-1.5 text-center ${editorOutlineClass("grading")}`}
                   style={getBlockStyle("grading")}
                   onClick={() => editorMode && setSelectedBlock("grading")}
                   onMouseDown={(e) => startBlockDrag("grading", e)}
@@ -3394,7 +3394,7 @@ export const Transcripts: React.FC<TranscriptsProps> = (props) => {
                 </div>
 
                 <div
-                  className={`flex justify-between mt-10 relative z-10 mb-4 px-8 ${editorOutlineClass("signatures")}`}
+                  className={`flex justify-between mt-6 relative z-10 mb-2 px-8 ${editorOutlineClass("signatures")}`}
                   style={getBlockStyle("signatures")}
                   onClick={() => editorMode && setSelectedBlock("signatures")}
                   onMouseDown={(e) => startBlockDrag("signatures", e)}
@@ -3402,7 +3402,7 @@ export const Transcripts: React.FC<TranscriptsProps> = (props) => {
                   {/* Dean of Faculty & Academics */}
                   <div className="flex flex-col items-start w-[32%]">
                     <div className="w-full border-b border-gray-900" />
-                    <span className="font-serif italic text-sm text-gray-900 whitespace-nowrap mt-1.5">
+                    <span className="font-serif italic text-[11px] text-gray-900 whitespace-nowrap mt-1">
                       {getDeanName(selectedStudent.program_code ?? "")}
                     </span>
                     <span className="text-[7px] font-black uppercase tracking-widest mt-0.5 text-gray-500">
@@ -3413,7 +3413,7 @@ export const Transcripts: React.FC<TranscriptsProps> = (props) => {
                   {/* University Registrar */}
                   <div className="flex flex-col items-end w-[35%] relative">
                     <div className="w-full border-b border-gray-900 relative z-10" />
-                    <span className="font-serif italic text-sm text-gray-900 whitespace-nowrap mt-1.5 w-full text-right relative z-10">
+                    <span className="font-serif italic text-[11px] text-gray-900 whitespace-nowrap mt-1 w-full text-right relative z-10">
                       Dr. Lilian Young
                     </span>
                     <span className="text-[7px] font-black uppercase tracking-widest mt-0.5 text-gray-500 w-full text-right relative z-10">
@@ -3423,7 +3423,7 @@ export const Transcripts: React.FC<TranscriptsProps> = (props) => {
                 </div>
 
                 <div
-                  className={`flex justify-between items-center px-4 mt-8 mb-2 relative z-10 ${editorOutlineClass("footer")}`}
+                  className={`flex justify-between items-center px-4 mt-4 mb-1 relative z-10 ${editorOutlineClass("footer")}`}
                   style={getBlockStyle("footer")}
                   onClick={() => editorMode && setSelectedBlock("footer")}
                   onMouseDown={(e) => startBlockDrag("footer", e)}
@@ -3456,13 +3456,13 @@ export const Transcripts: React.FC<TranscriptsProps> = (props) => {
                   </div>
 
                   {/* CENTRE — physical seal zone */}
-                  <div className="flex flex-col items-center justify-center w-[34%] py-1">
+                  <div className="flex flex-col items-center justify-center w-[34%] py-0.5">
                     {/* Dashed circle guides the stamp placement during printing */}
                     <div
-                      className="w-24 h-24 rounded-full border-2 border-dashed border-gray-300 flex flex-col items-center justify-center"
+                      className="w-20 h-20 rounded-full border-2 border-dashed border-gray-300 flex flex-col items-center justify-center"
                       style={{ borderStyle: "dashed", borderSpacing: "4px" }}
                     >
-                      <span className="text-[7px] font-bold text-gray-300 uppercase tracking-[0.15em] text-center leading-tight select-none">
+                      <span className="text-[6px] font-bold text-gray-300 uppercase tracking-[0.15em] text-center leading-tight select-none">
                         OFFICIAL
                         <br />
                         SEAL
@@ -3472,14 +3472,14 @@ export const Transcripts: React.FC<TranscriptsProps> = (props) => {
 
                   {/* RIGHT — digital validation badge */}
                   <div className="w-[30%] flex justify-end">
-                    <div className="border border-purple-200 bg-purple-50/30 px-4 py-2.5 rounded-none flex flex-col items-center justify-center w-full relative z-10">
-                      <div className="flex items-center gap-1.5">
-                        <ShieldCheck size={11} className="text-[#4B0082]" />
-                        <span className="text-[#4B0082] text-[9px] font-black uppercase tracking-widest">
+                    <div className="border border-purple-200 bg-purple-50/30 px-3 py-1.5 rounded-none flex flex-col items-center justify-center w-full relative z-10">
+                      <div className="flex items-center gap-1">
+                        <ShieldCheck size={10} className="text-[#4B0082]" />
+                        <span className="text-[#4B0082] text-[8px] font-black uppercase tracking-widest">
                           DIGITAL VALIDATION ACTIVE
                         </span>
                       </div>
-                      <span className="text-[6px] font-bold text-gray-400 uppercase tracking-[0.2em] mt-0.5">
+                      <span className="text-[5px] font-bold text-gray-400 uppercase tracking-[0.2em] mt-0.5">
                         CERTIFIED TRUE COPY • E-TRANSCRIPT
                       </span>
                     </div>

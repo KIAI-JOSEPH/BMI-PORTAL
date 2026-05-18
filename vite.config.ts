@@ -10,7 +10,7 @@ export default defineConfig({
   preview: {
     port: 3000,
     host: "0.0.0.0",
-    // Allow any host — needed when Cloudflare Tunnel or a reverse proxy forwards
+    // Allow any host — needed when Ngrok Tunnel or a reverse proxy forwards
     // requests from a public domain.  Safe because the preview server only
     // serves pre-built static files (no source code exposure).
     allowedHosts: true,

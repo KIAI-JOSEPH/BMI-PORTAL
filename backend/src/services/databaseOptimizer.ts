@@ -11,39 +11,16 @@ import { logger } from "../utils/logger.js";
  * Indexes dramatically improve query speed on large datasets
  */
 export async function createDatabaseIndexes(): Promise<void> {
-  try {
-    logger.info("Creating database indexes for optimal performance...");
-
-    // Note: PocketBase uses SQLite under the hood
-    // We'll create indexes through PocketBase's collection schema
-
-    logger.info(
-      "✓ Database indexes configured (PocketBase manages index creation automatically)",
-    );
-    logger.info("  Indexes will be created on first query to each collection");
-  } catch (error) {
-    logger.error("Failed to configure database indexes:", error);
-    throw error;
-  }
+  logger.info("Database indexes are managed by pb_migrations.");
+  logger.info("  Migration: pb_migrations/1780000002_add_indexes.js");
+  logger.info("  To verify: check PocketBase admin UI > Collections > [collection] > Indexes tab");
 }
 
 /**
  * Update collection schemas with cascade rules and optimizations
  */
 export async function optimizeCollectionSchemas(): Promise<void> {
-  // pb is managed by the global singleton; no direct call needed here
-  void getPocketBase();
-  try {
-    logger.info("Optimizing collection schemas with cascade rules...");
-
-    logger.info("✓ Collection schemas already optimized via definitions");
-  } catch (error) {
-    logger.warn(
-      "Failed to optimize collection schemas (possibly due to PocketBase API version changes):",
-      (error as any).message,
-    );
-    // Don't throw - this is non-critical
-  }
+  logger.info("Collection schemas are managed by pb_migrations. No runtime schema optimization needed.");
 }
 
 /**

@@ -3,7 +3,7 @@ version: "3.8"
 services:
   # PocketBase - Database & Auth (internal only — access via Caddy reverse proxy)
   pocketbase:
-    image: ghcr.io/muchobien/pocketbase:latest
+    image: ghcr.io/muchobien/pocketbase:0.22.1
     container_name: bmi-pocketbase
     restart: unless-stopped
     expose:
@@ -28,7 +28,7 @@ services:
   # If the server dies, restore with: litestream restore -replica s3 /pb_data/data.db
   # Docs: https://litestream.io
   litestream:
-    image: litestream/litestream:latest
+    image: litestream/litestream:0.3.13
     container_name: bmi-litestream
     restart: unless-stopped
     command: replicate
@@ -46,7 +46,7 @@ services:
 
   # Ollama - Local LLM (internal only — no public access)
   ollama:
-    image: ollama/ollama:latest
+    image: ollama/ollama:0.5.1
     container_name: bmi-ollama
     restart: unless-stopped
     # No public ports — only accessible within Docker network
@@ -98,9 +98,9 @@ services:
       - CERT_SIGNING_SECRET=${CERT_SIGNING_SECRET}
       - CERT_OFFLINE_SECRET=${CERT_OFFLINE_SECRET}
     volumes:
+      # Production: only logs are mounted. Source code runs from the compiled image.
+      # For development with hot-reload, use docker-compose.override.yml
       - ./logs:/app/logs
-      - ./backend:/app
-      - /app/node_modules
     depends_on:
       pocketbase:
         condition: service_healthy
@@ -131,7 +131,7 @@ services:
 
   # Caddy - Reverse Proxy with Automatic HTTPS
   caddy:
-    image: caddy:2-alpine
+    image: caddy:2.9-alpine
     container_name: bmi-caddy
     restart: unless-stopped
     ports:

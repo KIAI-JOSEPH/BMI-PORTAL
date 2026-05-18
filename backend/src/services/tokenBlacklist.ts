@@ -127,8 +127,9 @@ export async function revokeToken(
     }
   }
 
-  // In-memory fallback
-  inMemoryBlacklist.set(token, { expiresAt: expiresAtMs });
+  // In-memory fallback — store the HASHED token to avoid keeping raw JWTs in
+  // process memory (same security property as the Redis path).
+  inMemoryBlacklist.set(hashToken(token), { expiresAt: expiresAtMs });
 }
 
 /**
@@ -151,11 +152,12 @@ export async function isTokenRevoked(token: string): Promise<boolean> {
     }
   }
 
-  // In-memory fallback
-  const entry = inMemoryBlacklist.get(token);
+  // In-memory fallback — look up by hashed token to match the revokeToken path.
+  const hashedToken = hashToken(token);
+  const entry = inMemoryBlacklist.get(hashedToken);
   if (!entry) return false;
   if (entry.expiresAt <= Date.now()) {
-    inMemoryBlacklist.delete(token);
+    inMemoryBlacklist.delete(hashedToken);
     return false;
   }
   return true;
@@ -167,10 +169,11 @@ export async function isTokenRevoked(token: string): Promise<boolean> {
  * Use the async version for full Redis-backed checks.
  */
 export function isTokenRevokedSync(token: string): boolean {
-  const entry = inMemoryBlacklist.get(token);
+  const hashedToken = hashToken(token);
+  const entry = inMemoryBlacklist.get(hashedToken);
   if (!entry) return false;
   if (entry.expiresAt <= Date.now()) {
-    inMemoryBlacklist.delete(token);
+    inMemoryBlacklist.delete(hashedToken);
     return false;
   }
   return true;

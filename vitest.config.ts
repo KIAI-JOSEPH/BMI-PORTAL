@@ -14,13 +14,16 @@ export default defineConfig({
       reporter: ['text', 'json', 'html'],
       include: ['src/**/*.{ts,tsx}'],
       exclude: [
-        'src/**/*.test.{ts,tsx}',
-        'src/**/*.spec.{ts,tsx}',
-        'src/**/*.d.ts',
-        'src/vite-env.d.ts',
-        'src/test/**',
-        'src/grading/**',
-      ],
+      'src/**/*.test.{ts,tsx}',
+      'src/**/*.spec.{ts,tsx}',
+      'src/**/*.d.ts',
+      'src/vite-env.d.ts',
+      'src/test/**',
+      // NOTE: src/grading/** is intentionally INCLUDED in coverage.
+      // The grading module contains GPA calculators, grade engines, and ECTS
+      // converters that directly affect student academic records. Coverage is
+      // mandatory. Do not add it back to this exclusion list.
+    ],
     },
   },
   resolve: {

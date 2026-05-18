@@ -41,6 +41,11 @@ jobs:
       - name: Type check backend
         run: cd backend && npx tsc --noEmit
 
+      - name: Lint backend
+        run: |
+          cd backend
+          npm run lint || true
+
       - name: Build frontend
         run: npm run build
 
@@ -79,7 +84,7 @@ jobs:
         run: cd backend && npm ci
 
       - name: Run frontend tests
-        run: npm test
+        run: npm run test
 
       - name: Run backend tests
         run: cd backend && npm test
@@ -118,8 +123,7 @@ jobs:
           cd backend
           cp .env.example .env
           # Generate secrets for the test run
-          echo "JWT_SECRET=$(node -e 'console.log(require(\"crypto\").randomBytes(32).toString(\"hex\")')" >> .env
-          echo "ENCRYPTION_KEY=$(node -e 'console.log(require(\"crypto\").randomBytes(32).toString(\"hex\")')" >> .env
+          node -e "const c=require('crypto'),fs=require('fs');fs.appendFileSync('.env','JWT_SECRET='+c.randomBytes(32).toString('hex')+'\n'+'ENCRYPTION_KEY='+c.randomBytes(32).toString('hex')+'\n')"
           echo "POCKETBASE_ADMIN_EMAIL=admin@bmi.edu" >> .env
           echo "POCKETBASE_ADMIN_PASSWORD=CITestAdmin2024!!" >> .env
           npm run start &
@@ -167,9 +171,9 @@ jobs:
         uses: actions/checkout@v4
 
       - name: Run npm audit (frontend)
-        run: npm audit --audit-level=moderate || true
+        run: npm audit --audit-level=high || echo "::warning::Frontend has high+ severity vulnerabilities — review AUDIT/ROADMAP_TODO.md P1-05"
 
       - name: Run npm audit (backend)
         run: |
           cd backend
-          npm audit --audit-level=moderate || true
+          npm audit --audit-level=high || echo "::warning::Backend has high+ severity vulnerabilities — review AUDIT/ROADMAP_TODO.md P1-05"

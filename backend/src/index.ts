@@ -2,8 +2,6 @@
 // 100% Open Source Backend API
 // License: MIT
 
-import { fileURLToPath } from "url";
-import path from "path";
 import { serve } from "@hono/node-server";
 import { Hono } from "hono";
 import { cors } from "hono/cors";
@@ -315,37 +313,9 @@ async function startServer() {
       logger.warn("User initialization failed:", error);
     }
 
-    // Auto-populate Mukurweini and Giathugu campus data
-    try {
-      logger.info("Auto-populating Mukurweini and Giathugu campus data...");
-      const { exec } = await import("child_process");
-      const { promisify } = await import("util");
-      const execAsync = promisify(exec);
-
-      const __filename = fileURLToPath(import.meta.url);
-      const __dirname = path.dirname(__filename);
-      const scriptPath = path.resolve(
-        __dirname,
-        "../../scripts/import-mukurweini-giathugu.ts",
-      );
-
-      await execAsync(`npx tsx "${scriptPath}"`, {
-        env: {
-          ...process.env,
-          PB_URL: CONFIG.POCKETBASE_URL,
-          PB_EMAIL: CONFIG.POCKETBASE_ADMIN_EMAIL,
-          PB_PASSWORD: CONFIG.POCKETBASE_ADMIN_PASSWORD,
-        },
-      });
-      logger.info(
-        "✓ Mukurweini and Giathugu campus data auto-populated successfully",
-      );
-    } catch (error) {
-      logger.warn(
-        "Failed to auto-populate Mukurweini and Giathugu data:",
-        error,
-      );
-    }
+    // Campus data seeding is a one-time manual operation.
+    // Run: npm --prefix backend exec -- npx tsx scripts/import-mukurweini-giathugu.ts
+    logger.info("ℹ Campus data seeding: run the import script manually on first setup (see Makefile seed target).");
 
     // No pool initialization needed — pocketbasePool now delegates to the
     // existing PocketBase singleton (zero overhead, same API surface).
