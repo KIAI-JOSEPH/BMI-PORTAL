@@ -1,114 +1,96 @@
-# BMI UMS - Caddy Configuration
-# Automatic HTTPS with Let's Encrypt
+# BMI UMS — Caddy Reverse Proxy + TLS
+#
+# Development mode  : uses :80 block (no TLS, auto_https off)
+# Production mode   : uncomment the verify.bmiuniversity.ac.ke block below
+#                     and comment out the :80 block.
+#                     Caddy provisions a free Let's Encrypt certificate automatically —
+#                     no manual cert setup required.
 
 {
-    # In production: remove auto_https off and set your email below
-    # email your-email@bmi.edu
+    # Set your email so Let's Encrypt can notify you about cert renewals
+    email admin@bmiuniversity.ac.ke
+
+    # Comment this out in production — it disables automatic HTTPS
     auto_https off
+
     admin off
 }
 
-# HTTP → HTTPS redirect (active when auto_https is enabled in production)
-# :80 {
-#     redir https://{host}{uri} permanent
-# }
-
-# Local development
-:80 {
-    encode gzip
-
+# ── SHARED SECURITY HEADERS ──────────────────────────────────────────────────
+# (snippet reused in both dev and prod blocks)
+(security_headers) {
     header {
-        X-Content-Type-Options "nosniff"
-        X-Frame-Options "DENY"
-        X-XSS-Protection "1; mode=block"
-        Referrer-Policy "strict-origin-when-cross-origin"
-        Content-Security-Policy "default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com; img-src 'self' data: blob: https:; connect-src 'self'; frame-ancestors 'none';"
-        Permissions-Policy "geolocation=(), microphone=(), camera=()"
-        Strict-Transport-Security "max-age=31536000; includeSubDomains; preload"
+        X-Content-Type-Options        "nosniff"
+        X-Frame-Options               "DENY"
+        X-XSS-Protection              "1; mode=block"
+        Referrer-Policy               "strict-origin-when-cross-origin"
+        Permissions-Policy            "geolocation=(), microphone=(), camera=()"
+        Strict-Transport-Security     "max-age=31536000; includeSubDomains; preload"
         -Server
     }
+}
 
-    # API routes
+# ── ROUTE HANDLERS ───────────────────────────────────────────────────────────
+# (snippet reused in both dev and prod blocks)
+(route_handlers) {
+    # Backend API — in Docker the service name is "api", on bare-metal it's localhost
     handle_path /api/* {
         reverse_proxy api:3001 {
-            header_up Host {host}
-            header_up X-Real-IP {remote}
-            header_up X-Forwarded-For {remote}
+            header_up X-Real-IP        {remote}
+            header_up X-Forwarded-For  {remote}
             header_up X-Forwarded-Proto {scheme}
         }
     }
 
-    # PocketBase admin UI — blocked from public access
-    # Access it directly on the server: ssh tunnel or VPN only
-    handle_path /_/* {
+    # Block direct PocketBase admin access from the internet
+    # Access via SSH tunnel: ssh -L 8090:localhost:8090 user@server
+    handle /_ * {
         respond "Access Denied" 403
     }
 
-    # PocketBase API
-    handle_path /pb/* {
-        reverse_proxy pocketbase:8090 {
-            header_up Host {host}
-            header_up X-Real-IP {remote}
-            header_up X-Forwarded-For {remote}
-            header_up X-Forwarded-Proto {scheme}
-        }
-    }
-
-    # Static files (frontend)
+    # SPA fallback — serve index.html for all non-file routes
     handle {
         root * /srv
         try_files {path} {path}/ /index.html
         file_server
+        encode gzip
     }
 
-    # Logging
     log {
         output file /var/log/caddy/access.log {
             roll_size 10MB
             roll_keep 5
-            roll_keep_for 48h
         }
     }
 }
 
-# ── PRODUCTION: uncomment and set your domain ────────────────────────────────
-# bmi.university.edu {
-#     # Caddy auto-provisions Let's Encrypt TLS — set email in global block above
+# ════════════════════════════════════════════════════════════════════════════
+# DEVELOPMENT  (active by default — comment out when deploying to production)
+# ════════════════════════════════════════════════════════════════════════════
+:80 {
+    import security_headers
+    import route_handlers
+}
+
+# ════════════════════════════════════════════════════════════════════════════
+# PRODUCTION   (uncomment this block + comment out the :80 block above)
 #
-#     encode gzip
+# HOW TO ACTIVATE:
+#   1. Ensure verify.bmiuniversity.ac.ke A record → your server IP
+#   2. Remove "auto_https off" from the global block
+#   3. Comment out the ":80 {" block above
+#   4. Uncomment the block below
+#   5. Run:  docker compose up -d  (or systemctl reload caddy)
 #
-#     header {
-#         X-Content-Type-Options "nosniff"
-#         X-Frame-Options "DENY"
-#         X-XSS-Protection "1; mode=block"
-#         Referrer-Policy "strict-origin-when-cross-origin"
-#         Content-Security-Policy "default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com; img-src 'self' data: blob: https:; connect-src 'self'; frame-ancestors 'none';"
-#         Permissions-Policy "geolocation=(), microphone=(), camera=()"
-#         Strict-Transport-Security "max-age=31536000; includeSubDomains; preload"
-#         -Server
-#     }
-#
-#     handle_path /api/* {
-#         reverse_proxy api:3001 {
-#             header_up Host {host}
-#             header_up X-Real-IP {remote}
-#             header_up X-Forwarded-For {remote}
-#             header_up X-Forwarded-Proto {scheme}
-#         }
-#     }
-#
-#     handle_path /_/* {
-#         respond "Access Denied" 403
-#     }
-#
-#     handle {
-#         root * /srv
-#         try_files {path} {path}/ /index.html
-#         file_server
-#     }
+# Caddy will automatically obtain and renew the TLS certificate — FREE.
+# ════════════════════════════════════════════════════════════════════════════
+
+# verify.bmiuniversity.ac.ke {
+#     import security_headers
+#     import route_handlers
 # }
 #
-# # HTTP → HTTPS redirect for production
-# http://bmi.university.edu {
-#     redir https://bmi.university.edu{uri} permanent
+# # Redirect bare HTTP → HTTPS
+# http://verify.bmiuniversity.ac.ke {
+#     redir https://verify.bmiuniversity.ac.ke{uri} permanent
 # }

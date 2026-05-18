@@ -1,617 +1,674 @@
 /**
- * KIRO: DO NOT MODIFY
- * This file contains stable production logic.
- * Do not edit unless explicitly instructed.
+ * BMI UMS — Unified Document Verification Portal
+ *
+ * Public page — no authentication required.
+ * Verifies BOTH certificates (BMI-YYYY-NNNNNN) and
+ * transcripts (BMI-TRANS-YYYY-NNNNNN) through one unified backend endpoint.
+ *
+ * Three input paths:
+ *   1. URL deep-link  /verify?id=SERIAL&t=TOKEN  (QR scan → opens this URL)
+ *   2. Manual entry   user types serial number
+ *   3. Camera QR scan via QRScanner component
+ *
+ * Confidence levels:
+ *   HIGH  — serial found + HMAC token verified    (QR scan path)
+ *   LOW   — serial found, no token provided        (manual serial only)
  */
 
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useCallback } from "react";
 import {
-  Search,
   ShieldCheck,
-  AlertTriangle,
+  ShieldX,
+  ShieldAlert,
+  QrCode,
+  Search,
   CheckCircle2,
   XCircle,
-  QrCode,
-  Download,
-  Eye,
-  Calendar,
-  User,
+  AlertCircle,
   GraduationCap,
-  Award,
-  Building,
+  Scroll,
+  CalendarDays,
+  Building2,
   Hash,
-  Clock,
-  Globe,
-  Wifi,
-  WifiOff,
-  Scan,
+  Star,
+  RefreshCcw,
+  Copy,
+  Check,
 } from "lucide-react";
 import QRScanner from "./QRScanner";
-import { verificationService } from "../services/verificationService";
-
-interface CertificateData {
-  valid: boolean;
-  certificate?: {
-    serial_number: string;
-    student_name: string;
-    degree_title: string;
-    graduation_class?: string;
-    faculty: string;
-    department: string;
-    issue_date: string;
-    graduation_date: string;
-    gpa: number;
-    status: "active" | "revoked" | "suspended";
-  };
-  verification?: {
-    timestamp: string;
-    method: "online" | "offline" | "qr_scan";
-    hash_verified: boolean;
-    verification_count: number;
-  };
-  error?: string;
-  code?: string;
-}
+import {
+  verifyDocument,
+  verifyQRScan,
+  parseQRPayload,
+  type DocumentVerifyResult,
+} from "../services/verificationService";
 
 interface VerificationPageProps {
   logo?: string;
 }
 
+// ─── Small helpers ────────────────────────────────────────────────────────────
+function formatDate(iso?: string) {
+  if (!iso) return "—";
+  try {
+    return new Date(iso).toLocaleDateString("en-US", {
+      year: "numeric",
+      month: "long",
+      day: "numeric",
+    });
+  } catch {
+    return iso;
+  }
+}
+
+function ConfidencePill({
+  confidence,
+}: {
+  confidence?: "high" | "medium" | "low";
+}) {
+  if (!confidence) return null;
+  const cfg = {
+    high: {
+      label: "High Confidence",
+      cls: "bg-emerald-100 text-emerald-800 border-emerald-200",
+    },
+    medium: {
+      label: "Medium Confidence",
+      cls: "bg-amber-100 text-amber-800 border-amber-200",
+    },
+    low: {
+      label: "Serial Only — Low Confidence",
+      cls: "bg-gray-100 text-gray-600 border-gray-200",
+    },
+  }[confidence];
+  return (
+    <span
+      className={`inline-flex items-center gap-1 px-2 py-0.5 rounded border text-[10px] font-bold uppercase tracking-widest ${cfg.cls}`}
+    >
+      {confidence === "high" && <Check size={10} />}
+      {cfg.label}
+    </span>
+  );
+}
+
+// ─── Component ────────────────────────────────────────────────────────────────
 const VerificationPage: React.FC<VerificationPageProps> = ({ logo }) => {
-  const [verificationMode, setVerificationMode] = useState<
-    "online" | "offline"
-  >("online");
-  const [serialNumber, setSerialNumber] = useState("");
-  const [hashValue, setHashValue] = useState("");
+  const [serial, setSerial] = useState("");
   const [isVerifying, setIsVerifying] = useState(false);
-  const [verificationResult, setVerificationResult] =
-    useState<CertificateData | null>(null);
-  const [showQRScanner, setShowQRScanner] = useState(false);
-  const [isOnline, setIsOnline] = useState(navigator.onLine);
+  const [result, setResult] = useState<DocumentVerifyResult | null>(null);
+  const [showScanner, setShowScanner] = useState(false);
+  const [copied, setCopied] = useState(false);
 
-  // Monitor online/offline status
+  // ── Deep-link / URL auto-verify ──────────────────────────────────────────────
   useEffect(() => {
-    const handleOnline = () => setIsOnline(true);
-    const handleOffline = () => setIsOnline(false);
+    // Use the unified parser so legacy ?s= format is handled identically
+    // to the new ?id= format. The URL is treated as a QR payload.
+    const fullUrl = window.location.href;
+    const req = parseQRPayload(fullUrl);
+    if (!req) return;
 
-    window.addEventListener("online", handleOnline);
-    window.addEventListener("offline", handleOffline);
+    setSerial(req.serial.toUpperCase());
 
-    return () => {
-      window.removeEventListener("online", handleOnline);
-      window.removeEventListener("offline", handleOffline);
-    };
-  }, []);
-
-  // Parse URL parameters for direct verification links
-  useEffect(() => {
-    const urlParams = new URLSearchParams(window.location.search);
-    const id = urlParams.get("id");
-    const sig = urlParams.get("sig");
-    const hash = urlParams.get("hash");
-
-    if (id) {
-      setSerialNumber(id);
-      if (hash) setHashValue(hash);
-      // Auto-verify using the service directly with URL params
-      setTimeout(async () => {
-        setIsVerifying(true);
-        try {
-          const result = await verificationService.verifyCertificate({
-            serial: id,
-            sig: sig || undefined,
-            hash: hash || undefined,
-            method: "online",
-          });
-          setVerificationResult(result);
-        } catch {
-          setVerificationResult({
-            valid: false,
-            error: "Verification service unavailable",
-            code: "SERVICE_ERROR",
-          });
-        } finally {
-          setIsVerifying(false);
-        }
-      }, 300);
-    }
-  }, []);
-
-  const parseQRData = (qrContent: string) => {
-    try {
-      // Handle full verification URL
-      if (qrContent.includes("/verify?")) {
-        const url = new URL(qrContent);
-        const id = url.searchParams.get("id");
-        const hash = url.searchParams.get("hash");
-        return { serial: id, hash: hash };
-      }
-
-      // Handle direct serial number
-      if (qrContent.match(/^BMI-\d{4}-\d{6}$/)) {
-        return { serial: qrContent, hash: null };
-      }
-
-      return null;
-    } catch (error) {
-      return null;
-    }
-  };
-
-  const handleVerification = async () => {
-    if (!serialNumber.trim()) {
-      setVerificationResult({
-        valid: false,
-        error: "Please enter a certificate serial number",
-        code: "MISSING_SERIAL",
-      });
-      return;
-    }
+    // Auto-verify immediately
     setIsVerifying(true);
-    setVerificationResult(null);
+    verifyDocument(req)
+      .then(setResult)
+      .catch(() =>
+        setResult({
+          valid: false,
+          error: "Verification service unavailable.",
+          code: "SERVICE_ERROR",
+        }),
+      )
+      .finally(() => setIsVerifying(false));
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // ── Manual verification ────────────────────────────────────────────────────
+  const handleVerify = useCallback(async () => {
+    const clean = serial.trim().toUpperCase();
+    if (!clean) return;
+    setIsVerifying(true);
+    setResult(null);
     try {
-      if (!serialNumber.match(/^BMI-\d{4}-\d{6}$/)) {
-        setVerificationResult({
-          valid: false,
-          error: "Invalid serial number format. Expected: BMI-YYYY-NNNNNN",
-          code: "INVALID_FORMAT",
-        });
-        return;
-      }
-      if (verificationMode === "online" && !isOnline) {
-        setVerificationResult({
-          valid: false,
-          error: "Online verification requires internet connection",
-          code: "NO_CONNECTION",
-        });
-        return;
-      }
-      const result = await verificationService.verifyCertificate({
-        serial: serialNumber,
-        hash: hashValue || undefined,
-        method: verificationMode as "online" | "offline",
-      });
-      setVerificationResult(result);
+      const res = await verifyDocument({ serial: clean });
+      setResult(res);
     } catch {
-      setVerificationResult({
+      setResult({
         valid: false,
-        error: "Verification service temporarily unavailable",
+        error: "Verification service unavailable.",
         code: "SERVICE_ERROR",
       });
     } finally {
       setIsVerifying(false);
     }
-  };
+  }, [serial]);
 
-  const handleQRScan = async (qrContent: string) => {
-    try {
-      const result = await verificationService.verifyQRCode(qrContent);
-      if (result.valid && result.certificate) {
-        setSerialNumber(result.certificate.serial_number);
-      }
-      setVerificationResult(result);
-      setShowQRScanner(false);
-    } catch {
-      setVerificationResult({
+  // ── QR scanner callback ────────────────────────────────────────────────────
+  const handleQRScan = useCallback(async (qrContent: string) => {
+    setShowScanner(false);
+    const req = parseQRPayload(qrContent);
+    if (!req) {
+      setResult({
         valid: false,
-        error: "QR code verification failed",
-        code: "QR_VERIFICATION_ERROR",
+        error: "This QR code is not from BMI University.",
+        code: "INVALID_QR",
       });
-      setShowQRScanner(false);
+      return;
     }
+    setSerial(req.serial.toUpperCase());
+    setIsVerifying(true);
+    try {
+      const res = await verifyQRScan(qrContent);
+      setResult(res);
+    } catch {
+      setResult({
+        valid: false,
+        error: "QR verification failed.",
+        code: "QR_ERROR",
+      });
+    } finally {
+      setIsVerifying(false);
+    }
+  }, []);
+
+  const handleReset = () => {
+    setSerial("");
+    setResult(null);
+    // Clear URL params without reload
+    window.history.replaceState({}, "", "/verify");
   };
 
-  const getStatusColor = (status: string) => {
-    switch (status) {
-      case "active":
-        return "text-emerald-600 bg-emerald-50";
-      case "revoked":
-        return "text-red-600 bg-red-50";
-      case "suspended":
-        return "text-amber-600 bg-amber-50";
-      default:
-        return "text-gray-600 bg-gray-50";
-    }
+  const handleCopySerial = async () => {
+    if (!result?.document?.serial_number) return;
+    await navigator.clipboard
+      .writeText(result.document.serial_number)
+      .catch(() => {});
+    setCopied(true);
+    setTimeout(() => setCopied(false), 2000);
   };
 
-  const getGraduationClass = (gpa: number) => {
-    if (gpa >= 3.6) return "First Class Honours";
-    if (gpa >= 3.0) return "Second Class Honours (Upper Division)";
-    if (gpa >= 2.5) return "Second Class Honours (Lower Division)";
-    return "Pass";
-  };
+  // ── Document type label ────────────────────────────────────────────────────
+  const docTypeLabel =
+    result?.documentType === "transcript"
+      ? "Academic Transcript"
+      : result?.documentType === "certificate"
+        ? "Graduation Certificate"
+        : "BMI University Document";
+
+  const docTypeIcon =
+    result?.documentType === "transcript" ? (
+      <Scroll size={20} />
+    ) : (
+      <GraduationCap size={20} />
+    );
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-[#1a0033] via-[#4B0082] to-[#320064] p-4">
-      {/* Header */}
-      <div className="max-w-6xl mx-auto">
-        <div className="bg-white/95 backdrop-blur-md rounded-2xl shadow-2xl border border-white/20 mb-8">
-          <div className="absolute top-0 left-0 w-full h-2 bg-gradient-to-r from-[#4B0082] via-[#FFD700] to-[#4B0082]"></div>
+    <div className="min-h-screen bg-[#F8F9FA] dark:bg-[#0a0015]">
+      {/* ── Top bar ─────────────────────────────────────────────────────────── */}
+      <div className="bg-[#4B0082] text-white py-3 px-6 text-center text-[10px] font-bold uppercase tracking-widest">
+        Official Document Verification Portal · BMI University · Secure &amp;
+        Private
+      </div>
 
-          <div className="p-8 text-center">
-            <div className="flex items-center justify-center gap-4 mb-6">
-              <img
-                src={logo || "/BMI.svg"}
-                alt="BMI University"
-                className="w-16 h-16 object-contain rounded-xl border-2 border-[#FFD700] bg-white"
-              />
+      {/* ── Header ──────────────────────────────────────────────────────────── */}
+      <header className="bg-white border-b border-gray-100 shadow-sm">
+        <div className="max-w-5xl mx-auto px-6 py-6 flex items-center gap-5">
+          <img
+            src={logo || "/BMI.svg"}
+            alt="BMI University"
+            className="w-14 h-14 object-contain rounded-xl border-2 border-[#FFD700] bg-white"
+            onError={(e) => {
+              (e.target as HTMLImageElement).style.display = "none";
+            }}
+          />
+          <div>
+            <h1 className="text-2xl font-black text-[#2E004F] uppercase tracking-tight">
+              BMI University
+            </h1>
+            <p className="text-sm font-semibold text-gray-500 uppercase tracking-widest">
+              Document Authenticity Verification
+            </p>
+          </div>
+          <div className="ml-auto hidden md:flex items-center gap-2 text-[#4B0082]">
+            <ShieldCheck size={18} />
+            <span className="text-xs font-black uppercase tracking-widest">
+              Cryptographically Secured
+            </span>
+          </div>
+        </div>
+      </header>
+
+      <main className="max-w-5xl mx-auto px-4 py-10 space-y-8">
+        {/* ── Input card ────────────────────────────────────────────────────── */}
+        {!result && (
+          <div className="bg-white border border-gray-100 shadow-sm rounded-none p-8 max-w-2xl mx-auto">
+            <div className="flex items-center gap-3 mb-6">
+              <div className="p-2 bg-purple-50 rounded-none">
+                <Search size={20} className="text-[#4B0082]" />
+              </div>
               <div>
-                <h1 className="text-3xl font-bold text-[#4B0082] tracking-tight">
-                  BMI University
-                </h1>
-                <p className="text-gray-600 font-medium">
-                  Certificate Verification System
+                <h2 className="text-sm font-black uppercase tracking-widest text-gray-900">
+                  Enter Document Serial Number
+                </h2>
+                <p className="text-[10px] text-gray-400 font-medium uppercase tracking-widest mt-0.5">
+                  Certificates: BMI-YYYY-NNNNNN · Transcripts:
+                  BMI-TRANS-YYYY-NNNNNN
                 </p>
               </div>
             </div>
 
-            <p className="text-gray-700 max-w-2xl mx-auto">
-              Verify the authenticity of BMI University graduation certificates
-              using our secure verification system. Enter the certificate serial
-              number or scan the QR code to validate credentials.
-            </p>
-          </div>
-        </div>
-
-        {/* Verification Mode Toggle */}
-        <div className="bg-white/95 backdrop-blur-md rounded-2xl shadow-xl border border-white/20 mb-8 p-6">
-          <div className="flex items-center justify-center gap-4 mb-4">
-            <button
-              onClick={() => setVerificationMode("online")}
-              className={`flex items-center gap-2 px-6 py-3 rounded-xl font-semibold transition-all ${
-                verificationMode === "online"
-                  ? "bg-[#4B0082] text-white shadow-lg"
-                  : "bg-gray-100 text-gray-600 hover:bg-gray-200"
-              }`}
-            >
-              {isOnline ? <Wifi size={20} /> : <WifiOff size={20} />}
-              Online Verification
-            </button>
-            <button
-              onClick={() => setVerificationMode("offline")}
-              className={`flex items-center gap-2 px-6 py-3 rounded-xl font-semibold transition-all ${
-                verificationMode === "offline"
-                  ? "bg-[#4B0082] text-white shadow-lg"
-                  : "bg-gray-100 text-gray-600 hover:bg-gray-200"
-              }`}
-            >
-              <Globe size={20} />
-              Offline Verification
-            </button>
-          </div>
-
-          <div className="text-center text-sm text-gray-600">
-            {verificationMode === "online" ? (
-              <p className="flex items-center justify-center gap-2">
-                <Globe size={16} />
-                Real-time verification against BMI University database
-                {!isOnline && (
-                  <span className="text-red-500 font-semibold">
-                    (No Internet Connection)
-                  </span>
-                )}
-              </p>
-            ) : (
-              <p className="flex items-center justify-center gap-2">
-                <QrCode size={16} />
-                Verify certificates using QR code data and local validation
-              </p>
-            )}
-          </div>
-        </div>
-
-        {/* Verification Form */}
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
-          {/* Input Section */}
-          <div className="bg-white/95 backdrop-blur-md rounded-2xl shadow-xl border border-white/20 p-8">
-            <h2 className="text-2xl font-bold text-[#4B0082] mb-6 flex items-center gap-3">
-              <Search size={24} />
-              Certificate Verification
-            </h2>
-
-            <div className="space-y-6">
-              {/* Serial Number Input */}
-              <div>
-                <label className="block text-sm font-semibold text-gray-700 mb-2">
-                  Certificate Serial Number *
-                </label>
-                <input
-                  type="text"
-                  value={serialNumber}
-                  onChange={(e) =>
-                    setSerialNumber(e.target.value.toUpperCase())
-                  }
-                  placeholder="BMI-2024-123456"
-                  className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-[#4B0082] focus:border-transparent font-mono text-lg"
-                />
-                <p className="text-xs text-gray-500 mt-1">
-                  Format: BMI-YYYY-XXXXXX
-                </p>
-              </div>
-
-              {/* Hash Input (Optional) */}
-              <div>
-                <label className="block text-sm font-semibold text-gray-700 mb-2">
-                  Content Hash (Optional)
-                </label>
-                <input
-                  type="text"
-                  value={hashValue}
-                  onChange={(e) => setHashValue(e.target.value)}
-                  placeholder="a1b2c3d4"
-                  className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-[#4B0082] focus:border-transparent font-mono"
-                />
-                <p className="text-xs text-gray-500 mt-1">
-                  For additional security verification
-                </p>
-              </div>
-
-              {/* QR Code Section */}
-              <div className="border-t pt-6">
-                <div className="flex items-center justify-between mb-4">
-                  <h3 className="text-lg font-semibold text-gray-800">
-                    QR Code Verification
-                  </h3>
-                  <button
-                    onClick={() => setShowQRScanner(!showQRScanner)}
-                    className="flex items-center gap-2 px-4 py-2 bg-[#FFD700] text-[#4B0082] rounded-xl font-semibold hover:bg-yellow-400 transition-all"
-                  >
-                    <Scan size={18} />
-                    {showQRScanner ? "Hide Scanner" : "Scan QR Code"}
-                  </button>
-                </div>
-
-                {showQRScanner && (
-                  <QRScanner
-                    isOpen={showQRScanner}
-                    onScan={handleQRScan}
-                    onClose={() => setShowQRScanner(false)}
-                  />
-                )}
-              </div>
-
-              {/* Verify Button */}
+            <div className="flex gap-3">
+              <input
+                type="text"
+                value={serial}
+                onChange={(e) => setSerial(e.target.value.toUpperCase())}
+                onKeyDown={(e) => e.key === "Enter" && handleVerify()}
+                placeholder="BMI-2026-123456"
+                spellCheck={false}
+                className="flex-1 px-4 py-3 border border-gray-200 font-mono text-sm outline-none focus:ring-2 focus:ring-[#4B0082] focus:border-transparent uppercase tracking-wider"
+              />
               <button
-                onClick={handleVerification}
-                disabled={isVerifying || !serialNumber.trim()}
-                className="w-full py-4 bg-[#4B0082] text-white rounded-xl font-bold text-lg hover:bg-purple-700 transition-all disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-3"
+                onClick={handleVerify}
+                disabled={isVerifying || !serial.trim()}
+                className="px-6 py-3 bg-[#4B0082] text-white font-black text-xs uppercase tracking-widest hover:bg-black transition-all disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
               >
                 {isVerifying ? (
-                  <>
-                    <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-white"></div>
-                    Verifying...
-                  </>
+                  <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
                 ) : (
-                  <>
-                    <ShieldCheck size={20} />
-                    Verify Certificate
-                  </>
+                  <ShieldCheck size={16} />
                 )}
+                {isVerifying ? "Verifying…" : "Verify"}
+              </button>
+            </div>
+
+            {/* QR Scan button */}
+            <div className="mt-4 pt-4 border-t border-gray-100 flex items-center justify-between">
+              <p className="text-[10px] text-gray-400 font-medium">
+                Or scan the QR code on the document:
+              </p>
+              <button
+                onClick={() => setShowScanner(true)}
+                className="flex items-center gap-2 px-4 py-2 border border-[#4B0082] text-[#4B0082] text-[10px] font-black uppercase tracking-widest hover:bg-[#4B0082] hover:text-white transition-all"
+              >
+                <QrCode size={14} />
+                Scan QR Code
               </button>
             </div>
           </div>
+        )}
 
-          {/* Results Section */}
-          <div className="bg-white/95 backdrop-blur-md rounded-2xl shadow-xl border border-white/20 p-8">
-            <h2 className="text-2xl font-bold text-[#4B0082] mb-6 flex items-center gap-3">
-              <Award size={24} />
-              Verification Results
-            </h2>
+        {/* QR Scanner overlay */}
+        {showScanner && (
+          <QRScanner
+            isOpen={showScanner}
+            onScan={handleQRScan}
+            onClose={() => setShowScanner(false)}
+          />
+        )}
 
-            {!verificationResult ? (
-              <div className="text-center py-12">
-                <ShieldCheck size={64} className="mx-auto text-gray-300 mb-4" />
-                <p className="text-gray-500 text-lg">
-                  Enter certificate details to verify
-                </p>
-                <p className="text-gray-400 text-sm mt-2">
-                  Results will appear here after verification
-                </p>
-              </div>
-            ) : (
-              <div className="space-y-6">
-                {/* Verification Status */}
-                <div
-                  className={`p-4 rounded-xl border-2 ${
-                    verificationResult.valid
-                      ? "bg-emerald-50 border-emerald-200"
-                      : "bg-red-50 border-red-200"
-                  }`}
-                >
-                  <div className="flex items-center gap-3 mb-2">
-                    {verificationResult.valid ? (
-                      <CheckCircle2 size={24} className="text-emerald-600" />
-                    ) : (
-                      <XCircle size={24} className="text-red-600" />
-                    )}
-                    <h3
-                      className={`text-lg font-bold ${
-                        verificationResult.valid
-                          ? "text-emerald-800"
-                          : "text-red-800"
-                      }`}
-                    >
-                      {verificationResult.valid
-                        ? "Certificate Verified"
-                        : "Verification Failed"}
-                    </h3>
-                  </div>
+        {/* ── Loading state ─────────────────────────────────────────────────── */}
+        {isVerifying && (
+          <div className="flex flex-col items-center justify-center py-16 gap-4">
+            <div className="w-12 h-12 border-4 border-purple-100 border-t-[#4B0082] rounded-full animate-spin" />
+            <p className="text-sm font-black text-gray-500 uppercase tracking-widest">
+              Querying Registry…
+            </p>
+          </div>
+        )}
 
-                  {verificationResult.error && (
-                    <p className="text-red-700 text-sm">
-                      {verificationResult.error} ({verificationResult.code})
-                    </p>
-                  )}
-                </div>
-
-                {/* Certificate Details */}
-                {verificationResult.valid && verificationResult.certificate && (
-                  <div className="space-y-4">
-                    <div className="grid grid-cols-1 gap-4">
-                      <div className="flex items-center gap-3 p-3 bg-gray-50 rounded-lg">
-                        <User size={18} className="text-[#4B0082]" />
-                        <div>
-                          <p className="text-sm text-gray-600">Graduate Name</p>
-                          <p className="font-semibold">
-                            {verificationResult.certificate.student_name}
-                          </p>
-                        </div>
-                      </div>
-
-                      <div className="flex items-center gap-3 p-3 bg-gray-50 rounded-lg">
-                        <GraduationCap size={18} className="text-[#4B0082]" />
-                        <div>
-                          <p className="text-sm text-gray-600">
-                            Degree/Certificate
-                          </p>
-                          <p className="font-semibold">
-                            {verificationResult.certificate.degree_title}
-                          </p>
-                          {verificationResult.certificate.graduation_class && (
-                            <p className="text-sm text-[#FFD700] font-medium">
-                              {verificationResult.certificate.graduation_class}
-                            </p>
-                          )}
-                        </div>
-                      </div>
-
-                      <div className="flex items-center gap-3 p-3 bg-gray-50 rounded-lg">
-                        <Building size={18} className="text-[#4B0082]" />
-                        <div>
-                          <p className="text-sm text-gray-600">Faculty</p>
-                          <p className="font-semibold">
-                            {verificationResult.certificate.faculty}
-                          </p>
-                        </div>
-                      </div>
-
-                      <div className="flex items-center gap-3 p-3 bg-gray-50 rounded-lg">
-                        <Calendar size={18} className="text-[#4B0082]" />
-                        <div>
-                          <p className="text-sm text-gray-600">Issue Date</p>
-                          <p className="font-semibold">
-                            {new Date(
-                              verificationResult.certificate.issue_date,
-                            ).toLocaleDateString("en-US", {
-                              year: "numeric",
-                              month: "long",
-                              day: "numeric",
-                            })}
-                          </p>
-                        </div>
-                      </div>
-
-                      <div className="flex items-center gap-3 p-3 bg-gray-50 rounded-lg">
-                        <Hash size={18} className="text-[#4B0082]" />
-                        <div>
-                          <p className="text-sm text-gray-600">Serial Number</p>
-                          <p className="font-mono font-semibold">
-                            {verificationResult.certificate.serial_number}
-                          </p>
-                        </div>
-                      </div>
-
-                      <div className="flex items-center gap-3 p-3 bg-gray-50 rounded-lg">
-                        <ShieldCheck size={18} className="text-[#4B0082]" />
-                        <div className="flex items-center justify-between w-full">
-                          <div>
-                            <p className="text-sm text-gray-600">Status</p>
-                            <span
-                              className={`px-2 py-1 rounded-full text-xs font-semibold ${getStatusColor(verificationResult.certificate.status)}`}
-                            >
-                              {verificationResult.certificate.status.toUpperCase()}
-                            </span>
-                          </div>
-                          {verificationResult.verification?.hash_verified && (
-                            <div className="text-right">
-                              <p className="text-xs text-gray-600">
-                                Hash Verified
-                              </p>
-                              <CheckCircle2
-                                size={16}
-                                className="text-emerald-600 ml-auto"
-                              />
-                            </div>
-                          )}
-                        </div>
-                      </div>
-                    </div>
-
-                    {/* Verification Metadata */}
-                    {verificationResult.verification && (
-                      <div className="border-t pt-4 mt-6">
-                        <h4 className="font-semibold text-gray-800 mb-3 flex items-center gap-2">
-                          <Clock size={16} />
-                          Verification Details
-                        </h4>
-                        <div className="grid grid-cols-2 gap-4 text-sm">
-                          <div>
-                            <p className="text-gray-600">Verified At</p>
-                            <p className="font-medium">
-                              {new Date(
-                                verificationResult.verification.timestamp,
-                              ).toLocaleString()}
-                            </p>
-                          </div>
-                          <div>
-                            <p className="text-gray-600">Method</p>
-                            <p className="font-medium capitalize">
-                              {verificationResult.verification.method}
-                            </p>
-                          </div>
-                          <div>
-                            <p className="text-gray-600">Verification Count</p>
-                            <p className="font-medium">
-                              {
-                                verificationResult.verification
-                                  .verification_count
-                              }{" "}
-                              times
-                            </p>
-                          </div>
-                          <div>
-                            <p className="text-gray-600">Hash Status</p>
-                            <p
-                              className={`font-medium ${verificationResult.verification.hash_verified ? "text-emerald-600" : "text-amber-600"}`}
-                            >
-                              {verificationResult.verification.hash_verified
-                                ? "Verified"
-                                : "Not Verified"}
-                            </p>
-                          </div>
-                        </div>
-                      </div>
-                    )}
-                  </div>
+        {/* ── Result ────────────────────────────────────────────────────────── */}
+        {result && !isVerifying && (
+          <div className="max-w-3xl mx-auto space-y-6">
+            {/* Status banner */}
+            <div
+              className={`flex items-center gap-4 p-6 border-l-8 ${
+                result.valid
+                  ? "bg-emerald-50 border-emerald-500"
+                  : result.code === "REVOKED"
+                    ? "bg-red-50 border-red-500"
+                    : result.code === "TAMPERED"
+                      ? "bg-red-50 border-red-600"
+                      : "bg-gray-50 border-gray-400"
+              }`}
+            >
+              <div>
+                {result.valid ? (
+                  <CheckCircle2 size={44} className="text-emerald-500" />
+                ) : result.code === "TAMPERED" ? (
+                  <ShieldX size={44} className="text-red-600" />
+                ) : result.code === "REVOKED" ? (
+                  <ShieldAlert size={44} className="text-red-500" />
+                ) : (
+                  <XCircle size={44} className="text-gray-400" />
                 )}
               </div>
-            )}
-          </div>
-        </div>
+              <div className="flex-1">
+                <div className="flex items-center gap-3 flex-wrap mb-1">
+                  <h2
+                    className={`text-xl font-black uppercase tracking-tight ${
+                      result.valid ? "text-emerald-800" : "text-red-800"
+                    }`}
+                  >
+                    {result.valid
+                      ? "Document Verified — Authentic"
+                      : result.code === "TAMPERED"
+                        ? "Verification Failed — Possible Forgery"
+                        : result.code === "REVOKED"
+                          ? "Document Revoked"
+                          : "Document Not Found"}
+                  </h2>
+                  {result.valid && (
+                    <ConfidencePill
+                      confidence={result.verification?.confidence}
+                    />
+                  )}
+                </div>
+                {result.valid ? (
+                  <p className="text-sm text-emerald-700">
+                    This {docTypeLabel.toLowerCase()} is registered in the BMI
+                    University official registry and has been verified{" "}
+                    {result.verification?.token_verified
+                      ? "using a cryptographic HMAC token"
+                      : "by serial number lookup"}
+                    .
+                  </p>
+                ) : (
+                  <p className="text-sm text-red-700">{result.error}</p>
+                )}
+              </div>
+            </div>
 
-        {/* Footer */}
-        <div className="mt-12 text-center">
-          <div className="bg-white/95 backdrop-blur-md rounded-2xl shadow-xl border border-white/20 p-6">
-            <p className="text-gray-600 mb-2">
-              <strong>BMI University Certificate Verification System</strong>
-            </p>
-            <p className="text-sm text-gray-500">
-              For technical support or to report fraudulent certificates,
-              contact:
-              <a
-                href="mailto:registrar@bmi.edu"
-                className="text-[#4B0082] hover:underline ml-1"
+            {/* Document details card */}
+            {result.document && (
+              <div className="bg-white border border-gray-100 shadow-sm">
+                {/* Card header */}
+                <div className="flex items-center gap-3 px-6 py-4 border-b border-gray-100 bg-gray-50">
+                  <div className="p-2 bg-white border border-gray-200 rounded-none text-[#4B0082]">
+                    {docTypeIcon}
+                  </div>
+                  <div>
+                    <p className="text-[9px] font-black uppercase tracking-widest text-gray-400">
+                      {docTypeLabel}
+                    </p>
+                    <p className="text-xs font-black text-gray-700 uppercase tracking-wide">
+                      {result.document.institution}
+                    </p>
+                  </div>
+                  <div className="ml-auto">
+                    <span
+                      className={`px-3 py-1 text-[9px] font-black uppercase tracking-widest ${
+                        result.document.status === "active"
+                          ? "bg-emerald-100 text-emerald-700"
+                          : result.document.status === "revoked"
+                            ? "bg-red-100 text-red-700"
+                            : "bg-amber-100 text-amber-700"
+                      }`}
+                    >
+                      {result.document.status.toUpperCase()}
+                    </span>
+                  </div>
+                </div>
+
+                {/* Fields */}
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-px bg-gray-100">
+                  {[
+                    {
+                      label: "Full Name",
+                      value: result.document.holder_name,
+                      icon: <GraduationCap size={14} />,
+                    },
+                    {
+                      label:
+                        result.documentType === "transcript"
+                          ? "Programme"
+                          : "Qualification",
+                      value: result.document.credential,
+                      icon: <Scroll size={14} />,
+                    },
+                    {
+                      label: "Issuing Institution",
+                      value: result.document.institution,
+                      icon: <Building2 size={14} />,
+                    },
+                    {
+                      label: "Issue Date",
+                      value: formatDate(result.document.issued_at),
+                      icon: <CalendarDays size={14} />,
+                    },
+                    result.document.faculty
+                      ? {
+                          label: "Faculty",
+                          value: result.document.faculty,
+                          icon: <Building2 size={14} />,
+                        }
+                      : null,
+                    result.document.department
+                      ? {
+                          label: "Department",
+                          value: result.document.department,
+                          icon: <Building2 size={14} />,
+                        }
+                      : null,
+                    result.document.graduation_class
+                      ? {
+                          label: "Graduation Class",
+                          value: result.document.graduation_class,
+                          icon: <Star size={14} />,
+                        }
+                      : null,
+                    result.document.gpa != null
+                      ? {
+                          label: "GPA",
+                          value: result.document.gpa.toFixed(2),
+                          icon: <Star size={14} />,
+                        }
+                      : null,
+                    result.document.academic_year
+                      ? {
+                          label: "Academic Year",
+                          value: result.document.academic_year,
+                          icon: <CalendarDays size={14} />,
+                        }
+                      : null,
+                  ]
+                    .filter(Boolean)
+                    .map((f, i) => (
+                      <div
+                        key={i}
+                        className="bg-white px-6 py-4 flex items-start gap-3"
+                      >
+                        <div className="mt-0.5 text-[#4B0082]">{f!.icon}</div>
+                        <div>
+                          <p className="text-[9px] font-black uppercase tracking-widest text-gray-400 mb-0.5">
+                            {f!.label}
+                          </p>
+                          <p className="text-sm font-bold text-gray-900">
+                            {f!.value}
+                          </p>
+                        </div>
+                      </div>
+                    ))}
+
+                  {/* Serial number with copy button */}
+                  <div className="bg-white px-6 py-4 flex items-start gap-3 sm:col-span-2">
+                    <div className="mt-0.5 text-[#4B0082]">
+                      <Hash size={14} />
+                    </div>
+                    <div className="flex-1">
+                      <p className="text-[9px] font-black uppercase tracking-widest text-gray-400 mb-0.5">
+                        Serial Number
+                      </p>
+                      <div className="flex items-center gap-3">
+                        <p className="text-sm font-black text-gray-900 font-mono tracking-wider">
+                          {result.document.serial_number}
+                        </p>
+                        <button
+                          onClick={handleCopySerial}
+                          className="p-1.5 text-gray-400 hover:text-[#4B0082] transition-colors"
+                          title="Copy serial number"
+                        >
+                          {copied ? (
+                            <Check size={12} className="text-emerald-500" />
+                          ) : (
+                            <Copy size={12} />
+                          )}
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {/* Verification metadata */}
+            {result.verification && (
+              <div className="bg-white border border-gray-100 shadow-sm px-6 py-4">
+                <p className="text-[9px] font-black uppercase tracking-widest text-gray-400 mb-3">
+                  Verification Record
+                </p>
+                <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 text-center">
+                  {[
+                    {
+                      label: "Timestamp",
+                      value: formatDate(result.verification.timestamp),
+                    },
+                    {
+                      label: "Method",
+                      value: result.verification.method
+                        .replace("_", " ")
+                        .toUpperCase(),
+                    },
+                    {
+                      label: "Token Verified",
+                      value: result.verification.token_verified
+                        ? "YES ✓"
+                        : "NO (serial only)",
+                    },
+                    {
+                      label: "Verification #",
+                      value: `#${result.verification.verification_count}`,
+                    },
+                  ].map((item, i) => (
+                    <div key={i}>
+                      <p className="text-[8px] font-black uppercase tracking-widest text-gray-400">
+                        {item.label}
+                      </p>
+                      <p className="text-xs font-black text-gray-700 mt-0.5">
+                        {item.value}
+                      </p>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {/* Error details when invalid */}
+            {!result.valid && result.code !== "REVOKED" && (
+              <div className="bg-amber-50 border border-amber-200 px-6 py-4 flex items-start gap-3">
+                <AlertCircle
+                  size={16}
+                  className="text-amber-600 mt-0.5 flex-shrink-0"
+                />
+                <div>
+                  <p className="text-xs font-black text-amber-800 uppercase tracking-wide mb-1">
+                    What to do
+                  </p>
+                  <ul className="text-xs text-amber-700 space-y-1 list-disc list-inside">
+                    {result.code === "TAMPERED" && (
+                      <>
+                        <li>Do NOT accept this document as genuine.</li>
+                        <li>
+                          Contact the BMI University Registrar immediately.
+                        </li>
+                        <li>
+                          Report the document reference number:{" "}
+                          <span className="font-mono font-bold">{serial}</span>
+                        </li>
+                      </>
+                    )}
+                    {result.code === "NOT_FOUND" && (
+                      <>
+                        <li>
+                          Confirm the serial number is entered exactly as
+                          printed.
+                        </li>
+                        <li>
+                          If recently issued, the system may take a few minutes
+                          to update.
+                        </li>
+                        <li>
+                          Contact the BMI University Registrar if the issue
+                          persists.
+                        </li>
+                      </>
+                    )}
+                    {result.code === "INVALID_FORMAT" && (
+                      <>
+                        <li>
+                          Certificates:{" "}
+                          <span className="font-mono">BMI-YYYY-NNNNNN</span>
+                        </li>
+                        <li>
+                          Transcripts:{" "}
+                          <span className="font-mono">
+                            BMI-TRANS-YYYY-NNNNNN
+                          </span>
+                        </li>
+                      </>
+                    )}
+                  </ul>
+                </div>
+              </div>
+            )}
+
+            {/* Action buttons */}
+            <div className="flex gap-3 justify-end">
+              <button
+                onClick={handleReset}
+                className="flex items-center gap-2 px-5 py-2.5 border border-gray-200 text-gray-600 text-[10px] font-black uppercase tracking-widest hover:border-[#4B0082] hover:text-[#4B0082] transition-all"
               >
-                registrar@bmi.edu
-              </a>
-            </p>
-            <p className="text-xs text-gray-400 mt-2">
-              © 2024 BMI University. All rights reserved. | "Excellence in Faith
-              and Knowledge"
-            </p>
+                <RefreshCcw size={13} />
+                Verify Another
+              </button>
+              {!result.valid && (
+                <button
+                  onClick={() => setShowScanner(true)}
+                  className="flex items-center gap-2 px-5 py-2.5 bg-[#4B0082] text-white text-[10px] font-black uppercase tracking-widest hover:bg-black transition-all"
+                >
+                  <QrCode size={13} />
+                  Scan QR
+                </button>
+              )}
+            </div>
           </div>
+        )}
+      </main>
+
+      {/* ── Footer ──────────────────────────────────────────────────────────── */}
+      <footer className="mt-16 border-t border-gray-100 bg-white py-8 px-6 text-center space-y-2">
+        <div className="flex items-center justify-center gap-2 text-[#4B0082]">
+          <img
+            src={logo || "/BMI.svg"}
+            alt=""
+            className="w-6 h-6 object-contain"
+            onError={(e) => {
+              (e.target as HTMLImageElement).style.display = "none";
+            }}
+          />
+          <span className="text-xs font-black uppercase tracking-widest">
+            BMI University
+          </span>
         </div>
-      </div>
+        <p className="text-[10px] text-gray-400 font-medium">
+          This portal verifies documents issued by Bishop Medardo Isizoh
+          University. All verification attempts are logged for security
+          purposes.
+        </p>
+        <p className="text-[10px] text-gray-400">
+          Registrar: registrar@bmiuniversity.ac.ke &nbsp;·&nbsp;
+          <span className="font-mono">+254 XXX XXX XXX</span>
+        </p>
+      </footer>
     </div>
   );
 };

@@ -15,7 +15,9 @@
     "lint": "eslint src --ext .ts,.tsx",
     "e2e": "playwright test",
     "e2e:ui": "playwright test --ui",
-    "e2e:headed": "playwright test --headed"
+    "e2e:headed": "playwright test --headed",
+    "tunnel": "node scripts/tunnel-start.cjs",
+    "proxy": "node scripts/local-proxy.cjs"
   },
   "dependencies": {
     "@types/file-saver": "^2.0.7",

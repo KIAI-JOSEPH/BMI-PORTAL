@@ -111,12 +111,42 @@ function App() {
 
   // Session verification on mount
   useEffect(() => {
-    // Clean up any stale PII / mock caches from previous versions
+    // Clean up stale PII / mock caches from previous versions
     localStorage.removeItem("bmi_data_students");
     localStorage.removeItem("bmi_data_staff");
     localStorage.removeItem("bmi_data_transactions");
     localStorage.removeItem("bmi_data_courses");
     localStorage.removeItem("bmi_data_library");
+
+    // Purge old-format transcript documents from localStorage.
+    // Old entries used the ?s=&h=&t=&v=2 URL scheme and only verified
+    // on the issuing browser.  The new scheme registers server-side
+    // so QR codes work on any device.  We detect old entries by
+    // checking for the presence of ?s= in their verificationUrl.
+    try {
+      const raw = localStorage.getItem("bmi_documents");
+      if (raw) {
+        const docs = JSON.parse(raw) as Array<{
+          type: string;
+          security?: { verificationUrl?: string };
+        }>;
+        const fresh = docs.filter(
+          (d) =>
+            d.type !== "transcript" ||
+            // Keep only server-registered transcripts (?id= scheme)
+            (d.security?.verificationUrl?.includes("?id=") ?? false),
+        );
+        if (fresh.length !== docs.length) {
+          localStorage.setItem("bmi_documents", JSON.stringify(fresh));
+          console.info(
+            `[App] Purged ${docs.length - fresh.length} legacy transcript record(s) from localStorage.`,
+          );
+        }
+      }
+    } catch {
+      // If parsing fails, remove the entire key so we start clean
+      localStorage.removeItem("bmi_documents");
+    }
 
     checkSession();
   }, [checkSession]);

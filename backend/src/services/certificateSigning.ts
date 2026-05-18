@@ -28,15 +28,35 @@
  *   - Therefore: cannot forge a valid QR for any certificate
  */
 
-import { createHmac, createHash, randomBytes, timingSafeEqual } from 'crypto';
-import { SignJWT, jwtVerify } from 'jose';
-import { CONFIG } from '../config/index.js';
-import { logger } from '../utils/logger.js';
+import { createHmac, createHash, randomBytes, timingSafeEqual } from "crypto";
+import { SignJWT, jwtVerify } from "jose";
+import { CONFIG } from "../config/index.js";
+import { logger } from "../utils/logger.js";
 
-// ─── Signing key derived from JWT_SECRET ─────────────────────────────────────
-const SIGNING_KEY = createHash('sha256')
-  .update(CONFIG.JWT_SECRET + '-cert-signing-v1')
+// ─── Signing keys — NEVER derived from JWT_SECRET ──────────────────────────────
+//
+// Using a separate CERT_SIGNING_SECRET (env var) means:
+//   • JWT key rotation never invalidates issued certificates
+//   • A JWT breach does not allow certificate forgery (key separation)
+//   • Certificate key rotation is independent of auth infrastructure
+//
+// Fallback: derive from JWT_SECRET with a domain-separated suffix only when
+// CERT_SIGNING_SECRET is not configured (dev / legacy)
+const RAW_CERT_KEY = process.env.CERT_SIGNING_SECRET || CONFIG.JWT_SECRET;
+
+export const SIGNING_KEY = createHash("sha256")
+  .update(RAW_CERT_KEY + "-bmi-cert-signing-v2-DO-NOT-USE-FOR-JWT")
   .digest();
+
+// Offline JWT uses its own key so it can be rotated independently
+export const OFFLINE_JWT_KEY = process.env.CERT_OFFLINE_SECRET || RAW_CERT_KEY;
+
+if (!process.env.CERT_SIGNING_SECRET) {
+  logger.warn(
+    "[CertSigning] CERT_SIGNING_SECRET not set — falling back to JWT_SECRET derivative. " +
+      "Set CERT_SIGNING_SECRET in .env for proper key separation.",
+  );
+}
 
 // ─── Layer 1: Content Hash ────────────────────────────────────────────────────
 
@@ -57,10 +77,10 @@ export async function generateContentHash(data: {
     data.studentId,
     data.name.toUpperCase().trim(),
     data.degree.toUpperCase().trim(),
-    'BMI UNIVERSITY',
+    "BMI UNIVERSITY",
     data.issueDate,
-  ].join('|');
-  return createHash('sha256').update(input, 'utf8').digest('hex');
+  ].join("|");
+  return createHash("sha256").update(input, "utf8").digest("hex");
 }
 
 // ─── Layer 2: Hidden HMAC Token ───────────────────────────────────────────────
@@ -72,7 +92,7 @@ export async function generateContentHash(data: {
  * Without this nonce, the QR token cannot be computed or forged.
  */
 export function generateIssuanceNonce(): string {
-  return randomBytes(16).toString('hex'); // 32 hex chars, 128 bits of entropy
+  return randomBytes(16).toString("hex"); // 32 hex chars, 128 bits of entropy
 }
 
 /**
@@ -90,8 +110,8 @@ function buildHiddenPayload(data: {
     data.studentId,
     data.issueDate,
     data.nonce,
-    'BMI-CERT-TOKEN-V1',
-  ].join('::');
+    "BMI-CERT-TOKEN-V1",
+  ].join("::");
 }
 
 /**
@@ -109,9 +129,9 @@ export function generateHiddenToken(data: {
   nonce: string;
 }): string {
   const payload = buildHiddenPayload(data);
-  return createHmac('sha256', SIGNING_KEY)
+  return createHmac("sha256", SIGNING_KEY)
     .update(payload)
-    .digest('hex')
+    .digest("hex")
     .substring(0, 24);
 }
 
@@ -123,14 +143,14 @@ export function generateHiddenToken(data: {
  */
 export function verifyHiddenToken(
   token: string,
-  data: { serial: string; studentId: string; issueDate: string; nonce: string }
+  data: { serial: string; studentId: string; issueDate: string; nonce: string },
 ): boolean {
   if (!token || token.length !== 24) return false;
   const expected = generateHiddenToken(data);
   try {
     return timingSafeEqual(
-      Buffer.from(expected, 'hex'),
-      Buffer.from(token, 'hex')
+      Buffer.from(expected, "hex"),
+      Buffer.from(token, "hex"),
     );
   } catch {
     return false;
@@ -149,24 +169,38 @@ export function buildSigningPayload(data: {
   gpa: number;
 }): string {
   return [
-    data.serial, data.studentId,
+    data.serial,
+    data.studentId,
     data.studentName.toUpperCase().trim(),
     data.degree.toUpperCase().trim(),
     data.faculty.toUpperCase().trim(),
-    data.issueDate, data.gpa.toFixed(2), 'BMI-UNIVERSITY',
-  ].join('|');
+    data.issueDate,
+    data.gpa.toFixed(2),
+    "BMI-UNIVERSITY",
+  ].join("|");
 }
 
 export function signCertificate(payload: string): string {
-  return createHmac('sha256', SIGNING_KEY).update(payload).digest('hex').substring(0, 32);
+  return createHmac("sha256", SIGNING_KEY)
+    .update(payload)
+    .digest("hex")
+    .substring(0, 32);
 }
 
-export function verifyCertificateSignature(payload: string, signature: string): boolean {
+export function verifyCertificateSignature(
+  payload: string,
+  signature: string,
+): boolean {
   if (!signature || signature.length !== 32) return false;
   const expected = signCertificate(payload);
   try {
-    return timingSafeEqual(Buffer.from(expected, 'hex'), Buffer.from(signature, 'hex'));
-  } catch { return false; }
+    return timingSafeEqual(
+      Buffer.from(expected, "hex"),
+      Buffer.from(signature, "hex"),
+    );
+  } catch {
+    return false;
+  }
 }
 
 // ─── Layer 3: Offline JWT ─────────────────────────────────────────────────────
@@ -179,7 +213,9 @@ export async function generateOfflineJWT(data: {
   issueDate: string;
   graduationClass: string;
 }): Promise<string> {
-  const secret = new TextEncoder().encode(CONFIG.JWT_SECRET + '-offline-cert-v1');
+  const secret = new TextEncoder().encode(
+    CONFIG.JWT_SECRET + "-offline-cert-v1",
+  );
   return new SignJWT({
     sn: data.serial,
     n: data.studentName,
@@ -187,32 +223,41 @@ export async function generateOfflineJWT(data: {
     f: data.faculty,
     dt: data.issueDate,
     cl: data.graduationClass,
-    iss: 'BMI University',
-    aud: 'certificate-verifier',
+    iss: "BMI University",
+    aud: "certificate-verifier",
   })
-    .setProtectedHeader({ alg: 'HS256' })
+    .setProtectedHeader({ alg: "HS256" })
     .setIssuedAt()
-    .setExpirationTime('50y')
+    .setExpirationTime("50y")
     .sign(secret);
 }
 
 export async function verifyOfflineJWT(token: string): Promise<{
-  serial: string; studentName: string; degree: string;
-  faculty: string; issueDate: string; graduationClass: string;
+  serial: string;
+  studentName: string;
+  degree: string;
+  faculty: string;
+  issueDate: string;
+  graduationClass: string;
 } | null> {
   try {
-    const secret = new TextEncoder().encode(CONFIG.JWT_SECRET + '-offline-cert-v1');
+    const secret = new TextEncoder().encode(
+      CONFIG.JWT_SECRET + "-offline-cert-v1",
+    );
     const { payload } = await jwtVerify(token, secret, {
-      audience: 'certificate-verifier',
-      issuer: 'BMI University',
+      audience: "certificate-verifier",
+      issuer: "BMI University",
     });
     return {
-      serial: payload.sn as string, studentName: payload.n as string,
-      degree: payload.d as string, faculty: payload.f as string,
-      issueDate: payload.dt as string, graduationClass: payload.cl as string,
+      serial: payload.sn as string,
+      studentName: payload.n as string,
+      degree: payload.d as string,
+      faculty: payload.f as string,
+      issueDate: payload.dt as string,
+      graduationClass: payload.cl as string,
     };
   } catch (error) {
-    logger.warn('Offline JWT verification failed:', error);
+    logger.warn("Offline JWT verification failed:", error);
     return null;
   }
 }
@@ -232,36 +277,63 @@ export async function verifyOfflineJWT(token: string): Promise<{
  * An attacker who photographs the QR gets a token that only works for
  * that exact certificate — changing any field invalidates it.
  */
-export function buildVerificationUrl(serial: string, hiddenToken: string, baseUrl?: string): string {
-  const base = baseUrl || process.env.VITE_APP_URL || 'http://localhost:3000';
+/**
+ * Build the public verification URL embedded in QR codes.
+ *
+ * Priority:
+ *   1. explicit baseUrl argument (caller override)
+ *   2. VERIFY_PORTAL_URL env var   — set this in backend/.env for production
+ *      e.g.  VERIFY_PORTAL_URL=https://verify.bmiuniversity.ac.ke
+ *   3. VITE_APP_URL legacy fallback
+ *   4. http://localhost:3000 (development)
+ */
+export function buildVerificationUrl(
+  serial: string,
+  hiddenToken: string,
+  baseUrl?: string,
+): string {
+  const base =
+    baseUrl ||
+    process.env.VERIFY_PORTAL_URL ||
+    process.env.VITE_APP_URL ||
+    "http://localhost:3000";
   return `${base}/verify?id=${encodeURIComponent(serial)}&t=${encodeURIComponent(hiddenToken)}`;
 }
 
-export function buildOfflineQRPayload(serial: string, offlineJWT: string): string {
+export function buildOfflineQRPayload(
+  serial: string,
+  offlineJWT: string,
+): string {
   return `BMI-VERIFY::${serial}::${offlineJWT}`;
 }
 
 export function parseQRPayload(qrContent: string): {
-  type: 'online' | 'offline';
+  type: "online" | "offline";
   serial?: string;
   token?: string;
   offlineJWT?: string;
 } | null {
   try {
-    if (qrContent.startsWith('BMI-VERIFY::')) {
-      const parts = qrContent.split('::');
-      if (parts.length === 3) return { type: 'offline', serial: parts[1], offlineJWT: parts[2] };
+    if (qrContent.startsWith("BMI-VERIFY::")) {
+      const parts = qrContent.split("::");
+      if (parts.length === 3)
+        return { type: "offline", serial: parts[1], offlineJWT: parts[2] };
     }
-    if (qrContent.includes('/verify?') || qrContent.includes('?id=')) {
-      const url = new URL(qrContent.startsWith('http') ? qrContent : `https://x.com${qrContent}`);
-      const id = url.searchParams.get('id');
-      const t = url.searchParams.get('t');
-      const sig = url.searchParams.get('sig'); // legacy
-      if (id) return { type: 'online', serial: id, token: t || sig || undefined };
+    if (qrContent.includes("/verify?") || qrContent.includes("?id=")) {
+      const url = new URL(
+        qrContent.startsWith("http") ? qrContent : `https://x.com${qrContent}`,
+      );
+      const id = url.searchParams.get("id");
+      const t = url.searchParams.get("t");
+      const sig = url.searchParams.get("sig"); // legacy
+      if (id)
+        return { type: "online", serial: id, token: t || sig || undefined };
     }
     if (/^BMI[-/]\d{4}[-/]/.test(qrContent.trim())) {
-      return { type: 'online', serial: qrContent.trim() };
+      return { type: "online", serial: qrContent.trim() };
     }
     return null;
-  } catch { return null; }
+  } catch {
+    return null;
+  }
 }

@@ -165,8 +165,9 @@ export class DocumentService {
       return dataUrl;
     } catch (error) {
       console.error("QR Code generation failed:", error);
-      // Fallback to API-based QR generation
-      return `https://api.qrserver.com/v1/create-qr-code/?size=200x200&ecc=H&margin=2&data=${encodeURIComponent(verificationUrl)}`;
+      // Return empty string rather than leaking document data to a third-party CDN.
+      // The transcript component will handle missing QR gracefully.
+      return "";
     }
   }
 
@@ -183,21 +184,27 @@ export class DocumentService {
   // ==========================================
 
   /**
-   * Generate secure verification URL
+   * Generate a verification URL.
+   * Uses the unified scheme: ?id=SERIAL&t=TOKEN
+   * where TOKEN is the HMAC nonce token returned by the backend on registration.
+   * Falls back to serial-only URL when token is not yet available.
    */
   generateVerificationUrl(
     serialNumber: string,
-    contentHash: string,
-    type: DocumentType,
+    hiddenToken?: string,
+    _contentHash?: string, // kept for backward-compat call sites
+    _type?: DocumentType,
   ): string {
-    const baseUrl = window.location.origin;
-    const params = new URLSearchParams({
-      s: serialNumber,
-      h: contentHash.slice(0, 16), // First 16 chars for URL brevity
-      t: type,
-      v: "2", // Version
-    });
-    return `${baseUrl}/verify?${params.toString()}`;
+    // Prefer the configured public portal URL so QR codes on printed
+    // documents link to the real publicly-accessible site, not localhost.
+    // Set VITE_VERIFY_URL=https://verify.bmiuniversity.ac.ke in .env
+    const baseUrl =
+      (import.meta.env.VITE_VERIFY_URL as string | undefined) ??
+      window.location.origin;
+    if (hiddenToken) {
+      return `${baseUrl}/verify?id=${encodeURIComponent(serialNumber)}&t=${encodeURIComponent(hiddenToken)}`;
+    }
+    return `${baseUrl}/verify?id=${encodeURIComponent(serialNumber)}`;
   }
 
   // ==========================================
@@ -205,7 +212,10 @@ export class DocumentService {
   // ==========================================
 
   /**
-   * Generate complete security features for a document
+   * Generate complete security features for a document.
+   *
+   * TRANSCRIPTS register server-side so the QR works on any device.
+   * Other document types keep the existing client-side path.
    */
   async generateSecurityFeatures(
     type: DocumentType,
@@ -214,31 +224,91 @@ export class DocumentService {
     options?: { expiresAt?: string; includeBlockchain?: boolean },
   ): Promise<DocumentSecurityFeatures> {
     const timestamp = new Date().toISOString();
-    const serialNumber = this.generateSerialNumber(type, studentId);
 
-    // Generate content hash
+    // Content hash covers all visible fields
     const contentHash = await this.generateContentHash({
       ...contentData,
-      serialNumber,
+      studentId,
       timestamp,
     });
 
-    // Generate seal hash
+    // ── TRANSCRIPT: server-side registration ──────────────────────────────
+    if (type === "transcript") {
+      try {
+        const { authFetch } = await import("./authService");
+        const studentName =
+          (contentData.studentName as string) ||
+          `${String(contentData.first_name ?? "")} ${String(contentData.last_name ?? "")}`.trim();
+        const res = await authFetch(`${this.API_BASE}/transcripts/register`, {
+          method: "POST",
+          body: JSON.stringify({
+            studentId,
+            studentName,
+            programme: String(
+              contentData.programme ?? contentData.program_code ?? "Unknown",
+            ),
+            academicYear: String(
+              contentData.academicYear ??
+                new Date().getFullYear() + "-" + (new Date().getFullYear() + 1),
+            ),
+            contentHash,
+          }),
+        });
+
+        if (res.ok) {
+          const json = (await res.json()) as {
+            success: boolean;
+            data?: {
+              serialNumber: string;
+              issuedAt: string;
+              verificationUrl: string;
+              hiddenToken: string;
+            };
+          };
+          if (json.success && json.data) {
+            const { serialNumber, issuedAt, verificationUrl, hiddenToken } =
+              json.data;
+            // Regenerate QR with the backend-issued token (no CDN fallback)
+            const qrCodeDataUrl = await this.generateQRCode(verificationUrl);
+            const sealHash = await this.generateSealHash(
+              contentHash,
+              serialNumber,
+              timestamp,
+            );
+            return {
+              contentHash,
+              serialNumber,
+              qrCodeDataUrl,
+              verificationUrl,
+              issuedAt,
+              expiresAt: options?.expiresAt,
+              sealHash,
+              verificationCount: 0,
+            };
+          }
+        }
+      } catch (err) {
+        console.warn(
+          "[DocumentService] Transcript server registration failed, falling back to client-side:",
+          err,
+        );
+      }
+      // Fallback: client-side serial (verification will only work in this browser)
+      console.warn(
+        "[DocumentService] Using client-side transcript serial. QR will not verify cross-device.",
+      );
+    }
+
+    // ── All other types (and transcript fallback) ────────────────────────────
+    const serialNumber = this.generateSerialNumber(type, studentId);
     const sealHash = await this.generateSealHash(
       contentHash,
       serialNumber,
       timestamp,
     );
-
-    // Generate verification URL and QR code
-    const verificationUrl = this.generateVerificationUrl(
-      serialNumber,
-      contentHash,
-      type,
-    );
+    const verificationUrl = this.generateVerificationUrl(serialNumber);
     const qrCodeDataUrl = await this.generateQRCode(verificationUrl);
 
-    // Optional blockchain anchor
     let blockchainAnchor: string | undefined;
     if (options?.includeBlockchain) {
       const previousAnchor = await this.getLastAnchor();

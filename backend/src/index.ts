@@ -52,6 +52,8 @@ import inventoryRouter from "./routes/inventory.js";
 import visitorRouter from "./routes/visitors.js";
 import attendanceRouter from "./routes/attendance.js";
 import campusesRouter from "./routes/campuses.js";
+import transcriptsRouter from "./routes/transcripts.js";
+import documentsRouter from "./routes/documents.js";
 
 // Validate configuration
 validateConfig();
@@ -193,6 +195,8 @@ app.route("/api/v1/inventory", inventoryRouter);
 app.route("/api/v1/visitors", visitorRouter);
 app.route("/api/v1/attendance", attendanceRouter);
 app.route("/api/v1/campuses", campusesRouter);
+app.route("/api/v1/transcripts", transcriptsRouter);
+app.route("/api/v1/documents", documentsRouter);
 
 // ── OpenAPI Documentation ────────────────────────────────────────────────────
 // GET /api/openapi.json  — machine-readable spec (useful for code generators)

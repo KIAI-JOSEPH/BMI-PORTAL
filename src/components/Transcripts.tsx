@@ -251,22 +251,50 @@ export const Transcripts: React.FC<TranscriptsProps> = (props) => {
     const initSecurity = async () => {
       const docService = DocumentService.getInstance();
       try {
-        const existingDocs = await docService.getDocumentsByStudent(
-          selectedStudent.id,
+        // Build a SHA-256 content hash from the student's actual grade records
+        // so the backend can detect if grades changed after issuance.
+        const gradePayload = JSON.stringify(
+          studentGrades
+            .map((g) => ({
+              course: g.courseCode,
+              score: g.totalScore,
+              grade: g.grade,
+            }))
+            .sort((a, b) => a.course.localeCompare(b.course)),
         );
-        let doc = existingDocs.find(
-          (d) => d.type === "transcript" && d.status === "issued",
+        const gradeHashBuf = await crypto.subtle.digest(
+          "SHA-256",
+          new TextEncoder().encode(gradePayload + selectedStudent.id),
+        );
+        const contentHash = Array.from(new Uint8Array(gradeHashBuf))
+          .map((b) => b.toString(16).padStart(2, "0"))
+          .join("");
+
+        // ALWAYS call createDocument() for transcripts — never serve a cached
+        // localStorage record.  Old records use the ?s= URL scheme and are
+        // stored only in the issuing browser, making QR verification fail on
+        // any other device.  createDocument() calls generateSecurityFeatures()
+        // which registers the transcript server-side (idempotent — returns
+        // the existing serial+token if one already exists for this student)
+        // and builds a proper ?id=SERIAL&t=TOKEN URL.
+        const doc = await docService.createDocument(
+          "transcript",
+          selectedStudent.id,
+          {
+            studentName:
+              `${selectedStudent.first_name} ${selectedStudent.last_name}`.trim() ||
+              selectedStudent.full_name,
+            programme:
+              selectedStudent.programme ||
+              selectedStudent.program_code ||
+              "Unknown",
+            academicYear: `${new Date().getFullYear()}-${
+              new Date().getFullYear() + 1
+            }`,
+            contentHash,
+          } as any,
         );
 
-        if (!doc) {
-          doc = await docService.createDocument(
-            "transcript",
-            selectedStudent.id,
-            {
-              studentName: `${selectedStudent.first_name} ${selectedStudent.last_name}`,
-            } as any,
-          );
-        }
         if (active) {
           setSecurityData(doc.security);
         }

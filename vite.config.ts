@@ -7,6 +7,14 @@ import { VitePWA } from "vite-plugin-pwa";
 // Backend API: http://localhost:3001
 
 export default defineConfig({
+  preview: {
+    port: 3000,
+    host: "0.0.0.0",
+    // Allow any host — needed when Cloudflare Tunnel or a reverse proxy forwards
+    // requests from a public domain.  Safe because the preview server only
+    // serves pre-built static files (no source code exposure).
+    allowedHosts: "all",
+  },
   server: {
     port: 3000,
     host: "0.0.0.0",
