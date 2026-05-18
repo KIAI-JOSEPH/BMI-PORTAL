@@ -2440,7 +2440,7 @@ export const Transcripts: React.FC<TranscriptsProps> = (props) => {
                       onClick={() => setShowTranscript(true)}
                       className="px-10 py-4 bg-[#FFD700] text-[#4B0082] rounded-none font-black text-xs uppercase tracking-widest shadow-xl hover:bg-white transition-all flex items-center gap-3"
                     >
-                      <FileText size={18} /> Official Transcript View
+                      <FileText size={18} /> Generate Transcript
                     </button>
                   </div>
                 </div>

@@ -13,7 +13,7 @@ export default defineConfig({
     // Allow any host — needed when Cloudflare Tunnel or a reverse proxy forwards
     // requests from a public domain.  Safe because the preview server only
     // serves pre-built static files (no source code exposure).
-    allowedHosts: "all",
+    allowedHosts: true,
   },
   server: {
     port: 3000,

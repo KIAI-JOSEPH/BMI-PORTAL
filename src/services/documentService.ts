@@ -41,9 +41,11 @@ export class DocumentService {
   private readonly TEMPLATES_KEY = "bmi_document_templates";
 
   private constructor() {
-    // Use relative path — Vite proxy handles dev, same-origin handles production.
-    // If you need an explicit URL (e.g., mobile device testing), set VITE_API_URL=/api/v1 or a full origin.
-    this.API_BASE = import.meta.env.VITE_API_URL || "/api/v1";
+    let base = import.meta.env.VITE_API_URL || "/api/v1";
+    if (base.startsWith("http") && !base.includes("/api/v1")) {
+      base = `${base}/api/v1`;
+    }
+    this.API_BASE = base;
   }
 
   static getInstance(): DocumentService {
