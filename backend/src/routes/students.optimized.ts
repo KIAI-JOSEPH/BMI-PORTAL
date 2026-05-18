@@ -80,7 +80,7 @@ studentsRouter.get('/', requireRole('admin', 'registrar', 'faculty', 'staff'), a
  */
 studentsRouter.get('/:id', requireRole('admin', 'registrar', 'faculty', 'staff'), async (c) => {
   try {
-    const id = c.req.param('id');
+    const id = c.req.param('id')!;
     
     // Use optimized query with eager loading
     const student = await StudentQueries.getWithAcademicHistory(id);
@@ -138,7 +138,7 @@ studentsRouter.post('/', requireRole('admin', 'registrar'), zValidator('json', s
  */
 studentsRouter.patch('/:id', requireRole('admin', 'registrar'), zValidator('json', studentSchema.partial()), async (c) => {
   try {
-    const id = c.req.param('id');
+    const id = c.req.param('id')!;
     const data = c.req.valid('json');
     
     const student = await withPocketBase(async (pb) => {
@@ -168,7 +168,7 @@ studentsRouter.patch('/:id', requireRole('admin', 'registrar'), zValidator('json
  */
 studentsRouter.delete('/:id', requireRole('admin'), async (c) => {
   try {
-    const id = c.req.param('id');
+    const id = c.req.param('id')!;
     
     await withPocketBase(async (pb) => {
       return pb.collection('students').delete(id);
@@ -233,7 +233,7 @@ studentsRouter.get('/stats/overview', requireRole('admin', 'registrar'), async (
  */
 studentsRouter.get('/campus/:campusId', requireRole('admin', 'registrar', 'faculty', 'staff'), async (c) => {
   try {
-    const campusId = c.req.param('campusId');
+    const campusId = c.req.param('campusId')!;
     
     const result = await StudentQueries.getByCampus(campusId);
     

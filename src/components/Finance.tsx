@@ -1026,7 +1026,9 @@ const Finance: React.FC = () => {
                             </option>
                           ))
                       : staff
-                          .sort((a, b) => a.name.localeCompare(b.name))
+                          .sort((a, b) =>
+                            (a.name ?? "").localeCompare(b.name ?? ""),
+                          )
                           .map((st) => (
                             <option key={st.id} value={st.name}>
                               {st.id} | {st.name}

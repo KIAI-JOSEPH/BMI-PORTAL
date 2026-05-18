@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useState, useMemo, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import {
   Users,
@@ -28,21 +28,130 @@ import { Student } from "../types";
 import { useAuthStore } from "../stores/authStore";
 import { useDataStore } from "../stores/dataStore";
 
-const revenueTrend = [
-  { month: "Jan", revenue: 120000 },
-  { month: "Feb", revenue: 145000 },
-  { month: "Mar", revenue: 210000 },
-  { month: "Apr", revenue: 190000 },
-  { month: "May", revenue: 250000 },
-  { month: "Jun", revenue: 389000 },
+/** Short month names for chart labels */
+const MONTHS = [
+  "Jan",
+  "Feb",
+  "Mar",
+  "Apr",
+  "May",
+  "Jun",
+  "Jul",
+  "Aug",
+  "Sep",
+  "Oct",
+  "Nov",
+  "Dec",
 ];
 
 const Dashboard: React.FC = () => {
   const navigate = useNavigate();
   const user = useAuthStore((s) => s.user);
   const stats = useDataStore((s) => s.getStats());
+  const transactions = useDataStore((s) => s.transactions);
+  const students = useDataStore((s) => s.students);
   const addStudent = useDataStore((s) => s.addStudent);
   const addTransaction = useDataStore((s) => s.addTransaction);
+
+  // ── Fetch revenue trend from backend API (falls back to local compute) ──
+  const [apiRevenueTrend, setApiRevenueTrend] = useState<
+    { month: string; revenue: number }[] | null
+  >(null);
+
+  useEffect(() => {
+    let cancelled = false;
+    import("../services/authService").then(({ authFetch }) => {
+      authFetch("/api/v1/dashboard/revenue-trend?months=6")
+        .then((r) => r.json())
+        .then((d: any) => {
+          if (!cancelled && d.success && Array.isArray(d.data)) {
+            setApiRevenueTrend(d.data);
+          }
+        })
+        .catch(() => {
+          /* fall back to local computation */
+        });
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  /** Derive recent-activity items from real data (last 3 events) */
+  const recentActivity = useMemo(() => {
+    type ActivityItem = {
+      action: string;
+      time: string;
+      user: string;
+      icon: typeof CheckCircle2;
+      color: string;
+    };
+    const items: ActivityItem[] = [];
+
+    // Last 2 student registrations
+    const recentStudents = [...students]
+      .sort(
+        (a, b) =>
+          new Date(b.admission_date).getTime() -
+          new Date(a.admission_date).getTime(),
+      )
+      .slice(0, 2);
+    for (const s of recentStudents) {
+      items.push({
+        action: `${s.full_name || s.first_name} Registered`,
+        time: new Date(s.admission_date).toLocaleDateString(),
+        user: "Registrar",
+        icon: CheckCircle2,
+        color: "text-emerald-500",
+      });
+    }
+
+    // Last 2 paid transactions
+    const recentTx = [...transactions]
+      .filter((t) => t.status === "Paid")
+      .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime())
+      .slice(0, 2);
+    for (const t of recentTx) {
+      items.push({
+        action: `Payment — $${t.amt.toLocaleString()}`,
+        time: new Date(t.date).toLocaleDateString(),
+        user: "Finance",
+        icon: DollarSign,
+        color: "text-blue-500",
+      });
+    }
+
+    if (items.length === 0) {
+      items.push({
+        action: "No recent activity",
+        time: "",
+        user: "System",
+        icon: Activity,
+        color: "text-gray-400",
+      });
+    }
+    return items.slice(0, 3);
+  }, [students, transactions]);
+
+  // Build last-6-months revenue trend — use API data when available,
+  // fall back to computing it from the in-memory transactions store.
+  const revenueTrend = useMemo(() => {
+    if (apiRevenueTrend) return apiRevenueTrend;
+    const now = new Date();
+    return Array.from({ length: 6 }, (_, i) => {
+      const d = new Date(now.getFullYear(), now.getMonth() - (5 - i), 1);
+      const month = MONTHS[d.getMonth()];
+      const year = d.getFullYear();
+      const revenue = transactions
+        .filter((t) => {
+          if (t.status !== "Paid") return false;
+          const td = new Date(t.date);
+          return td.getMonth() === d.getMonth() && td.getFullYear() === year;
+        })
+        .reduce((sum, t) => sum + (t.amt ?? 0), 0);
+      return { month, revenue };
+    });
+  }, [transactions]);
 
   const userName = user?.name || "Administrator";
   const currentDate = new Date().toLocaleDateString("en-US", {
@@ -255,29 +364,7 @@ const Dashboard: React.FC = () => {
                 Activity
               </h3>
               <div className="space-y-6">
-                {[
-                  {
-                    action: "New Student Registered",
-                    time: "2 mins ago",
-                    user: "Admin",
-                    icon: CheckCircle2,
-                    color: "text-emerald-500",
-                  },
-                  {
-                    action: "Tuition Payment ($2,500)",
-                    time: "15 mins ago",
-                    user: "Finance",
-                    icon: DollarSign,
-                    color: "text-blue-500",
-                  },
-                  {
-                    action: "Server Maintenance Alert",
-                    time: "1 hr ago",
-                    user: "System",
-                    icon: Activity,
-                    color: "text-amber-500",
-                  },
-                ].map((item, idx) => (
+                {recentActivity.map((item, idx) => (
                   <div key={idx} className="flex items-start gap-4 group">
                     <div className={`mt-0.5 ${item.color}`}>
                       <item.icon size={16} />

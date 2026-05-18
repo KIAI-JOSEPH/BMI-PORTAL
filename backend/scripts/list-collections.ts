@@ -2,7 +2,7 @@
 
 const PB_URL = 'http://127.0.0.1:8090';
 const ADMIN_EMAIL = 'admin@bmi.edu';
-const ADMIN_PASSWORD = 'BMIAdmin2024Secure';
+const ADMIN_PASSWORD = (process.env.POCKETBASE_ADMIN_PASSWORD ?? '');
 
 async function listCollections() {
   // Authenticate
@@ -66,7 +66,7 @@ async function listCollections() {
   if (!hasStudents || !hasExams) {
     console.log('\n⚠️  Missing collections! Please create them in PocketBase Admin UI:');
     console.log('   1. Open http://localhost:8090/_/');
-    console.log('   2. Login with admin@bmi.edu / BMIAdmin2024Secure');
+    console.log('   2. Login with admin@bmi.edu / <your-admin-password>');
     console.log('   3. Go to Collections');
     console.log('   4. Create the missing collections');
   }

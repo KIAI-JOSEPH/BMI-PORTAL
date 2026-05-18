@@ -8,12 +8,12 @@ import PocketBase from 'pocketbase';
 
 const POCKETBASE_URL = 'http://127.0.0.1:8090';
 const POCKETBASE_ADMIN_EMAIL = 'admin@bmi.edu';
-const POCKETBASE_ADMIN_PASSWORD = 'BMIAdmin2024Secure';
+const POCKETBASE_ADMIN_PASSWORD = (process.env.POCKETBASE_ADMIN_PASSWORD ?? '');
 
 const APP_USER = {
   email: 'admin@bmi.edu',
-  password: 'BMIAdmin2024Secure',
-  passwordConfirm: 'BMIAdmin2024Secure',
+  password: (process.env.POCKETBASE_ADMIN_PASSWORD ?? ''),
+  passwordConfirm: (process.env.POCKETBASE_ADMIN_PASSWORD ?? ''),
   name: 'System Administrator',
   role: 'admin',
   department: 'IT Administration',

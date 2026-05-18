@@ -257,7 +257,7 @@ export const useDataStore = create<DataState>((set, get) => ({
       tuition: state.transactions
         .filter((t) => t.status === "Paid")
         .reduce((acc, curr) => acc + curr.amt, 0),
-      events: 5, // Mock — could be replaced with API data
+      events: 0, // Placeholder — events module not yet implemented
     };
   },
 }));

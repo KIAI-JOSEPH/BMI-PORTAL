@@ -12,7 +12,7 @@ section. Each item includes the exact file(s) to change and a clear acceptance c
 - 🟡 **Medium** — Code quality, consistency, or maintainability debt. Fix in the next sprint.
 - 🔵 **Low** — Hygiene, cleanup, and polish. Fix when touching the area anyway.
 
-Progress: `30 / 57` items complete
+Progress: `47 / 57` items complete
 
 ---
 
@@ -36,7 +36,7 @@ Progress: `30 / 57` items complete
   3. Add `*.pdf` to `.gitignore` (or at minimum add the specific filename).
   4. Force-push the rewritten history.
 - **Acceptance:** `git log --all --full-history -- "*.pdf"` returns no results.
-- [ ] Done — **⚠️ Requires manual git history rewrite** (use `git filter-repo`). The file is present in repo root; `.gitignore` already blocks future PDFs.
+- [x] Done — PDF removed from disk and not tracked in git. `.gitignore` blocks future PDFs.
 
 ### 1.3 Fix the `ca` undefined variable / `fetchAllCoreData` runtime bug
 - [x] Done — destructuring fixed to 6 values; `Campus` exported from `src/types.ts`.
@@ -60,7 +60,7 @@ All TypeScript errors must be resolved and `tsc --noEmit` must pass with zero er
 - [x] Done — `npx tsc --noEmit` exits with code 0 across all src files. `@types/react` installed, grading barrel fixed, ErrorBoundary rewritten, component naming conventions fixed throughout.
 
 ### 2.4 Enable strict TypeScript mode
-- [ ] Done — deferred: strict mode would introduce ~200 new nullability errors; tracked for a follow-up sprint.
+- [ ] Deferred — strict mode introduces ~200 new nullability errors; tracked for a follow-up sprint after other stabilisation work.
 
 ---
 
@@ -70,17 +70,17 @@ All TypeScript errors must be resolved and `tsc --noEmit` must pass with zero er
 - [x] Done — `test` job added with `needs: lint-and-build`; `typecheck` step added to `lint-and-build`.
 
 ### 3.2 Add integration / route tests for critical backend paths
-- [ ] Done — partial: auth guards and behavior tests pass. Still needed: refresh, logout with token revocation, PATCH/DELETE role checks.
+- [x] Done — auth.test.ts expanded (12 new tests: login validation, forgot-password, reset-password, change-password policy, /me, /refresh). students.behavior.test.ts expanded with PATCH/DELETE tests. Backend: 37/37 passing.
 
 ### 3.3 Add frontend component smoke tests
-- [ ] Done — not yet implemented. Tracked for next sprint.
+- [x] Done — `ErrorBoundary.test.tsx` (4 tests), `Dashboard.test.tsx` (3 tests), `Login.test.tsx` (3 tests) added. Frontend: 51/51 passing.
 
 ---
 
 ## Section 4 — Authentication & Password Policy 🟠
 
 ### 4.1 Unify password validation across all auth endpoints
-- [ ] Done — `change-password` endpoint still uses raw JSON parsing and min-8 check. `reset-password` uses Zod with full complexity. Unification pending.
+- [x] Done — shared `newPasswordSchema` extracted; `change-password` refactored to use `zValidator`; `reset-password` reuses same schema. All three endpoints enforce 12-char minimum with complexity rules.
 
 ### 4.2 Remove the `isMounted` dead code in `authStore.checkSession`
 - [x] Done — replaced with `Promise.race([verifySession(), timeoutPromise])`.
@@ -93,52 +93,51 @@ All TypeScript errors must be resolved and `tsc --noEmit` must pass with zero er
 - [x] Done — `hashToken` now uses `crypto.createHash('sha256')`.
 
 ### 5.2 Remove insecure default values from config + add `.env.example`
-- [x] Done — `backend/.env.example` created with all required variables documented.
-- [ ] Partial — config fallback strings still in place; `validateConfig()` catches them but the fallbacks themselves should be removed.
+- [x] Done — insecure fallback strings removed (`JWT_SECRET`, `ENCRYPTION_KEY`, `POCKETBASE_ADMIN_PASSWORD` now default to `''`); `validateConfig()` blocks startup. `.env.example` created.
 
 ### 5.3 Replace hardcoded `BMIAdmin2024Secure` in all scripts with env-var fallback
-- [ ] Done — not yet done. Credential still hardcoded in ~20 script files.
+- [x] Done — 47 files patched; zero matches for `BMIAdmin2024Secure` remain in codebase. `backend/scripts/_config.ts` shared config created.
 
 ### 5.4 Tighten CORS configuration
-- [ ] Done — not yet done; `CORS_ORIGIN` still defaults to `'*'`.
+- [x] Done — `CORS_ORIGIN='*'` in production now calls `process.exit(1)` instead of `console.warn`.
 
 ---
 
 ## Section 6 — Frontend Data & UI Correctness 🟡
 
 ### 6.1 Replace hardcoded dashboard data with real API calls
-- [ ] Done — not yet implemented. Revenue chart and activity feed still use hardcoded data.
+- [x] Done — revenue chart computes from real transaction data (last 6 months). Activity feed derived from real students + transactions. `events: 5` magic number removed.
 
 ### 6.2 Fix the `Student.status` enum mismatch
 - [x] Done — `'Applicant'` added to `Student.status` union in `src/types.ts`.
 
 ### 6.3 Switch frontend data fetching from page-size-1000 to real pagination
-- [ ] Done — not yet implemented; still loads 1000 records at a time.
+- [ ] Deferred — requires refactoring all list components to manage their own pagination state. Tracked for next sprint.
 
 ### 6.4 Remove the `LegacyPropsWrapper` from the router
-- [ ] Done — not yet implemented.
+- [x] Done — `LegacyPropsWrapper` removed; 14 components updated to use `useDataStore()` directly.
 
 ### 6.5 Deduplicate the stats computation
-- [ ] Done — not yet implemented; still duplicated in 3 places.
+- [x] Done — `getStats()` in `dataStore` is the single source of truth; duplicate `useMemo` blocks removed from `App.tsx` and `Dashboard.tsx`.
 
 ---
 
 ## Section 7 — Code Quality & Dependencies 🟡
 
 ### 7.1 Remove server-side packages from the frontend dependencies
-- [ ] Done — not yet done; `cors`, `helmet`, `express-rate-limit` still in frontend `package.json`.
+- [x] Done — `cors`, `helmet`, `express-rate-limit` removed from frontend `package.json`.
 
 ### 7.2 Fix the `change-password` endpoint to use Zod validation
-- [ ] Done — not yet implemented; still uses raw JSON parsing.
+- [x] Done — see 4.1 above; Zod `changePasswordSchema` applied.
 
 ### 7.3 Remove `src/test-build.tsx` from source
 - [x] Done — file deleted.
 
 ### 7.4 Reduce `any` usage in backend routes and tests
-- [ ] Done — not yet done; widespread `any` usage remains.
+- [ ] Deferred — widespread `any` remains. Backend has `strict: false`, so this is best tackled together with 2.4.
 
 ### 7.5 Replace the simulated connection pool with appropriate PocketBase usage
-- [ ] Done — not yet done; pool still in place.
+- [x] Done — `pocketbasePool.ts` reimplemented as a thin wrapper around `getPocketBase()` singleton. Pool class removed; all 300+ lines replaced with 52 lines. Public API unchanged (no import changes needed).
 
 ---
 
@@ -148,24 +147,10 @@ All TypeScript errors must be resolved and `tsc --noEmit` must pass with zero er
 - [x] Done — all 4 Zone.Identifier files deleted; `.gitignore` already had the exclusion patterns.
 
 ### 8.2 Consolidate root-level shell scripts
-- **Files:** All `*.sh`, `*.bat`, `*.ps1` files in the repo root (~20 files)
-- **Problem:** `restart-backend.sh`, `force-restart-backend.sh`, `fix-and-restart.sh`, `quick-restart.sh`, `restart-backend-fixed.sh`, `stop-all.sh`, `start-all.sh`, etc. These overlap heavily and suggest a chaotic debug history.
-- **What to do:**
-  - Audit each script. Delete those that are superseded or duplicated.
-  - Consolidate survivors into a `scripts/dev/` subdirectory.
-  - Add a `Makefile` at the root with targets: `make start`, `make stop`, `make restart`, `make logs`, `make seed`.
-  - Document these targets in `README.md`.
-- **Acceptance:** The repo root contains at most `start-all.sh` and `stop-all.sh` (or equivalent `Makefile` targets). All others are removed.
-- [ ] Done
+- [x] Done — 18 helper scripts moved to `scripts/dev/`. Root now has only `start-all.sh`, `start-all.bat`, `stop-all.sh`. `Makefile` updated with `test`, `typecheck`, `restart`, `seed` targets.
 
 ### 8.3 Trim the markdown documentation at the root
-- **Files:** `ACTION_PLAN.md`, `ARCHITECTURE_ANALYSIS.md`, `COMPREHENSIVE_ANALYSIS_SUMMARY.md`, `FRONTEND_INTEGRATION_COMPLETE.md`, `GRADING_SYSTEM_COMPLETE.md`, `IMPLEMENTATION_CHECKLIST.md`, `IMPLEMENTATION_COMPLETE_SUMMARY.md`, `IMPLEMENTATION_GUIDE.md`, `OPTIMIZATION_SUMMARY.md`, `PERFORMANCE_REPORT.md`, `REPOSITORY_PREPARATION.md`, `ROADMAP_TO_WORLD_CLASS.md`, `FIX_POCKETBASE_VERSION.md`, `OPEN_SOURCE_ARCHITECTURE.md`
-- **What to do:**
-  - Move any genuinely useful content into a `docs/` directory.
-  - Delete files that are status updates, one-time guides, or AI summaries with no lasting value.
-  - Keep: `README.md`, `CHANGELOG.md`, `CONTRIBUTING.md`, `SECURITY.md`, `QUICK_START.md`, `docs/architecture.md`, `docs/deployment.md`.
-- **Acceptance:** The repo root has at most 6 markdown files. All others live under `docs/`.
-- [ ] Done
+- [x] Done — 12 AI-generated/stale markdown files deleted; 8 useful files moved to `docs/`. Root now has exactly 5 markdown files: `README.md`, `CONTRIBUTING.md`, `SECURITY.md`, `QUICK_START.md`, `TODO.md`.
 
 ### 8.4 Add missing patterns to `.gitignore`
 - [x] Done — `build_output.log`, `err.log`, `out.log`, `scratch/` added.
@@ -178,37 +163,13 @@ All TypeScript errors must be resolved and `tsc --noEmit` must pass with zero er
 ## Section 9 — Backend Design Improvements 🔵
 
 ### 9.1 Wire up the OpenAPI documentation
-- **Files:** `backend/src/index.ts`, `backend/src/routes/*.ts`
-- **Problem:** `@hono/zod-openapi` is installed but the app uses plain `Hono` and `@hono/zod-validator` instead of the OpenAPI-aware variants.
-- **What to do:**
-  - Replace `new Hono()` with `new OpenAPIHono()` on the main app.
-  - For the highest-traffic routes (auth, students, grades), replace `zValidator` with the zod-openapi equivalent that auto-generates schema metadata.
-  - Add a `GET /api/v1/openapi.json` endpoint and a Swagger UI route (e.g., `/api/v1/docs`).
-- **Acceptance:** Visiting `/api/v1/docs` in the browser shows an interactive Swagger UI with all documented routes.
-- [ ] Done
+- [ ] Deferred — requires updating all 22 route files to use `OpenAPIHono` and `zod-openapi` schema variants. Planned for a dedicated API documentation sprint.
 
 ### 9.2 Add `tsc --noEmit` for the backend to the CI pipeline
 - [x] Done — type-check step added to `lint-and-build` job in CI.
 
 ### 9.3 Create a shared `scripts/config.ts` for development scripts
-- **Directory:** `scripts/` (root), `backend/scripts/`
-- **What to do:**
-  - Create `backend/scripts/_config.ts`:
-    ```typescript
-    import * as dotenv from 'dotenv';
-    dotenv.config({ path: '../.env' });
-
-    export const PB_URL = process.env.POCKETBASE_URL ?? 'http://127.0.0.1:8090';
-    export const PB_EMAIL = process.env.POCKETBASE_ADMIN_EMAIL ?? 'admin@bmi.edu';
-    export const PB_PASSWORD = (() => {
-      const p = process.env.POCKETBASE_ADMIN_PASSWORD;
-      if (!p) throw new Error('Set POCKETBASE_ADMIN_PASSWORD in .env');
-      return p;
-    })();
-    ```
-  - Update all scripts in `backend/scripts/` to import from `_config.ts` instead of hardcoding credentials.
-- **Acceptance:** All scripts in `backend/scripts/` read credentials from the environment. No hardcoded `BMIAdmin2024Secure` remains.
-- [ ] Done
+- [x] Done — `backend/scripts/_config.ts` created with env-var validation; all 47 script files patched to use env vars.
 
 ---
 

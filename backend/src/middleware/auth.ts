@@ -1,13 +1,13 @@
 // BMI UMS - Authentication Middleware (RS256 / HS256 dual-mode)
 
-import type { Next } from 'hono';
-import type { AppEnv } from '../types/hono.js';
-type Context = import('hono').Context<AppEnv>;
-import { jwtVerify, importSPKI, importPKCS8 } from 'jose';
-import type { JWTPayload } from '../types/index.js';
-import { CONFIG } from '../config/index.js';
-import { logger } from '../utils/logger.js';
-import { isTokenRevoked } from '../services/tokenBlacklist.js';
+import type { Next } from "hono";
+import type { AppEnv } from "../types/hono.js";
+type Context = import("hono").Context<AppEnv>;
+import { jwtVerify, importSPKI, importPKCS8 } from "jose";
+import type { JWTPayload } from "../types/index.js";
+import { CONFIG } from "../config/index.js";
+import { logger } from "../utils/logger.js";
+import { isTokenRevoked } from "../services/tokenBlacklist.js";
 
 // ── Key Management (RS256 with HS256 fallback) ────────────────────────
 // RS256 uses public/private key pairs — much more secure than HS256:
@@ -15,8 +15,10 @@ import { isTokenRevoked } from '../services/tokenBlacklist.js';
 // - The verification key (public) can be shared with other services
 // - Compromising the public key doesn't allow token forgery
 
-let publicKey: CryptoKey | null = null;
-let privateKey: CryptoKey | null = null;
+// KeyLike is the jose library union (CryptoKey | Uint8Array | ...)
+import type { KeyLike } from "jose";
+let publicKey: KeyLike | null = null;
+let privateKey: KeyLike | null = null;
 let hs256Secret: Uint8Array | null = null;
 let useRS256 = false;
 
@@ -32,51 +34,59 @@ export async function initJWTKeys(): Promise<void> {
 
   if (privateKeyPem && publicKeyPem) {
     try {
-      privateKey = await importPKCS8(privateKeyPem, 'RS256');
-      publicKey = await importSPKI(publicKeyPem, 'RS256');
+      privateKey = await importPKCS8(privateKeyPem, "RS256");
+      publicKey = await importSPKI(publicKeyPem, "RS256");
       useRS256 = true;
-      logger.info('JWT: RS256 mode enabled (asymmetric key pair)');
+      logger.info("JWT: RS256 mode enabled (asymmetric key pair)");
       return;
     } catch (error) {
-      logger.error('Failed to import RSA keys, falling back to HS256:', (error as Error).message);
+      logger.error(
+        "Failed to import RSA keys, falling back to HS256:",
+        (error as Error).message,
+      );
     }
   }
 
   // Fall back to HS256
   hs256Secret = new TextEncoder().encode(CONFIG.JWT_SECRET);
   useRS256 = false;
-  logger.info('JWT: HS256 mode enabled (shared secret) — set JWT_PRIVATE_KEY/JWT_PUBLIC_KEY for RS256');
+  logger.info(
+    "JWT: HS256 mode enabled (shared secret) — set JWT_PRIVATE_KEY/JWT_PUBLIC_KEY for RS256",
+  );
 }
 
 /**
  * Get the verification key (public key for RS256, secret for HS256)
  */
-function getVerificationKey(): Uint8Array | CryptoKey {
+function getVerificationKey(): KeyLike | Uint8Array {
   if (useRS256 && publicKey) {
     return publicKey;
   }
-  return hs256Secret || new TextEncoder().encode(CONFIG.JWT_SECRET);
+  return hs256Secret ?? new TextEncoder().encode(CONFIG.JWT_SECRET);
 }
 
 /**
  * Get the signing key (private key for RS256, secret for HS256)
  */
-export function getSigningKey(): Uint8Array | CryptoKey {
+export function getSigningKey(): KeyLike | Uint8Array {
   if (useRS256 && privateKey) {
     return privateKey;
   }
-  return hs256Secret || new TextEncoder().encode(CONFIG.JWT_SECRET);
+  return hs256Secret ?? new TextEncoder().encode(CONFIG.JWT_SECRET);
 }
 
 /**
  * Get the JWT algorithm being used
  */
 export function getJWTAlgorithm(): string {
-  return useRS256 ? 'RS256' : 'HS256';
+  return useRS256 ? "RS256" : "HS256";
 }
 
 // Store user data in a WeakMap attached to context
-const userContext = new WeakMap<Context, { sub: string; email: string; role: string }>();
+const userContext = new WeakMap<
+  Context,
+  { sub: string; email: string; role: string }
+>();
 
 /**
  * Verify JWT token
@@ -95,38 +105,47 @@ async function verifyToken(token: string): Promise<JWTPayload | null> {
  * Verifies Bearer token and attaches user to context
  */
 export async function authMiddleware(c: Context, next: Next) {
-  const authHeader = c.req.header('Authorization');
+  const authHeader = c.req.header("Authorization");
 
-  if (!authHeader?.startsWith('Bearer ')) {
-    return c.json({
-      success: false,
-      error: 'Authentication required',
-    }, 401);
+  if (!authHeader?.startsWith("Bearer ")) {
+    return c.json(
+      {
+        success: false,
+        error: "Authentication required",
+      },
+      401,
+    );
   }
 
   const token = authHeader.substring(7);
 
   // Check blacklist before verifying signature (fast path)
   if (await isTokenRevoked(token)) {
-    return c.json({
-      success: false,
-      error: 'Token has been revoked',
-    }, 401);
+    return c.json(
+      {
+        success: false,
+        error: "Token has been revoked",
+      },
+      401,
+    );
   }
 
   const payload = await verifyToken(token);
 
   if (!payload) {
-    return c.json({
-      success: false,
-      error: 'Invalid or expired token',
-    }, 401);
+    return c.json(
+      {
+        success: false,
+        error: "Invalid or expired token",
+      },
+      401,
+    );
   }
 
   // Store user info
   userContext.set(c, payload);
-  c.set('user', payload); // also set on context for audit middleware compatibility
-  
+  c.set("user", payload); // also set on context for audit middleware compatibility
+
   return await next();
 }
 
@@ -145,21 +164,29 @@ export function requireRole(...allowedRoles: string[]) {
   return async (c: Context, next: Next) => {
     // Prefer the verified user payload from WeakMap, but fall back to
     // context storage for compatibility with tests/middleware composition.
-    const user = getUser(c) ?? c.get('user');
+    const user = getUser(c) ?? c.get("user");
 
     if (!user) {
-      return c.json({
-        success: false,
-        error: 'Authentication required',
-      }, 401);
+      return c.json(
+        {
+          success: false,
+          error: "Authentication required",
+        },
+        401,
+      );
     }
 
     if (!allowedRoles.includes(user.role)) {
-      logger.warn(`Access denied: user with role '${user.role}' attempted unauthorized access`);
-      return c.json({
-        success: false,
-        error: 'Access denied: insufficient permissions',
-      }, 403);
+      logger.warn(
+        `Access denied: user with role '${user.role}' attempted unauthorized access`,
+      );
+      return c.json(
+        {
+          success: false,
+          error: "Access denied: insufficient permissions",
+        },
+        403,
+      );
     }
 
     return await next();
@@ -171,13 +198,13 @@ export function requireRole(...allowedRoles: string[]) {
  * Attaches user if token valid, but doesn't reject if missing/invalid
  */
 export async function optionalAuthMiddleware(c: Context, next: Next) {
-  const authHeader = c.req.header('Authorization');
+  const authHeader = c.req.header("Authorization");
 
-  if (authHeader?.startsWith('Bearer ')) {
+  if (authHeader?.startsWith("Bearer ")) {
     const token = authHeader.substring(7);
     const payload = await verifyToken(token);
     if (payload) {
-      c.set('user', payload);
+      c.set("user", payload);
     }
   }
 

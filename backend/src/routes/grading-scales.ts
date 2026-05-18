@@ -79,7 +79,7 @@ gradingScalesRouter.get('/', requireRole('admin', 'registrar', 'faculty', 'staff
  */
 gradingScalesRouter.get('/:id', requireRole('admin', 'registrar', 'faculty', 'staff', 'student'), async (c) => {
   try {
-    const id = c.req.param('id');
+    const id = c.req.param('id')!;
     const pb = getPocketBase();
     
     const scale = await pb.collection('grading_scales').getOne(id);
@@ -144,7 +144,7 @@ gradingScalesRouter.post('/', requireRole('admin', 'registrar'), async (c) => {
  */
 gradingScalesRouter.put('/:id', requireRole('admin', 'registrar'), async (c) => {
   try {
-    const id = c.req.param('id');
+    const id = c.req.param('id')!;
     const body = await c.req.json();
     const parsed = gradingScaleSchema.partial().safeParse(body);
     
@@ -181,7 +181,7 @@ gradingScalesRouter.put('/:id', requireRole('admin', 'registrar'), async (c) => 
  */
 gradingScalesRouter.delete('/:id', requireRole('admin'), async (c) => {
   try {
-    const id = c.req.param('id');
+    const id = c.req.param('id')!;
     const pb = getPocketBase();
     
     await pb.collection('grading_scales').delete(id);

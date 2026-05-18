@@ -11,7 +11,7 @@ dotenv.config({ path: 'backend/.env' });
 
 const PB_URL   = process.env.POCKETBASE_URL            ?? 'http://127.0.0.1:8090';
 const PB_EMAIL = process.env.POCKETBASE_ADMIN_EMAIL    ?? 'admin@bmi.edu';
-const PB_PASS  = process.env.POCKETBASE_ADMIN_PASSWORD ?? 'BMIAdmin2024Secure';
+const PB_PASS  = process.env.POCKETBASE_ADMIN_PASSWORD ?? (process.env.POCKETBASE_ADMIN_PASSWORD ?? '');
 
 const COLORS = ['bg-purple-600','bg-blue-600','bg-green-600','bg-red-600',
                 'bg-orange-600','bg-teal-600','bg-indigo-600','bg-pink-600'];

@@ -1335,7 +1335,7 @@ export const Transcripts: React.FC<TranscriptsProps> = (props) => {
                                 font: "Arial",
                               }),
                               new TextRun({
-                                text: selectedStudent.program_code.toUpperCase(),
+                                text: (selectedStudent.program_code ?? "").toUpperCase(),
                                 size: 18,
                                 bold: true,
                                 font: "Arial",
@@ -1367,7 +1367,7 @@ export const Transcripts: React.FC<TranscriptsProps> = (props) => {
                                 font: "Arial",
                               }),
                               new TextRun({
-                                text: selectedStudent.program_code.toUpperCase(),
+                                text: (selectedStudent.program_code ?? "").toUpperCase(),
                                 size: 18,
                                 bold: true,
                                 font: "Arial",
@@ -1679,7 +1679,7 @@ export const Transcripts: React.FC<TranscriptsProps> = (props) => {
                             spacing: { after: 50 },
                           }),
                           new Paragraph({
-                            text: getDeanName(selectedStudent.program_code),
+                            text: getDeanName(selectedStudent.program_code ?? ""),
                             alignment: AlignmentType.CENTER,
                             spacing: { after: 50 },
                             run: {
@@ -2008,7 +2008,7 @@ export const Transcripts: React.FC<TranscriptsProps> = (props) => {
   <line x1="60" y1="325" x2="350" y2="325" stroke="#E5E7EB" stroke-width="0.5"/>
 
   <text x="60" y="345" font-family="Arial, sans-serif" font-size="9" fill="#6B7280">FACULTY OF:</text>
-  <text x="150" y="345" font-family="Arial, sans-serif" font-size="10" font-weight="bold" fill="#000000">${selectedStudent.program_code.toUpperCase()}</text>
+  <text x="150" y="345" font-family="Arial, sans-serif" font-size="10" font-weight="bold" fill="#000000">${(selectedStudent.program_code ?? "").toUpperCase()}</text>
   <line x1="60" y1="350" x2="350" y2="350" stroke="#E5E7EB" stroke-width="0.5"/>
 
   <text x="60" y="370" font-family="Arial, sans-serif" font-size="9" fill="#6B7280">Admission:</text>
@@ -2017,7 +2017,7 @@ export const Transcripts: React.FC<TranscriptsProps> = (props) => {
 
   <!-- Right Column -->
   <text x="400" y="320" font-family="Arial, sans-serif" font-size="9" fill="#6B7280">Program:</text>
-  <text x="470" y="320" font-family="Arial, sans-serif" font-size="10" font-weight="bold" fill="#000000">${selectedStudent.program_code.substring(0, 30).toUpperCase()}</text>
+  <text x="470" y="320" font-family="Arial, sans-serif" font-size="10" font-weight="bold" fill="#000000">${(selectedStudent.program_code ?? "").substring(0, 30).toUpperCase()}</text>
   <line x1="400" y1="325" x2="730" y2="325" stroke="#E5E7EB" stroke-width="0.5"/>
 
   <text x="400" y="345" font-family="Arial, sans-serif" font-size="9" fill="#6B7280">Student ID:</text>
@@ -2078,7 +2078,7 @@ export const Transcripts: React.FC<TranscriptsProps> = (props) => {
   <text x="200" y="${signaturesY}" font-family="Arial, sans-serif" font-size="10" fill="#000000">_________________________</text>
   <text x="550" y="${signaturesY}" font-family="Arial, sans-serif" font-size="10" fill="#000000">_________________________</text>
 
-  <text x="200" y="${signaturesY + 20}" font-family="Arial, sans-serif" font-size="10" font-weight="bold" fill="#000000" text-anchor="middle">${getDeanName(selectedStudent.program_code)}</text>
+  <text x="200" y="${signaturesY + 20}" font-family="Arial, sans-serif" font-size="10" font-weight="bold" fill="#000000" text-anchor="middle">${getDeanName(selectedStudent.program_code ?? "")}</text>
   <text x="550" y="${signaturesY + 20}" font-family="Arial, sans-serif" font-size="10" font-weight="bold" fill="#000000" text-anchor="middle">Dean of Students</text>
 
   <text x="200" y="${signaturesY + 35}" font-family="Arial, sans-serif" font-size="8" font-style="italic" fill="#6B7280" text-anchor="middle">Dean of Faculty &amp; Academics</text>
@@ -3277,7 +3277,7 @@ export const Transcripts: React.FC<TranscriptsProps> = (props) => {
                   <div className="flex flex-col items-start w-[32%]">
                     <div className="w-full border-b border-gray-900" />
                     <span className="font-serif italic text-sm text-gray-900 whitespace-nowrap mt-1.5">
-                      {getDeanName(selectedStudent.program_code)}
+                      {getDeanName(selectedStudent.program_code ?? "")}
                     </span>
                     <span className="text-[7px] font-black uppercase tracking-widest mt-0.5 text-gray-500">
                       DEAN, {selectedStudent.faculty || "SCHOOL OF THEOLOGY"}

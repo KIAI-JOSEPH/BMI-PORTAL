@@ -6,7 +6,7 @@ import PocketBase from 'pocketbase';
 
 const PB_URL = 'http://127.0.0.1:8090';
 const ADMIN_EMAIL = 'admin@bmi.edu';
-const ADMIN_PASSWORD = 'BMIAdmin2024Secure';
+const ADMIN_PASSWORD = (process.env.POCKETBASE_ADMIN_PASSWORD ?? '');
 
 async function testBothAPIs() {
   console.log('🔍 Testing Both PocketBase APIs');

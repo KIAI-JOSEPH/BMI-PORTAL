@@ -4,7 +4,7 @@ const pb = new PocketBase('http://127.0.0.1:8090');
 async function run() {
     try {
         console.log('Logging in...');
-        await pb.admins.authWithPassword('admin@bmi.edu', 'BMIAdmin2024Secure');
+        await pb.admins.authWithPassword('admin@bmi.edu', (process.env.POCKETBASE_ADMIN_PASSWORD ?? ''));
         
         let user;
         try {
@@ -18,8 +18,8 @@ async function run() {
             console.log('User not found, creating...');
             await pb.collection('users').create({
                 email: 'admin@bmi.edu',
-                password: 'BMIAdmin2024Secure',
-                passwordConfirm: 'BMIAdmin2024Secure',
+                password: (process.env.POCKETBASE_ADMIN_PASSWORD ?? ''),
+                passwordConfirm: (process.env.POCKETBASE_ADMIN_PASSWORD ?? ''),
                 role: 'admin',
                 isActive: true,
                 name: 'System Admin'

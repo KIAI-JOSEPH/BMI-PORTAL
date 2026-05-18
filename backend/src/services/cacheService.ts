@@ -7,7 +7,7 @@
  * Usage:
  *   const data = await cache.getOrSet('dashboard_stats', () => fetchStats(), 30_000);
  */
-import { logger } from '../utils/logger.js';
+import { logger } from "../utils/logger.js";
 
 // ── In-Memory Cache ───────────────────────────────────────────────────
 interface CacheEntry<T> {
@@ -38,17 +38,17 @@ async function getRedis(): Promise<any> {
 
   redisInitAttempted = true;
 
-  if (process.env.REDIS_ENABLED !== 'true') return null;
+  if (process.env.REDIS_ENABLED !== "true") return null;
 
   try {
-    const Redis = (await import('ioredis')).default as any;
-    const redisUrl = process.env.REDIS_URL || 'redis://localhost:6379';
+    const Redis = (await import("ioredis")).default as any;
+    const redisUrl = process.env.REDIS_URL || "redis://localhost:6379";
 
     redis = new Redis(redisUrl, {
       maxRetriesPerRequest: 2,
       connectTimeout: 3000,
       lazyConnect: true,
-      retryStrategy(times) {
+      retryStrategy(times: number) {
         if (times > 3) return null;
         return Math.min(times * 200, 2000);
       },
@@ -57,9 +57,15 @@ async function getRedis(): Promise<any> {
     await redis.connect();
     redisAvailable = true;
 
-    redis.on('error', () => { redisAvailable = false; });
-    redis.on('ready', () => { redisAvailable = true; });
-    redis.on('close', () => { redisAvailable = false; });
+    redis.on("error", () => {
+      redisAvailable = false;
+    });
+    redis.on("ready", () => {
+      redisAvailable = true;
+    });
+    redis.on("close", () => {
+      redisAvailable = false;
+    });
 
     return redis;
   } catch {
@@ -79,7 +85,11 @@ export const cache = {
    * @param factory Function that produces the value if not cached
    * @param ttlMs Time-to-live in milliseconds (default: 30 seconds)
    */
-  async getOrSet<T>(key: string, factory: () => Promise<T>, ttlMs: number = 30_000): Promise<T> {
+  async getOrSet<T>(
+    key: string,
+    factory: () => Promise<T>,
+    ttlMs: number = 30_000,
+  ): Promise<T> {
     // Try Redis first
     const client = await getRedis();
     if (client && redisAvailable) {
@@ -96,10 +106,17 @@ export const cache = {
 
         // Not in cache — compute
         const data = await factory();
-        await client.setex(`cache:${key}`, Math.ceil(ttlMs / 1000), JSON.stringify(data));
+        await client.setex(
+          `cache:${key}`,
+          Math.ceil(ttlMs / 1000),
+          JSON.stringify(data),
+        );
         return data;
       } catch (error) {
-        logger.debug(`Redis cache error for key '${key}':`, (error as Error).message);
+        logger.debug(
+          `Redis cache error for key '${key}':`,
+          (error as Error).message,
+        );
       }
     }
 
@@ -124,7 +141,9 @@ export const cache = {
     if (client && redisAvailable) {
       try {
         await client.del(`cache:${key}`);
-      } catch { /* ignore */ }
+      } catch {
+        /* ignore */
+      }
     }
 
     // In-memory
@@ -143,7 +162,9 @@ export const cache = {
         if (keys.length > 0) {
           await client.del(...keys);
         }
-      } catch { /* ignore */ }
+      } catch {
+        /* ignore */
+      }
     }
 
     // In-memory

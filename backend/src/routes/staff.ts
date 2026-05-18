@@ -236,7 +236,7 @@ staffRouter.get('/:id', async (c) => {
   try {
     const pb = getPocketBase();
     
-    const id = c.req.param('id');
+    const id = c.req.param('id')!;
     const staff = await pb.collection('staff').getOne(id);
     
     return c.json<ApiResponse<StaffMember>>({
@@ -308,7 +308,7 @@ staffRouter.patch(
   logAction('UPDATE', 'staff'),
   async (c) => {
     try {
-      const id = c.req.param('id');
+      const id = c.req.param('id')!;
       const data = c.req.valid('json');
       const pb = getPocketBase();
       
@@ -342,7 +342,7 @@ staffRouter.delete(
   logAction('DELETE', 'staff'),
   async (c) => {
     try {
-      const id = c.req.param('id');
+      const id = c.req.param('id')!;
       const pb = getPocketBase();
       
       await pb.collection('staff').delete(id);

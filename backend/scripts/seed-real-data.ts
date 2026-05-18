@@ -20,7 +20,7 @@
  * Env vars (defaults work for local dev):
  *   POCKETBASE_URL            http://127.0.0.1:8090
  *   POCKETBASE_ADMIN_EMAIL    admin@bmi.edu
- *   POCKETBASE_ADMIN_PASSWORD BMIAdmin2024Secure
+ *   POCKETBASE_ADMIN_PASSWORD <your-admin-password>
  */
 
 import PocketBase from 'pocketbase';
@@ -29,7 +29,7 @@ dotenv.config();
 
 const PB_URL   = process.env.POCKETBASE_URL            ?? 'http://127.0.0.1:8090';
 const PB_EMAIL = process.env.POCKETBASE_ADMIN_EMAIL    ?? 'admin@bmi.edu';
-const PB_PASS  = process.env.POCKETBASE_ADMIN_PASSWORD ?? 'BMIAdmin2024Secure';
+const PB_PASS  = process.env.POCKETBASE_ADMIN_PASSWORD ?? (process.env.POCKETBASE_ADMIN_PASSWORD ?? '');
 
 // ─── Colour helper ───────────────────────────────────────────────────────────
 const COLORS = ['bg-purple-600','bg-blue-600','bg-green-600','bg-red-600',

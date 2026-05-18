@@ -7,7 +7,7 @@ async function run() {
       const r = await fetch('http://127.0.0.1:8090/api/admins/auth-with-password', { 
         method: 'POST', 
         headers: { 'Content-Type': 'application/json' }, 
-        body: JSON.stringify({ identity: 'admin@bmi.edu', password: 'BMIAdmin2024Secure' }) 
+        body: JSON.stringify({ identity: 'admin@bmi.edu', password: (process.env.POCKETBASE_ADMIN_PASSWORD ?? '') }) 
       }); 
       
       const d = await r.json(); 

@@ -463,7 +463,7 @@ gradeRouter.get(
   requireRole("admin", "registrar", "faculty", "staff", "student"),
   async (c) => {
     try {
-      const id = c.req.param("id");
+      const id = c.req.param("id")!;
       const pb = getPocketBase();
 
       const expanded = await pb.collection("academic_records").getOne(id, {
@@ -574,7 +574,7 @@ gradeRouter.put(
   "/:id",
   requireRole("admin", "registrar", "faculty", "staff"),
   async (c) => {
-    const id = c.req.param("id");
+    const id = c.req.param("id")!;
     return updateGradeHandler(c, id);
   },
 );
@@ -584,7 +584,7 @@ gradeRouter.patch(
   "/:id",
   requireRole("admin", "registrar", "faculty", "staff"),
   async (c) => {
-    const id = c.req.param("id");
+    const id = c.req.param("id")!;
     return updateGradeHandler(c, id);
   },
 );
@@ -595,7 +595,7 @@ gradeRouter.patch(
  */
 gradeRouter.delete("/:id", requireRole("admin", "registrar"), async (c) => {
   try {
-    const id = c.req.param("id");
+    const id = c.req.param("id")!;
     const pb = getPocketBase();
 
     await pb.collection("grades").delete(id);
@@ -738,7 +738,7 @@ gradeRouter.get(
   async (c) => {
     try {
       const pb = getPocketBase();
-      const studentId = sanitizeFilter(c.req.param("studentId"));
+      const studentId = sanitizeFilter(c.req.param("studentId")!);
 
       const records = await pb.collection("academic_records").getFullList({
         filter: `student_id = "${studentId}"`,

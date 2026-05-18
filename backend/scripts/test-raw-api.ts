@@ -30,7 +30,7 @@ async function main() {
   const baseUrl = 'http://127.0.0.1:8090';
   const credentials = {
     identity: 'admin@bmi.edu',
-    password: 'BMIAdmin2024Secure',
+    password: (process.env.POCKETBASE_ADMIN_PASSWORD ?? ''),
   };
   
   console.log('Testing different admin authentication endpoints...');
@@ -58,7 +58,7 @@ async function main() {
   console.log('\n\n🔍 Testing with email/password fields...');
   const altCredentials = {
     email: 'admin@bmi.edu',
-    password: 'BMIAdmin2024Secure',
+    password: (process.env.POCKETBASE_ADMIN_PASSWORD ?? ''),
   };
   
   for (const endpoint of endpoints) {

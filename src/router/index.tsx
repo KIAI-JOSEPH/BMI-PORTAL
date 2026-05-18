@@ -9,6 +9,7 @@
  */
 import React, { Suspense, lazy } from "react";
 import { Routes, Route, Navigate } from "react-router-dom";
+import { useAuthStore } from "../stores/authStore";
 
 // Lazy-loaded page components for code splitting
 const Dashboard = lazy(() => import("../components/Dashboard"));
@@ -36,6 +37,8 @@ const Communications = lazy(() => import("../components/Communications"));
 const Visitors = lazy(() => import("../components/Visitors"));
 const Reports = lazy(() => import("../components/Reports"));
 const Settings = lazy(() => import("../components/Settings"));
+const StudentPortal = lazy(() => import("../components/StudentPortal"));
+const FacultyPortal = lazy(() => import("../components/FacultyPortal"));
 
 // Page-level loading fallback
 function PageLoader() {
@@ -47,6 +50,25 @@ function PageLoader() {
       </div>
     </div>
   );
+}
+
+/**
+ * RoleGuard — redirects to /dashboard when the signed-in user's role
+ * does not match the required role.  Always passes when role is undefined
+ * (i.e. admin / staff routes that are open to all authenticated users).
+ */
+function RoleGuard({
+  role,
+  children,
+}: {
+  role: string;
+  children: React.ReactNode;
+}) {
+  const user = useAuthStore((s) => s.user);
+  if (!user || user.role !== role) {
+    return <Navigate to="/dashboard" replace />;
+  }
+  return <>{children}</>;
 }
 
 /**
@@ -77,6 +99,23 @@ export function AppRoutes() {
         <Route path="/visitors" element={<Visitors />} />
         <Route path="/reports" element={<Reports />} />
         <Route path="/settings" element={<Settings />} />
+        {/* Role-specific portals — guarded by role */}
+        <Route
+          path="/student"
+          element={
+            <RoleGuard role="student">
+              <StudentPortal />
+            </RoleGuard>
+          }
+        />
+        <Route
+          path="/faculty"
+          element={
+            <RoleGuard role="faculty">
+              <FacultyPortal />
+            </RoleGuard>
+          }
+        />
         {/* Catch-all redirect to dashboard */}
         <Route path="*" element={<Navigate to="/dashboard" replace />} />
       </Routes>

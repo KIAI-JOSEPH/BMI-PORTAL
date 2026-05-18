@@ -193,7 +193,7 @@ coursesRouter.get('/stats/overview', async (c) => {
  */
 coursesRouter.get('/:id', async (c) => {
   try {
-    const id = c.req.param('id');
+    const id = c.req.param('id')!;
     const pb = getPocketBase();
     
     const course = await pb.collection('courses').getOne(id);
@@ -269,7 +269,7 @@ coursesRouter.patch(
   logAction('UPDATE', 'courses'),
   async (c) => {
     try {
-      const id = c.req.param('id');
+      const id = c.req.param('id')!;
       const data = c.req.valid('json');
       const pb = getPocketBase();
       
@@ -303,7 +303,7 @@ coursesRouter.delete(
   logAction('DELETE', 'courses'),
   async (c) => {
     try {
-      const id = c.req.param('id');
+      const id = c.req.param('id')!;
       const pb = getPocketBase();
       
       await pb.collection('courses').delete(id);

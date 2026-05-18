@@ -136,7 +136,7 @@ const Alumni: React.FC = () => {
           classYear: (
             parseInt(s.admission_date?.split("-")[0] ?? "") + 4
           ).toString(), // Projected completion year
-          course: s.department || s.faculty,
+          course: s.department ?? s.faculty ?? "",
           occupation: "Awaiting Alumni Record Update",
           location: "Seeking Placement",
           achievements:

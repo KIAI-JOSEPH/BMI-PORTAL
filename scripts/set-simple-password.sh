@@ -5,7 +5,7 @@ echo "================================="
 echo ""
 
 ADMIN_EMAIL="admin@bmi.edu"
-ADMIN_PASSWORD="BMIAdmin2024Secure"
+ADMIN_PASSWORD="${POCKETBASE_ADMIN_PASSWORD:-<your-admin-password>}"
 DATA_DIR="data/pb_data"
 
 echo "📧 Email: $ADMIN_EMAIL"

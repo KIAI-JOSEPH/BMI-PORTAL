@@ -15,7 +15,7 @@
 
 const PB_URL      = process.env.PB_URL      || 'http://127.0.0.1:8090';
 const PB_EMAIL    = process.env.PB_EMAIL    || 'admin@bmi.edu';
-const PB_PASSWORD = process.env.PB_PASSWORD || 'BMIAdmin2024Secure';
+const PB_PASSWORD = process.env.PB_PASSWORD || (process.env.POCKETBASE_ADMIN_PASSWORD ?? '');
 
 // ── Auth ──────────────────────────────────────────────────────────────────────
 let TOKEN = '';

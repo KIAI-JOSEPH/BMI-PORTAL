@@ -11,7 +11,7 @@ dotenv.config();
 
 const PB_URL = process.env.POCKETBASE_URL || 'http://127.0.0.1:8090';
 const ADMIN_EMAIL = process.env.POCKETBASE_ADMIN_EMAIL || 'admin@bmi.edu';
-const ADMIN_PASSWORD = process.env.POCKETBASE_ADMIN_PASSWORD || 'BMIAdmin2024Secure';
+const ADMIN_PASSWORD = process.env.POCKETBASE_ADMIN_PASSWORD || (process.env.POCKETBASE_ADMIN_PASSWORD ?? '');
 
 // All available theology courses
 const ALL_COURSES = [

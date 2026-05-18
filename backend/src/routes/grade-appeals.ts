@@ -151,7 +151,7 @@ gradeAppealsRouter.get('/', requireRole('admin', 'registrar', 'faculty', 'staff'
  */
 gradeAppealsRouter.get('/:id', requireRole('admin', 'registrar', 'faculty', 'staff', 'student'), async (c) => {
   try {
-    const id = c.req.param('id');
+    const id = c.req.param('id')!;
     const pb = getPocketBase();
     
     const appeal = await pb.collection('grade_appeals').getOne(id);
@@ -176,7 +176,7 @@ gradeAppealsRouter.get('/:id', requireRole('admin', 'registrar', 'faculty', 'sta
  */
 gradeAppealsRouter.put('/:id', requireRole('admin', 'registrar', 'faculty'), async (c) => {
   try {
-    const id = c.req.param('id');
+    const id = c.req.param('id')!;
     const body = await c.req.json();
     const parsed = updateAppealSchema.safeParse(body);
     
@@ -230,7 +230,7 @@ gradeAppealsRouter.put('/:id', requireRole('admin', 'registrar', 'faculty'), asy
  */
 gradeAppealsRouter.delete('/:id', requireRole('admin', 'registrar', 'faculty', 'student'), async (c) => {
   try {
-    const id = c.req.param('id');
+    const id = c.req.param('id')!;
     const pb = getPocketBase();
     
     // Instead of deleting, mark as withdrawn

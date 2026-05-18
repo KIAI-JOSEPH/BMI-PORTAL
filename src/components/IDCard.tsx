@@ -440,9 +440,11 @@ export const IDCard: React.FC<IDCardProps> = ({ students, logo }) => {
                       <div className="text-[9px] opacity-70">
                         <p>
                           Valid Until:{" "}
-                          {new Date(
-                            generatedCard.expiryDate,
-                          ).toLocaleDateString()}
+                          {generatedCard.expiryDate
+                            ? new Date(
+                                generatedCard.expiryDate,
+                              ).toLocaleDateString()
+                            : "—"}
                         </p>
                       </div>
                       <div className="w-8 h-8 bg-white rounded p-0.5">

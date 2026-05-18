@@ -1,6 +1,6 @@
-﻿import { authFetch } from './authService';
+﻿import { authFetch } from "./authService";
 
-import { API_URL } from './config';
+import { API_URL } from "./config";
 
 export interface Grade {
   id: string;
@@ -20,6 +20,8 @@ export interface Grade {
   academicYear: string;
   semester: string;
   status?: string;
+  /** Email / ID of the staff member who recorded the grade */
+  createdBy?: string;
 }
 
 export interface GradeResponse {
@@ -39,56 +41,88 @@ export interface GradesListResponse {
   error?: string;
 }
 
-export async function getGrades(filters?: any): Promise<GradesListResponse> {   
+export async function getGrades(filters?: any): Promise<GradesListResponse> {
   try {
     const params = new URLSearchParams();
-    if (filters?.perPage) params.append('perPage', filters.perPage.toString()); 
+    if (filters?.perPage) params.append("perPage", filters.perPage.toString());
 
-    const response = await authFetch(`${API_URL}/grades?${params.toString()}`); 
+    const response = await authFetch(`${API_URL}/grades?${params.toString()}`);
     const raw = await response.json();
-    if (raw?.success && raw.data && raw.data.totalItems != null && raw.data.total == null) {
+    if (
+      raw?.success &&
+      raw.data &&
+      raw.data.totalItems != null &&
+      raw.data.total == null
+    ) {
       raw.data.total = raw.data.totalItems;
     }
     return raw;
   } catch (error) {
-    return { success: false, error: error instanceof Error ? error.message : 'Failed to fetch' };
+    return {
+      success: false,
+      error: error instanceof Error ? error.message : "Failed to fetch",
+    };
   }
 }
 
-export async function createGrade(data: Partial<Grade>): Promise<GradeResponse> {
+export async function createGrade(
+  data: Partial<Grade>,
+): Promise<GradeResponse> {
   try {
     const response = await authFetch(`${API_URL}/grades`, {
-      method: 'POST',
+      method: "POST",
       body: JSON.stringify(data),
     });
     return await response.json();
   } catch (error) {
-    return { success: false, error: error instanceof Error ? error.message : 'Failed to create' };
+    return {
+      success: false,
+      error: error instanceof Error ? error.message : "Failed to create",
+    };
   }
 }
 
-export async function getStudentGrades(studentId: string): Promise<GradesListResponse> {
+export async function getStudentGrades(
+  studentId: string,
+): Promise<GradesListResponse> {
   try {
     const params = new URLSearchParams({ studentId });
-    const response = await authFetch(`${API_URL}/grades?${params.toString()}`); 
+    const response = await authFetch(`${API_URL}/grades?${params.toString()}`);
     const raw = await response.json();
-    if (raw?.success && raw.data && raw.data.totalItems != null && raw.data.total == null) {
+    if (
+      raw?.success &&
+      raw.data &&
+      raw.data.totalItems != null &&
+      raw.data.total == null
+    ) {
       raw.data.total = raw.data.totalItems;
     }
     return raw;
   } catch (error) {
-    return { success: false, error: error instanceof Error ? error.message : 'Failed to fetch student grades' };
+    return {
+      success: false,
+      error:
+        error instanceof Error
+          ? error.message
+          : "Failed to fetch student grades",
+    };
   }
 }
 
-export async function updateGrade(id: string, data: Partial<Grade>): Promise<GradeResponse> {
+export async function updateGrade(
+  id: string,
+  data: Partial<Grade>,
+): Promise<GradeResponse> {
   try {
     const response = await authFetch(`${API_URL}/grades/${id}`, {
-      method: 'PATCH',
+      method: "PATCH",
       body: JSON.stringify(data),
     });
     return await response.json();
   } catch (error) {
-    return { success: false, error: error instanceof Error ? error.message : 'Failed to update' };
+    return {
+      success: false,
+      error: error instanceof Error ? error.message : "Failed to update",
+    };
   }
 }

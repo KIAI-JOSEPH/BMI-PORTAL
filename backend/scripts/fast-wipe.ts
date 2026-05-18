@@ -12,7 +12,7 @@ dotenv.config({ path: 'backend/.env' });
 
 const PB_URL   = process.env.POCKETBASE_URL            ?? 'http://127.0.0.1:8090';
 const PB_EMAIL = process.env.POCKETBASE_ADMIN_EMAIL    ?? 'admin@bmi.edu';
-const PB_PASS  = process.env.POCKETBASE_ADMIN_PASSWORD ?? 'BMIAdmin2024Secure';
+const PB_PASS  = process.env.POCKETBASE_ADMIN_PASSWORD ?? (process.env.POCKETBASE_ADMIN_PASSWORD ?? '');
 
 async function wipeFast(token: string, collection: string) {
   process.stdout.write(`   Wiping ${collection.padEnd(20)}... `);

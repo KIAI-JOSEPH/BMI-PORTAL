@@ -5,7 +5,7 @@
 
 const POCKETBASE_URL = 'http://127.0.0.1:8090';
 const ADMIN_EMAIL = 'admin@bmi.edu';
-const ADMIN_PASSWORD = 'BMIAdmin2024Secure';
+const ADMIN_PASSWORD = (process.env.POCKETBASE_ADMIN_PASSWORD ?? '');
 
 async function createCampusesCollection() {
   console.log('🏫 Creating Campuses Collection...\n');

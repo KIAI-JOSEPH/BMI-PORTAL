@@ -91,7 +91,7 @@ libraryRouter.get('/', async (c) => {
  */
 libraryRouter.get('/:id', async (c) => {
   try {
-    const id = c.req.param('id');
+    const id = c.req.param('id')!;
     const pb = getPocketBase();
 
     const item = await pb.collection('library_items').getOne(id);
@@ -163,7 +163,7 @@ libraryRouter.patch(
   logAction('UPDATE', 'library'),
   async (c) => {
     try {
-      const id = c.req.param('id');
+      const id = c.req.param('id')!;
       const data = c.req.valid('json');
       const pb = getPocketBase();
 
@@ -197,7 +197,7 @@ libraryRouter.delete(
   logAction('DELETE', 'library'),
   async (c) => {
     try {
-      const id = c.req.param('id');
+      const id = c.req.param('id')!;
       const pb = getPocketBase();
 
       await pb.collection('library_items').delete(id);
@@ -230,7 +230,7 @@ libraryRouter.post(
   logAction('UPDATE', 'library'),
   async (c) => {
     try {
-      const id = c.req.param('id');
+      const id = c.req.param('id')!;
       const pb = getPocketBase();
 
       const item = await pb.collection('library_items').getOne(id) as unknown as LibraryItem;
@@ -274,7 +274,7 @@ libraryRouter.post(
   logAction('UPDATE', 'library'),
   async (c) => {
     try {
-      const id = c.req.param('id');
+      const id = c.req.param('id')!;
       const pb = getPocketBase();
 
       const item = await pb.collection('library_items').getOne(id) as unknown as LibraryItem;

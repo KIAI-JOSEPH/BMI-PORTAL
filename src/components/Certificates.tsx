@@ -193,7 +193,7 @@ const CertificateDocument: React.FC<CertDocProps> = ({
   const sig = cert.signature
     ? cert.signature.substring(0, 20).toUpperCase()
     : "";
-  const deptCode = DEPT_CODE[student.faculty] || "GEN";
+  const deptCode = DEPT_CODE[student.faculty ?? ""] ?? "GEN";
   const studentRef = `BMI/${new Date(cert.issue_date).getFullYear()}/${deptCode}/${student.id.replace(/\D/g, "").slice(-3).padStart(3, "0")}`;
   const issueDate = formatDate(cert.issue_date);
   const timestamp =

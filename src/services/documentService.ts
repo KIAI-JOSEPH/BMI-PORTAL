@@ -4,9 +4,9 @@
  * 100% Open Source - No proprietary dependencies
  */
 
-import type { 
-  BaseDocument, 
-  DocumentType, 
+import type {
+  BaseDocument,
+  DocumentType,
   DocumentStatus,
   DocumentSecurityFeatures,
   DocumentGenerationRequest,
@@ -22,28 +22,28 @@ import type {
   GoodStandingLetter,
   RegistrationCard,
   LibraryCard,
-  AttendanceRecord
-} from '../types/documents';
+  AttendanceRecord,
+} from "../types/documents";
 
 // QR Code generation (using free API or local implementation)
-import QRCode from 'qrcode';
-import { getHtml2Pdf } from './pdfService';
+import QRCode from "qrcode";
+import { getHtml2Pdf } from "./pdfService";
 
-/** 
+/**
  * Document Service - Central hub for all document operations
  * Implements all security features using native Web APIs
  */
 export class DocumentService {
   private static instance: DocumentService;
   private readonly API_BASE: string;
-  private readonly STORAGE_KEY = 'bmi_documents';
-  private readonly AUDIT_KEY = 'bmi_document_audit';
-  private readonly TEMPLATES_KEY = 'bmi_document_templates';
+  private readonly STORAGE_KEY = "bmi_documents";
+  private readonly AUDIT_KEY = "bmi_document_audit";
+  private readonly TEMPLATES_KEY = "bmi_document_templates";
 
   private constructor() {
     // Use relative path — Vite proxy handles dev, same-origin handles production.
     // If you need an explicit URL (e.g., mobile device testing), set VITE_API_URL=/api/v1 or a full origin.
-    this.API_BASE = import.meta.env.VITE_API_URL || '/api/v1';
+    this.API_BASE = import.meta.env.VITE_API_URL || "/api/v1";
   }
 
   static getInstance(): DocumentService {
@@ -65,9 +65,9 @@ export class DocumentService {
     const canonicalString = JSON.stringify(data, Object.keys(data).sort());
     const encoder = new TextEncoder();
     const dataBuffer = encoder.encode(canonicalString);
-    const hashBuffer = await crypto.subtle.digest('SHA-256', dataBuffer);
+    const hashBuffer = await crypto.subtle.digest("SHA-256", dataBuffer);
     const hashArray = Array.from(new Uint8Array(hashBuffer));
-    return hashArray.map(b => b.toString(16).padStart(2, '0')).join('');
+    return hashArray.map((b) => b.toString(16).padStart(2, "0")).join("");
   }
 
   /**
@@ -78,26 +78,26 @@ export class DocumentService {
     const randomBytes = new Uint8Array(4);
     crypto.getRandomValues(randomBytes);
     const randomHex = Array.from(randomBytes)
-      .map(b => b.toString(16).padStart(2, '0'))
-      .join('')
+      .map((b) => b.toString(16).padStart(2, "0"))
+      .join("")
       .toUpperCase();
-    
+
     const prefix = this.getDocumentPrefix(type);
-    const cleanId = studentId.replace(/[^A-Z0-9]/gi, '').slice(0, 6);
-    
+    const cleanId = studentId.replace(/[^A-Z0-9]/gi, "").slice(0, 6);
+
     return `${prefix}-${year}-${cleanId}-${randomHex}`;
   }
 
   private getDocumentPrefix(type: DocumentType): string {
     const prefixes: Record<DocumentType, string> = {
-      certificate: 'BMI-CERT',
-      transcript: 'BMI-TRANS',
-      id_card: 'BMI-ID',
-      admission_letter: 'BMI-ADM',
-      good_standing: 'BMI-GS',
-      registration_card: 'BMI-REG',
-      library_card: 'BMI-LIB',
-      attendance_record: 'BMI-ATT'
+      certificate: "BMI-CERT",
+      transcript: "BMI-TRANS",
+      id_card: "BMI-ID",
+      admission_letter: "BMI-ADM",
+      good_standing: "BMI-GS",
+      registration_card: "BMI-REG",
+      library_card: "BMI-LIB",
+      attendance_record: "BMI-ATT",
     };
     return prefixes[type];
   }
@@ -106,7 +106,11 @@ export class DocumentService {
    * Generate anti-tamper seal hash
    * Combines multiple hash algorithms for extra security
    */
-  async generateSealHash(contentHash: string, serialNumber: string, timestamp: string): Promise<string> {
+  async generateSealHash(
+    contentHash: string,
+    serialNumber: string,
+    timestamp: string,
+  ): Promise<string> {
     const sealData = `${contentHash}|${serialNumber}|${timestamp}|BMI-SEAL`;
     return this.generateContentHash({ seal: sealData });
   }
@@ -115,9 +119,12 @@ export class DocumentService {
    * Generate blockchain-style anchor hash
    * Creates a chain of hashes for immutability verification
    */
-  async generateBlockchainAnchor(previousAnchor: string | null, currentHash: string): Promise<string> {
-    const anchorData = previousAnchor 
-      ? `${previousAnchor}|${currentHash}|${Date.now()}` 
+  async generateBlockchainAnchor(
+    previousAnchor: string | null,
+    currentHash: string,
+  ): Promise<string> {
+    const anchorData = previousAnchor
+      ? `${previousAnchor}|${currentHash}|${Date.now()}`
       : `${currentHash}|GENESIS|${Date.now()}`;
     return this.generateContentHash({ anchor: anchorData });
   }
@@ -126,7 +133,10 @@ export class DocumentService {
    * Generate digital signature (simplified using HMAC concept)
    * In production, this would use proper RSA/ECDSA keys
    */
-  async generateDigitalSignature(contentHash: string, issuerKey: string): Promise<string> {
+  async generateDigitalSignature(
+    contentHash: string,
+    issuerKey: string,
+  ): Promise<string> {
     const signatureData = `${contentHash}|${issuerKey}|${Date.now()}`;
     return this.generateContentHash({ sign: signatureData });
   }
@@ -138,20 +148,23 @@ export class DocumentService {
   /**
    * Generate QR code data URL with verification information
    */
-  async generateQRCode(verificationUrl: string, options?: { width?: number; margin?: number }): Promise<string> {
+  async generateQRCode(
+    verificationUrl: string,
+    options?: { width?: number; margin?: number },
+  ): Promise<string> {
     try {
       const dataUrl = await QRCode.toDataURL(verificationUrl, {
         width: options?.width || 200,
         margin: options?.margin || 2,
         color: {
-          dark: '#4B0082',
-          light: '#FFFFFF'
+          dark: "#4B0082",
+          light: "#FFFFFF",
         },
-        errorCorrectionLevel: 'H'
+        errorCorrectionLevel: "H",
       });
       return dataUrl;
     } catch (error) {
-      console.error('QR Code generation failed:', error);
+      console.error("QR Code generation failed:", error);
       // Fallback to API-based QR generation
       return `https://api.qrserver.com/v1/create-qr-code/?size=200x200&ecc=H&margin=2&data=${encodeURIComponent(verificationUrl)}`;
     }
@@ -162,7 +175,7 @@ export class DocumentService {
    */
   generateBarcodeData(serialNumber: string, studentId: string): string {
     // Code 128 compatible format
-    return `\x00BMI${studentId.replace(/[^A-Z0-9]/gi, '')}${serialNumber.slice(-8)}\x00`;
+    return `\x00BMI${studentId.replace(/[^A-Z0-9]/gi, "")}${serialNumber.slice(-8)}\x00`;
   }
 
   // ==========================================
@@ -172,13 +185,17 @@ export class DocumentService {
   /**
    * Generate secure verification URL
    */
-  generateVerificationUrl(serialNumber: string, contentHash: string, type: DocumentType): string {
+  generateVerificationUrl(
+    serialNumber: string,
+    contentHash: string,
+    type: DocumentType,
+  ): string {
     const baseUrl = window.location.origin;
     const params = new URLSearchParams({
       s: serialNumber,
       h: contentHash.slice(0, 16), // First 16 chars for URL brevity
       t: type,
-      v: '2' // Version
+      v: "2", // Version
     });
     return `${baseUrl}/verify?${params.toString()}`;
   }
@@ -191,33 +208,44 @@ export class DocumentService {
    * Generate complete security features for a document
    */
   async generateSecurityFeatures(
-    type: DocumentType, 
-    studentId: string, 
+    type: DocumentType,
+    studentId: string,
     contentData: Record<string, any>,
-    options?: { expiresAt?: string; includeBlockchain?: boolean }
+    options?: { expiresAt?: string; includeBlockchain?: boolean },
   ): Promise<DocumentSecurityFeatures> {
     const timestamp = new Date().toISOString();
     const serialNumber = this.generateSerialNumber(type, studentId);
-    
+
     // Generate content hash
     const contentHash = await this.generateContentHash({
       ...contentData,
       serialNumber,
-      timestamp
+      timestamp,
     });
 
     // Generate seal hash
-    const sealHash = await this.generateSealHash(contentHash, serialNumber, timestamp);
+    const sealHash = await this.generateSealHash(
+      contentHash,
+      serialNumber,
+      timestamp,
+    );
 
     // Generate verification URL and QR code
-    const verificationUrl = this.generateVerificationUrl(serialNumber, contentHash, type);
+    const verificationUrl = this.generateVerificationUrl(
+      serialNumber,
+      contentHash,
+      type,
+    );
     const qrCodeDataUrl = await this.generateQRCode(verificationUrl);
 
     // Optional blockchain anchor
     let blockchainAnchor: string | undefined;
     if (options?.includeBlockchain) {
       const previousAnchor = await this.getLastAnchor();
-      blockchainAnchor = await this.generateBlockchainAnchor(previousAnchor, contentHash);
+      blockchainAnchor = await this.generateBlockchainAnchor(
+        previousAnchor,
+        contentHash,
+      );
     }
 
     return {
@@ -229,7 +257,7 @@ export class DocumentService {
       expiresAt: options?.expiresAt,
       sealHash,
       blockchainAnchor,
-      verificationCount: 0
+      verificationCount: 0,
     };
   }
 
@@ -239,37 +267,47 @@ export class DocumentService {
   async createDocument<T extends BaseDocument>(
     type: DocumentType,
     studentId: string,
-    data: Omit<T, 'id' | 'type' | 'security' | 'createdAt' | 'updatedAt'>,
-    options?: { templateId?: string; expiresAt?: string; createdBy?: string }
+    data: Omit<T, "id" | "type" | "security" | "createdAt" | "updatedAt">,
+    options?: { templateId?: string; expiresAt?: string; createdBy?: string },
   ): Promise<T> {
     const id = crypto.randomUUID();
     const timestamp = new Date().toISOString();
-    
+
     // Generate security features
-    const security = await this.generateSecurityFeatures(type, studentId, { ...data, id }, {
-      expiresAt: options?.expiresAt,
-      includeBlockchain: true
-    });
+    const security = await this.generateSecurityFeatures(
+      type,
+      studentId,
+      { ...data, id },
+      {
+        expiresAt: options?.expiresAt,
+        includeBlockchain: true,
+      },
+    );
 
     const document: BaseDocument = {
+      ...data, // spread first so explicit fields below override
       id,
       type,
       studentId,
-      status: 'issued',
+      status: "issued" as const,
       security,
       createdAt: timestamp,
       updatedAt: timestamp,
-      createdBy: options?.createdBy || 'system',
-      ...data
+      createdBy: options?.createdBy || "system",
     } as BaseDocument;
 
     // Save to storage
     await this.saveDocument(document);
-    
+
     // Log audit entry
-    await this.logAuditEntry(document.id, 'created', options?.createdBy || 'system', {
-      templateId: options?.templateId
-    });
+    await this.logAuditEntry(
+      document.id,
+      "created",
+      options?.createdBy || "system",
+      {
+        templateId: options?.templateId,
+      },
+    );
 
     return document as T;
   }
@@ -283,14 +321,14 @@ export class DocumentService {
    */
   private async saveDocument(document: BaseDocument): Promise<void> {
     const documents = await this.getAllDocuments();
-    const existingIndex = documents.findIndex(d => d.id === document.id);
-    
+    const existingIndex = documents.findIndex((d) => d.id === document.id);
+
     if (existingIndex >= 0) {
       documents[existingIndex] = document;
     } else {
       documents.push(document);
     }
-    
+
     localStorage.setItem(this.STORAGE_KEY, JSON.stringify(documents));
   }
 
@@ -307,7 +345,7 @@ export class DocumentService {
    */
   async getDocumentById(id: string): Promise<BaseDocument | null> {
     const documents = await this.getAllDocuments();
-    return documents.find(d => d.id === id) || null;
+    return documents.find((d) => d.id === id) || null;
   }
 
   /**
@@ -315,7 +353,7 @@ export class DocumentService {
    */
   async getDocumentsByStudent(studentId: string): Promise<BaseDocument[]> {
     const documents = await this.getAllDocuments();
-    return documents.filter(d => d.studentId === studentId);
+    return documents.filter((d) => d.studentId === studentId);
   }
 
   /**
@@ -323,7 +361,7 @@ export class DocumentService {
    */
   async getDocumentsByType(type: DocumentType): Promise<BaseDocument[]> {
     const documents = await this.getAllDocuments();
-    return documents.filter(d => d.type === type);
+    return documents.filter((d) => d.type === type);
   }
 
   // ==========================================
@@ -334,17 +372,19 @@ export class DocumentService {
    * Verify document authenticity
    */
   async verifyDocument(
-    serialNumber: string, 
+    serialNumber: string,
     providedHash?: string,
-    options?: { method?: 'online' | 'qr_scan' | 'api' }
+    options?: { method?: "online" | "qr_scan" | "api" },
   ): Promise<DocumentVerificationResult> {
     const timestamp = new Date().toISOString();
-    const method = options?.method || 'online';
+    const method = options?.method || "online";
 
     try {
       // Find document by serial number
       const documents = await this.getAllDocuments();
-      const document = documents.find(d => d.security.serialNumber === serialNumber);
+      const document = documents.find(
+        (d) => d.security.serialNumber === serialNumber,
+      );
 
       if (!document) {
         return {
@@ -354,28 +394,32 @@ export class DocumentService {
             sealIntact: false,
             notExpired: false,
             notRevoked: false,
-            qrCodeValid: false
+            qrCodeValid: false,
           },
           verification: {
             timestamp,
-            method
+            method,
           },
-          error: 'Document not found',
-          code: 'NOT_FOUND'
+          error: "Document not found",
+          code: "NOT_FOUND",
         };
       }
 
       // Perform security checks
       const now = new Date();
       const securityCheck = {
-        hashValid: !providedHash || document.security.contentHash.startsWith(providedHash),
+        hashValid:
+          !providedHash ||
+          document.security.contentHash.startsWith(providedHash),
         sealIntact: await this.verifySeal(document),
-        notExpired: !document.security.expiresAt || new Date(document.security.expiresAt) > now,
-        notRevoked: document.status !== 'revoked',
-        qrCodeValid: true
+        notExpired:
+          !document.security.expiresAt ||
+          new Date(document.security.expiresAt) > now,
+        notRevoked: document.status !== "revoked",
+        qrCodeValid: true,
       };
 
-      const isValid = Object.values(securityCheck).every(check => check);
+      const isValid = Object.values(securityCheck).every((check) => check);
 
       // Update verification count
       document.security.verificationCount++;
@@ -383,9 +427,9 @@ export class DocumentService {
       await this.saveDocument(document);
 
       // Log verification
-      await this.logAuditEntry(document.id, 'verified', 'anonymous', {
+      await this.logAuditEntry(document.id, "verified", "anonymous", {
         method,
-        result: isValid
+        result: isValid,
       });
 
       return {
@@ -395,8 +439,8 @@ export class DocumentService {
         verification: {
           timestamp,
           method,
-          verifiedBy: method === 'api' ? 'api_client' : undefined
-        }
+          verifiedBy: method === "api" ? "api_client" : undefined,
+        },
       };
     } catch (error) {
       return {
@@ -406,14 +450,14 @@ export class DocumentService {
           sealIntact: false,
           notExpired: false,
           notRevoked: false,
-          qrCodeValid: false
+          qrCodeValid: false,
         },
         verification: {
           timestamp,
-          method
+          method,
         },
-        error: error instanceof Error ? error.message : 'Verification failed',
-        code: 'VERIFICATION_ERROR'
+        error: error instanceof Error ? error.message : "Verification failed",
+        code: "VERIFICATION_ERROR",
       };
     }
   }
@@ -425,7 +469,7 @@ export class DocumentService {
     const expectedSeal = await this.generateSealHash(
       document.security.contentHash,
       document.security.serialNumber,
-      document.security.issuedAt
+      document.security.issuedAt,
     );
     return expectedSeal === document.security.sealHash;
   }
@@ -439,7 +483,7 @@ export class DocumentService {
    */
   async generatePDF(
     documentId: string,
-    options: DocumentOutputOptions = { format: 'pdf', quality: 'high' }
+    options: DocumentOutputOptions = { format: "pdf", quality: "high" },
   ): Promise<Blob | null> {
     const doc = await this.getDocumentById(documentId);
     if (!doc) return null;
@@ -456,40 +500,42 @@ export class DocumentService {
       const html2pdf = await getHtml2Pdf();
 
       const qualityMap = { low: 1, medium: 1.5, high: 2, maximum: 3 };
-      const scale = qualityMap[options.quality || 'high'];
+      const scale = qualityMap[options.quality || "high"];
 
       const pdfOptions = {
         margin: 0,
-        filename: options.filename || `${doc.type}_${doc.security.serialNumber}.pdf`,
-        image: { type: 'jpeg', quality: 0.98 },
+        filename:
+          options.filename || `${doc.type}_${doc.security.serialNumber}.pdf`,
+        image: { type: "jpeg", quality: 0.98 },
         html2canvas: {
           scale,
           useCORS: true,
           logging: false,
           letterRendering: true,
-          backgroundColor: options.includeBackground !== false ? '#FFFFFF' : null
+          backgroundColor:
+            options.includeBackground !== false ? "#FFFFFF" : null,
         },
         jsPDF: {
-          unit: 'mm',
-          format: 'a4',
-          orientation: 'portrait'
-        }
+          unit: "mm",
+          format: "a4",
+          orientation: "portrait",
+        },
       };
 
       const pdfBlob = await (html2pdf as any)()
         .set(pdfOptions)
         .from(element)
-        .output('blob');
+        .output("blob");
 
       // Log download
-      await this.logAuditEntry(doc.id, 'downloaded', 'user', {
-        format: 'pdf',
-        quality: options.quality
+      await this.logAuditEntry(doc.id, "downloaded", "user", {
+        format: "pdf",
+        quality: options.quality,
       });
 
       return pdfBlob;
     } catch (error) {
-      console.error('PDF generation failed:', error);
+      console.error("PDF generation failed:", error);
       return null;
     }
   }
@@ -498,16 +544,16 @@ export class DocumentService {
    * Download PDF file
    */
   async downloadPDF(documentId: string, filename?: string): Promise<boolean> {
-    const blob = await this.generatePDF(documentId, { 
-      format: 'pdf', 
+    const blob = await this.generatePDF(documentId, {
+      format: "pdf",
       filename,
-      quality: 'high' 
+      quality: "high",
     });
-    
+
     if (!blob) return false;
 
     const url = URL.createObjectURL(blob);
-    const link = document.createElement('a');
+    const link = document.createElement("a");
     link.href = url;
     link.download = filename || `document_${documentId}.pdf`;
     document.body.appendChild(link);
@@ -530,13 +576,16 @@ export class DocumentService {
     if (!element) return false;
 
     // Log print
-    await this.logAuditEntry(doc.id, 'printed', 'user');
+    await this.logAuditEntry(doc.id, "printed", "user");
 
     // Trigger print
     const originalTitle = globalThis.document.title;
-    globalThis.document.title = `${doc.type}_${doc.security.serialNumber}`.toUpperCase();
+    globalThis.document.title =
+      `${doc.type}_${doc.security.serialNumber}`.toUpperCase();
     window.print();
-    setTimeout(() => { globalThis.document.title = originalTitle; }, 1000);
+    setTimeout(() => {
+      globalThis.document.title = originalTitle;
+    }, 1000);
 
     return true;
   }
@@ -551,13 +600,13 @@ export class DocumentService {
   async getDefaultTemplates(): Promise<DocumentTemplate[]> {
     return [
       {
-        id: 'certificate-standard',
-        type: 'certificate',
-        name: 'Standard Certificate',
-        description: 'Traditional A4 landscape certificate with gold seal',
-        orientation: 'landscape',
-        paperSize: 'A4',
-        securityLevel: 'enhanced',
+        id: "certificate-standard",
+        type: "certificate",
+        name: "Standard Certificate",
+        description: "Traditional A4 landscape certificate with gold seal",
+        orientation: "landscape",
+        paperSize: "A4",
+        securityLevel: "enhanced",
         features: {
           qrCode: true,
           barcode: false,
@@ -566,26 +615,26 @@ export class DocumentService {
           watermark: true,
           holographic: true,
           uvFeatures: false,
-          digitalSignature: true
+          digitalSignature: true,
         },
         design: {
-          primaryColor: '#4B0082',
-          secondaryColor: '#FFD700',
-          accentColor: '#000000',
-          fontFamily: 'serif',
-          borderStyle: 'ornate'
+          primaryColor: "#4B0082",
+          secondaryColor: "#FFD700",
+          accentColor: "#000000",
+          fontFamily: "serif",
+          borderStyle: "ornate",
         },
         isDefault: true,
-        isActive: true
+        isActive: true,
       },
       {
-        id: 'transcript-official',
-        type: 'transcript',
-        name: 'Official Transcript',
-        description: 'Official academic record with full security features',
-        orientation: 'portrait',
-        paperSize: 'A4',
-        securityLevel: 'maximum',
+        id: "transcript-official",
+        type: "transcript",
+        name: "Official Transcript",
+        description: "Official academic record with full security features",
+        orientation: "portrait",
+        paperSize: "A4",
+        securityLevel: "maximum",
         features: {
           qrCode: true,
           barcode: false,
@@ -594,27 +643,27 @@ export class DocumentService {
           watermark: true,
           holographic: false,
           uvFeatures: false,
-          digitalSignature: true
+          digitalSignature: true,
         },
         design: {
-          primaryColor: '#4B0082',
-          secondaryColor: '#000000',
-          accentColor: '#666666',
-          fontFamily: 'sans-serif',
-          borderStyle: 'double'
+          primaryColor: "#4B0082",
+          secondaryColor: "#000000",
+          accentColor: "#666666",
+          fontFamily: "sans-serif",
+          borderStyle: "double",
         },
         isDefault: true,
-        isActive: true
+        isActive: true,
       },
       {
-        id: 'id-card-standard',
-        type: 'id_card',
-        name: 'Standard ID Card',
-        description: 'ISO ID-1 format student identification card',
-        orientation: 'landscape',
-        paperSize: 'ID1',
-        customDimensions: { width: 85.6, height: 54, unit: 'mm' },
-        securityLevel: 'enhanced',
+        id: "id-card-standard",
+        type: "id_card",
+        name: "Standard ID Card",
+        description: "ISO ID-1 format student identification card",
+        orientation: "landscape",
+        paperSize: "ID1",
+        customDimensions: { width: 85.6, height: 54, unit: "mm" },
+        securityLevel: "enhanced",
         features: {
           qrCode: true,
           barcode: true,
@@ -623,26 +672,26 @@ export class DocumentService {
           watermark: false,
           holographic: true,
           uvFeatures: true,
-          digitalSignature: false
+          digitalSignature: false,
         },
         design: {
-          primaryColor: '#4B0082',
-          secondaryColor: '#FFFFFF',
-          accentColor: '#FFD700',
-          fontFamily: 'sans-serif',
-          borderStyle: 'simple'
+          primaryColor: "#4B0082",
+          secondaryColor: "#FFFFFF",
+          accentColor: "#FFD700",
+          fontFamily: "sans-serif",
+          borderStyle: "simple",
         },
         isDefault: true,
-        isActive: true
+        isActive: true,
       },
       {
-        id: 'admission-letter',
-        type: 'admission_letter',
-        name: 'Admission Letter',
-        description: 'Official letter of admission with security features',
-        orientation: 'portrait',
-        paperSize: 'A4',
-        securityLevel: 'standard',
+        id: "admission-letter",
+        type: "admission_letter",
+        name: "Admission Letter",
+        description: "Official letter of admission with security features",
+        orientation: "portrait",
+        paperSize: "A4",
+        securityLevel: "standard",
         features: {
           qrCode: true,
           barcode: false,
@@ -651,18 +700,18 @@ export class DocumentService {
           watermark: true,
           holographic: false,
           uvFeatures: false,
-          digitalSignature: true
+          digitalSignature: true,
         },
         design: {
-          primaryColor: '#4B0082',
-          secondaryColor: '#000000',
-          accentColor: '#FFD700',
-          fontFamily: 'serif',
-          borderStyle: 'none'
+          primaryColor: "#4B0082",
+          secondaryColor: "#000000",
+          accentColor: "#FFD700",
+          fontFamily: "serif",
+          borderStyle: "none",
         },
         isDefault: true,
-        isActive: true
-      }
+        isActive: true,
+      },
     ];
   }
 
@@ -671,7 +720,7 @@ export class DocumentService {
    */
   async getTemplate(templateId: string): Promise<DocumentTemplate | null> {
     const templates = await this.getDefaultTemplates();
-    return templates.find(t => t.id === templateId) || null;
+    return templates.find((t) => t.id === templateId) || null;
   }
 
   // ==========================================
@@ -683,9 +732,9 @@ export class DocumentService {
    */
   private async logAuditEntry(
     documentId: string,
-    action: DocumentAuditLog['action'],
+    action: DocumentAuditLog["action"],
     performedBy: string,
-    details?: Record<string, any>
+    details?: Record<string, any>,
   ): Promise<void> {
     const logs = this.getAuditLogs();
     const entry: DocumentAuditLog = {
@@ -696,7 +745,7 @@ export class DocumentService {
       performedAt: new Date().toISOString(),
       ipAddress: undefined, // Would be populated in real implementation
       userAgent: navigator.userAgent,
-      details
+      details,
     };
 
     logs.push(entry);
@@ -715,7 +764,7 @@ export class DocumentService {
    * Get audit logs for specific document
    */
   getAuditLogsForDocument(documentId: string): DocumentAuditLog[] {
-    return this.getAuditLogs().filter(log => log.documentId === documentId);
+    return this.getAuditLogs().filter((log) => log.documentId === documentId);
   }
 
   // ==========================================
@@ -732,18 +781,28 @@ export class DocumentService {
     const thisYear = now.getFullYear();
 
     const byType: Record<DocumentType, number> = {
-      certificate: 0, transcript: 0, id_card: 0, admission_letter: 0,
-      good_standing: 0, registration_card: 0, library_card: 0, attendance_record: 0
+      certificate: 0,
+      transcript: 0,
+      id_card: 0,
+      admission_letter: 0,
+      good_standing: 0,
+      registration_card: 0,
+      library_card: 0,
+      attendance_record: 0,
     };
 
     const byStatus: Record<DocumentStatus, number> = {
-      draft: 0, issued: 0, revoked: 0, suspended: 0, expired: 0
+      draft: 0,
+      issued: 0,
+      revoked: 0,
+      suspended: 0,
+      expired: 0,
     };
 
     let issuedThisMonth = 0;
     let issuedThisYear = 0;
 
-    documents.forEach(doc => {
+    documents.forEach((doc) => {
       byType[doc.type]++;
       byStatus[doc.status]++;
 
@@ -757,9 +816,11 @@ export class DocumentService {
     });
 
     const mostVerified = documents
-      .sort((a, b) => b.security.verificationCount - a.security.verificationCount)
+      .sort(
+        (a, b) => b.security.verificationCount - a.security.verificationCount,
+      )
       .slice(0, 5)
-      .map(d => ({ documentId: d.id, count: d.security.verificationCount }));
+      .map((d) => ({ documentId: d.id, count: d.security.verificationCount }));
 
     return {
       totalDocuments: documents.length,
@@ -769,7 +830,7 @@ export class DocumentService {
       issuedThisYear,
       revokedCount: byStatus.revoked,
       averageVerificationTime: 0.5, // Simulated average in seconds
-      mostVerifiedDocuments: mostVerified
+      mostVerifiedDocuments: mostVerified,
     };
   }
 
@@ -780,16 +841,24 @@ export class DocumentService {
   /**
    * Revoke a document
    */
-  async revokeDocument(documentId: string, reason: string, revokedBy: string): Promise<boolean> {
+  async revokeDocument(
+    documentId: string,
+    reason: string,
+    revokedBy: string,
+  ): Promise<boolean> {
     const document = await this.getDocumentById(documentId);
     if (!document) return false;
 
-    document.status = 'revoked';
+    document.status = "revoked";
     document.updatedAt = new Date().toISOString();
-    document.metadata = { ...document.metadata, revocationReason: reason, revokedBy };
+    document.metadata = {
+      ...document.metadata,
+      revocationReason: reason,
+      revokedBy,
+    };
 
     await this.saveDocument(document);
-    await this.logAuditEntry(documentId, 'revoked', revokedBy, { reason });
+    await this.logAuditEntry(documentId, "revoked", revokedBy, { reason });
 
     return true;
   }
@@ -797,7 +866,10 @@ export class DocumentService {
   /**
    * Update document metadata
    */
-  async updateDocumentMetadata(documentId: string, metadata: Record<string, any>): Promise<boolean> {
+  async updateDocumentMetadata(
+    documentId: string,
+    metadata: Record<string, any>,
+  ): Promise<boolean> {
     const document = await this.getDocumentById(documentId);
     if (!document) return false;
 
@@ -805,7 +877,7 @@ export class DocumentService {
     document.updatedAt = new Date().toISOString();
 
     await this.saveDocument(document);
-    await this.logAuditEntry(documentId, 'updated', 'user', { metadata });
+    await this.logAuditEntry(documentId, "updated", "user", { metadata });
 
     return true;
   }
@@ -816,9 +888,12 @@ export class DocumentService {
   private async getLastAnchor(): Promise<string | null> {
     const documents = await this.getAllDocuments();
     const anchored = documents
-      .filter(d => d.security.blockchainAnchor)
-      .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
-    
+      .filter((d) => d.security.blockchainAnchor)
+      .sort(
+        (a, b) =>
+          new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime(),
+      );
+
     return anchored[0]?.security.blockchainAnchor || null;
   }
 
@@ -840,7 +915,7 @@ export class DocumentService {
       const merged = [...existing];
 
       for (const doc of documents) {
-        const existingIndex = merged.findIndex(d => d.id === doc.id);
+        const existingIndex = merged.findIndex((d) => d.id === doc.id);
         if (existingIndex >= 0) {
           merged[existingIndex] = doc;
         } else {
@@ -851,7 +926,7 @@ export class DocumentService {
       localStorage.setItem(this.STORAGE_KEY, JSON.stringify(merged));
       return documents.length;
     } catch (error) {
-      console.error('Import failed:', error);
+      console.error("Import failed:", error);
       return 0;
     }
   }
@@ -861,7 +936,7 @@ export class DocumentService {
 export const documentService = DocumentService.getInstance();
 
 // Export types (DocumentService is already exported as a class)
-export type { 
+export type {
   BaseDocument,
   DocumentType,
   DocumentStatus,
@@ -879,5 +954,5 @@ export type {
   GoodStandingLetter,
   RegistrationCard,
   LibraryCard,
-  AttendanceRecord
+  AttendanceRecord,
 };

@@ -7,7 +7,7 @@ import PocketBase from 'pocketbase';
 
 const POCKETBASE_URL = 'http://127.0.0.1:8090';
 const ADMIN_EMAIL = 'admin@bmi.edu';
-const ADMIN_PASSWORD = 'BMIAdmin2024Secure';
+const ADMIN_PASSWORD = (process.env.POCKETBASE_ADMIN_PASSWORD ?? '');
 
 async function checkUserRole() {
   console.log('🔍 Checking User Role in PocketBase...\n');
@@ -50,8 +50,8 @@ async function checkUserRole() {
       console.log('   3. Click "New record"');
       console.log('   4. Fill in:');
       console.log('      - email: admin@bmi.edu');
-      console.log('      - password: BMIAdmin2024Secure');
-      console.log('      - passwordConfirm: BMIAdmin2024Secure');
+      console.log('      - password: <your-admin-password>');
+      console.log('      - passwordConfirm: <your-admin-password>');
       console.log('      - name: System Administrator');
       console.log('      - role: admin');
       console.log('      - isActive: true');

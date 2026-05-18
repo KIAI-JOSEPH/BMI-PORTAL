@@ -316,7 +316,9 @@ export const DocumentVerifier: React.FC<DocumentVerifierProps> = ({
                     Issue Date
                   </p>
                   <p className="text-sm mt-1">
-                    {new Date(result.issuedAt).toLocaleDateString()}
+                    {result.issuedAt
+                      ? new Date(result.issuedAt).toLocaleDateString()
+                      : "—"}
                   </p>
                 </div>
               </div>
@@ -331,7 +333,9 @@ export const DocumentVerifier: React.FC<DocumentVerifierProps> = ({
                     <Clock size={14} className="text-gray-400" />
                     <span className="text-gray-600">
                       Verified at:{" "}
-                      {new Date(result.verifiedAt).toLocaleString()}
+                      {result.verifiedAt
+                        ? new Date(result.verifiedAt).toLocaleString()
+                        : "—"}
                     </span>
                   </div>
                   <div className="flex items-center gap-2">

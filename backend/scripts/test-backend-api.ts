@@ -24,7 +24,7 @@ async function testBackendAPI() {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
         email: 'admin@bmi.edu',
-        password: 'BMIAdmin2024Secure',
+        password: (process.env.POCKETBASE_ADMIN_PASSWORD ?? ''),
       }),
     });
     console.log(`   Status: ${authResponse.status}`);

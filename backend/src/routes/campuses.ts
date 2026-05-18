@@ -128,7 +128,7 @@ campusesRouter.get('/all', async (c) => {
  */
 campusesRouter.get('/:id', async (c) => {
   try {
-    const id = c.req.param('id');
+    const id = c.req.param('id')!;
     const pb = getPocketBase();
     
     const campus = await pb.collection('campuses').getOne(id);
@@ -153,7 +153,7 @@ campusesRouter.get('/:id', async (c) => {
  */
 campusesRouter.get('/:id/students', async (c) => {
   try {
-    const id = c.req.param('id');
+    const id = c.req.param('id')!;
     const pb = getPocketBase();
     
     const { page, perPage } = parsePagination(
@@ -192,7 +192,7 @@ campusesRouter.get('/:id/students', async (c) => {
  */
 campusesRouter.get('/:id/staff', async (c) => {
   try {
-    const id = c.req.param('id');
+    const id = c.req.param('id')!;
     const pb = getPocketBase();
     
     const { page, perPage } = parsePagination(
@@ -231,7 +231,7 @@ campusesRouter.get('/:id/staff', async (c) => {
  */
 campusesRouter.get('/:id/courses', async (c) => {
   try {
-    const id = c.req.param('id');
+    const id = c.req.param('id')!;
     const pb = getPocketBase();
     
     const { page, perPage } = parsePagination(
@@ -270,7 +270,7 @@ campusesRouter.get('/:id/courses', async (c) => {
  */
 campusesRouter.get('/:id/stats', async (c) => {
   try {
-    const id = c.req.param('id');
+    const id = c.req.param('id')!;
     const pb = getPocketBase();
     
     // Get campus details
@@ -355,7 +355,7 @@ campusesRouter.patch(
   logAction('UPDATE', 'campuses'),
   async (c) => {
     try {
-      const id = c.req.param('id');
+      const id = c.req.param('id')!;
       const data = c.req.valid('json');
       const pb = getPocketBase();
       
@@ -389,7 +389,7 @@ campusesRouter.delete(
   logAction('DELETE', 'campuses'),
   async (c) => {
     try {
-      const id = c.req.param('id');
+      const id = c.req.param('id')!;
       const pb = getPocketBase();
       
       // Check if campus has students, staff, or courses

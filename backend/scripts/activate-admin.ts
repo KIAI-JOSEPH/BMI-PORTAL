@@ -5,7 +5,7 @@ dotenv.config();
 
 const PB_URL = 'http://127.0.0.1:8090';
 const ADMIN_EMAIL = 'admin@bmi.edu';
-const ADMIN_PASS = 'BMIAdmin2024Secure';
+const ADMIN_PASS = (process.env.POCKETBASE_ADMIN_PASSWORD ?? '');
 
 async function activateAdmin() {
     const pb = new PocketBase(PB_URL);

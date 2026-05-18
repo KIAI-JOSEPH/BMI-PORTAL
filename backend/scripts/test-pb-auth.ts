@@ -8,7 +8,7 @@ async function test() {
     console.log('PocketBase URL:', pb.baseUrl);
     
     // Try admin auth
-    const authData = await pb.admins.authWithPassword('admin@bmi.edu', 'BMIAdmin2024Secure');
+    const authData = await pb.admins.authWithPassword('admin@bmi.edu', (process.env.POCKETBASE_ADMIN_PASSWORD ?? ''));
     console.log('✅ Admin authentication successful!');
     console.log('Admin:', authData.admin.email);
     console.log('Token:', authData.token.substring(0, 20) + '...');

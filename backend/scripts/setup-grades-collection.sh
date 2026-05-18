@@ -8,7 +8,7 @@ echo ""
 
 PB_URL="http://127.0.0.1:8090"
 ADMIN_EMAIL="admin@bmi.edu"
-ADMIN_PASSWORD="BMIAdmin2024Secure"
+ADMIN_PASSWORD="${POCKETBASE_ADMIN_PASSWORD:-<your-admin-password>}"
 
 # Check if PocketBase is running
 if ! curl -s "$PB_URL/api/health" > /dev/null 2>&1; then

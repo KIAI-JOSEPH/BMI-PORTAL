@@ -58,7 +58,7 @@ hostelRouter.post('/', requireRole('admin', 'registrar', 'staff'), zValidator('j
 // PATCH /api/v1/hostels/:id — Update a hostel
 hostelRouter.patch('/:id', requireRole('admin', 'registrar', 'staff'), zValidator('json', hostelSchema.partial()), async (c) => {
   try {
-    const id = c.req.param('id');
+    const id = c.req.param('id')!;
     const data = c.req.valid('json');
     const pb = getPocketBase();
     const record = await pb.collection('hostels').update(id, data);
@@ -72,7 +72,7 @@ hostelRouter.patch('/:id', requireRole('admin', 'registrar', 'staff'), zValidato
 // DELETE /api/v1/hostels/:id — Delete a hostel
 hostelRouter.delete('/:id', requireRole('admin', 'registrar'), async (c) => {
   try {
-    const id = c.req.param('id');
+    const id = c.req.param('id')!;
     const pb = getPocketBase();
     await pb.collection('hostels').delete(id);
     return c.json<ApiResponse<null>>({ success: true, data: null });

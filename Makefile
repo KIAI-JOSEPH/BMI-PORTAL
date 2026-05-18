@@ -1,6 +1,6 @@
 # BMI UMS - Makefile for common development tasks
 
-.PHONY: help install start stop dev docker-up docker-down migrate test lint clean
+.PHONY: help install start stop restart dev docker-up docker-down migrate test typecheck lint clean logs seed status
 
 # Default target
 help:
@@ -38,7 +38,7 @@ stop:
 # Development mode
 dev:
 	@echo "Starting development stack..."
-	./start-dev.sh
+	./scripts/dev/start-dev.sh || bash start-all.sh
 
 # Backend development
 dev-backend:
@@ -76,10 +76,32 @@ create-admin:
 	@echo "Creating admin user..."
 	cd backend && npx tsx ../scripts/create-admin.ts
 
-# Tests
+# Run all tests (frontend + backend)
 test:
-	@echo "Running tests..."
+	@echo "Running frontend tests..."
+	npm test
+	@echo "Running backend tests..."
 	cd backend && npm test
+
+# Typecheck both projects
+typecheck:
+	@echo "Type-checking frontend..."
+	npm run typecheck
+	@echo "Type-checking backend..."
+	cd backend && npx tsc --noEmit
+
+# Restart backend API
+restart:
+	@echo "Restarting backend API..."
+	./scripts/dev/restart-backend.sh || pkill -f 'node.*backend' || true
+	cd backend && npm run dev &
+	@echo "Backend restarting..."
+
+# Seed development data
+seed:
+	@echo "Seeding development data..."
+	cd backend && npx tsx scripts/seed-courses.ts || true
+	cd backend && npx tsx scripts/seed-real-data.ts || true
 
 # Linting
 lint:

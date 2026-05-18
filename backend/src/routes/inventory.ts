@@ -53,7 +53,7 @@ inventoryRouter.post('/', requireRole('admin', 'staff'), zValidator('json', inve
 // PATCH /api/v1/inventory/:id
 inventoryRouter.patch('/:id', requireRole('admin', 'staff'), zValidator('json', inventorySchema.partial()), async (c) => {
   try {
-    const id = c.req.param('id');
+    const id = c.req.param('id')!;
     const data = c.req.valid('json');
     const pb = getPocketBase();
     const record = await pb.collection('inventory_items').update(id, {
@@ -70,7 +70,7 @@ inventoryRouter.patch('/:id', requireRole('admin', 'staff'), zValidator('json', 
 // DELETE /api/v1/inventory/:id
 inventoryRouter.delete('/:id', requireRole('admin'), async (c) => {
   try {
-    const id = c.req.param('id');
+    const id = c.req.param('id')!;
     const pb = getPocketBase();
     await pb.collection('inventory_items').delete(id);
     return c.json<ApiResponse<null>>({ success: true, data: null });

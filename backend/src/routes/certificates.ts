@@ -134,7 +134,7 @@ certificatesRouter.get('/', requireRole('admin', 'registrar'), async (c) => {
  */
 certificatesRouter.get('/:id', async (c) => {
   try {
-    const id = c.req.param('id');
+    const id = c.req.param('id')!;
     const pb = getPocketBase();
     
     const certificate = await pb.collection('certificates').getOne(id, {
@@ -478,7 +478,7 @@ certificatesRouter.post('/verify', verifyRateLimiter, async (c) => {
  */
 certificatesRouter.get('/:id/qr', authMiddleware, async (c) => {
   try {
-    const id = c.req.param('id');
+    const id = c.req.param('id')!;
     const mode = c.req.query('mode') || 'online'; // 'online' | 'offline'
     const pb = getPocketBase();
 
@@ -530,7 +530,7 @@ certificatesRouter.patch(
   logAction('UPDATE', 'certificates'),
   async (c) => {
     try {
-      const id = c.req.param('id');
+      const id = c.req.param('id')!;
       const pb = getPocketBase();
       
       await pb.collection('certificates').update(id, {

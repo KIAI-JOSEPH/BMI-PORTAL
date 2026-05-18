@@ -55,7 +55,7 @@ async function getRedis(): Promise<any> {
       maxRetriesPerRequest: 2,
       connectTimeout: 3000,
       lazyConnect: true,
-      retryStrategy(times) {
+      retryStrategy(times: number) {
         if (times > 3) {
           logger.warn(
             "Redis connection failed after 3 retries, using in-memory blacklist",

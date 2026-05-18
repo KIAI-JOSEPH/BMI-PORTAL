@@ -108,7 +108,7 @@ financeRouter.get('/transactions', requireRole('admin', 'registrar', 'student'),
  */
 financeRouter.get('/transactions/:id', requireRole('admin', 'registrar', 'student'), async (c) => {
   try {
-    const id = c.req.param('id');
+    const id = c.req.param('id')!;
     const user = getUser(c);
     const pb = getPocketBase();
 
@@ -184,7 +184,7 @@ financeRouter.patch(
   logAction('UPDATE', 'transactions'),
   async (c) => {
     try {
-      const id = c.req.param('id');
+      const id = c.req.param('id')!;
       const data = c.req.valid('json');
       const pb = getPocketBase();
 
@@ -222,7 +222,7 @@ financeRouter.delete(
   logAction('DELETE', 'transactions'),
   async (c) => {
     try {
-      const id = c.req.param('id');
+      const id = c.req.param('id')!;
       const pb = getPocketBase();
 
       await pb.collection('transactions').delete(id);
