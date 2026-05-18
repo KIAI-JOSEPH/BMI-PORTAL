@@ -1335,7 +1335,9 @@ export const Transcripts: React.FC<TranscriptsProps> = (props) => {
                                 font: "Arial",
                               }),
                               new TextRun({
-                                text: (selectedStudent.program_code ?? "").toUpperCase(),
+                                text: (
+                                  selectedStudent.program_code ?? ""
+                                ).toUpperCase(),
                                 size: 18,
                                 bold: true,
                                 font: "Arial",
@@ -1367,7 +1369,9 @@ export const Transcripts: React.FC<TranscriptsProps> = (props) => {
                                 font: "Arial",
                               }),
                               new TextRun({
-                                text: (selectedStudent.program_code ?? "").toUpperCase(),
+                                text: (
+                                  selectedStudent.program_code ?? ""
+                                ).toUpperCase(),
                                 size: 18,
                                 bold: true,
                                 font: "Arial",
@@ -1679,7 +1683,9 @@ export const Transcripts: React.FC<TranscriptsProps> = (props) => {
                             spacing: { after: 50 },
                           }),
                           new Paragraph({
-                            text: getDeanName(selectedStudent.program_code ?? ""),
+                            text: getDeanName(
+                              selectedStudent.program_code ?? "",
+                            ),
                             alignment: AlignmentType.CENTER,
                             spacing: { after: 50 },
                             run: {
@@ -1765,36 +1771,42 @@ export const Transcripts: React.FC<TranscriptsProps> = (props) => {
                 rows: [
                   new TableRow({
                     children: [
+                      // LEFT — issuance metadata (30%)
                       new TableCell({
+                        width: { size: 30, type: WidthType.PERCENTAGE },
                         children: [
                           new Paragraph({
                             children: [
                               new TextRun({
-                                text: "Issued: ",
+                                text: "ISSUED: ",
                                 size: 16,
                                 bold: true,
                                 color: "666666",
                                 font: "Arial",
+                                allCaps: true,
                               }),
                               new TextRun({
                                 text: securityData?.issuedAt
-                                  ? new Date(
-                                      securityData.issuedAt,
-                                    ).toLocaleDateString("en-US", {
-                                      year: "numeric",
-                                      month: "long",
-                                      day: "numeric",
-                                    })
-                                  : "1st May 2026",
+                                  ? new Date(securityData.issuedAt)
+                                      .toLocaleDateString("en-US", {
+                                        year: "numeric",
+                                        month: "short",
+                                        day: "numeric",
+                                      })
+                                      .toUpperCase()
+                                  : new Date()
+                                      .toLocaleDateString("en-US", {
+                                        year: "numeric",
+                                        month: "short",
+                                        day: "numeric",
+                                      })
+                                      .toUpperCase(),
                                 size: 16,
                                 font: "Arial",
+                                color: "666666",
                               }),
                             ],
                           }),
-                        ],
-                      }),
-                      new TableCell({
-                        children: [
                           new Paragraph({
                             children: [
                               new TextRun({
@@ -1807,24 +1819,103 @@ export const Transcripts: React.FC<TranscriptsProps> = (props) => {
                               new TextRun({
                                 text:
                                   securityData?.serialNumber ||
-                                  `BMI-TR-${selectedStudent.id.split("-").pop()}`,
+                                  `BMI-TR-${selectedStudent.id.toUpperCase()}`,
                                 size: 16,
-                                font: "Arial",
+                                font: "Courier New",
+                                color: "666666",
                               }),
                             ],
                           }),
                         ],
                       }),
+                      // CENTRE — physical seal zone (40%)
                       new TableCell({
+                        width: { size: 40, type: WidthType.PERCENTAGE },
+                        borders: {
+                          top: {
+                            style: BorderStyle.DOTTED,
+                            size: 6,
+                            color: "CCCCCC",
+                          },
+                          bottom: {
+                            style: BorderStyle.DOTTED,
+                            size: 6,
+                            color: "CCCCCC",
+                          },
+                          left: {
+                            style: BorderStyle.DOTTED,
+                            size: 6,
+                            color: "CCCCCC",
+                          },
+                          right: {
+                            style: BorderStyle.DOTTED,
+                            size: 6,
+                            color: "CCCCCC",
+                          },
+                        },
                         children: [
                           new Paragraph({
-                            alignment: AlignmentType.RIGHT,
+                            alignment: AlignmentType.CENTER,
+                            spacing: { before: 200, after: 200 },
                             children: [
                               new TextRun({
-                                text: "✓ Verified Archive",
+                                text: "OFFICIAL SEAL",
+                                size: 16,
+                                bold: true,
+                                color: "CCCCCC",
+                                font: "Arial",
+                                allCaps: true,
+                              }),
+                            ],
+                          }),
+                        ],
+                      }),
+                      // RIGHT — digital validation badge (30%)
+                      new TableCell({
+                        width: { size: 30, type: WidthType.PERCENTAGE },
+                        shading: { fill: "FAF5FF" },
+                        borders: {
+                          top: {
+                            style: BorderStyle.SINGLE,
+                            size: 4,
+                            color: "DDD6FE",
+                          },
+                          bottom: {
+                            style: BorderStyle.SINGLE,
+                            size: 4,
+                            color: "DDD6FE",
+                          },
+                          left: {
+                            style: BorderStyle.SINGLE,
+                            size: 4,
+                            color: "DDD6FE",
+                          },
+                          right: {
+                            style: BorderStyle.SINGLE,
+                            size: 4,
+                            color: "DDD6FE",
+                          },
+                        },
+                        children: [
+                          new Paragraph({
+                            alignment: AlignmentType.CENTER,
+                            children: [
+                              new TextRun({
+                                text: "✓ DIGITAL VALIDATION ACTIVE",
                                 size: 16,
                                 bold: true,
                                 color: "4B0082",
+                                font: "Arial",
+                              }),
+                            ],
+                          }),
+                          new Paragraph({
+                            alignment: AlignmentType.CENTER,
+                            children: [
+                              new TextRun({
+                                text: "CERTIFIED TRUE COPY • E-TRANSCRIPT",
+                                size: 13,
+                                color: "9CA3AF",
                                 font: "Arial",
                               }),
                             ],
@@ -2084,18 +2175,25 @@ export const Transcripts: React.FC<TranscriptsProps> = (props) => {
   <text x="200" y="${signaturesY + 35}" font-family="Arial, sans-serif" font-size="8" font-style="italic" fill="#6B7280" text-anchor="middle">Dean of Faculty &amp; Academics</text>
   <text x="550" y="${signaturesY + 35}" font-family="Arial, sans-serif" font-size="8" font-style="italic" fill="#6B7280" text-anchor="middle">Student Affairs</text>
 
-  <!-- Footer -->
+  <!-- Footer rule -->
   <line x1="60" y1="${footerY}" x2="${width - 60}" y2="${footerY}" stroke="#C9A84C" stroke-width="1"/>
 
-  <text x="60" y="${footerY + 20}" font-family="Arial, sans-serif" font-size="8" fill="#6B7280">Issued: ${securityData?.issuedAt ? new Date(securityData.issuedAt).toLocaleDateString("en-US", { year: "numeric", month: "long", day: "numeric" }) : new Date().toLocaleDateString("en-US", { year: "numeric", month: "long", day: "numeric" })}</text>
-  <text x="${width / 2}" y="${footerY + 20}" font-family="Courier New, monospace" font-size="8" fill="#6B7280" text-anchor="middle">ID: ${securityData?.serialNumber || `${selectedStudent.id}-${transcriptType.toUpperCase()}-${new Date().getFullYear()}`}</text>
-  <text x="${width - 60}" y="${footerY + 20}" font-family="Arial, sans-serif" font-size="8" fill="#6B7280" text-anchor="end">Verified Archive</text>
+  <!-- LEFT: issuance metadata -->
+  <text x="60" y="${footerY + 18}" font-family="Arial, sans-serif" font-size="8" font-weight="bold" fill="#6B7280" text-transform="uppercase">ISSUED: ${securityData?.issuedAt ? new Date(securityData.issuedAt).toLocaleDateString("en-US", { year: "numeric", month: "short", day: "numeric" }).toUpperCase() : new Date().toLocaleDateString("en-US", { year: "numeric", month: "short", day: "numeric" }).toUpperCase()}</text>
+  <text x="60" y="${footerY + 32}" font-family="Courier New, monospace" font-size="8" fill="#6B7280">ID: ${securityData?.serialNumber || `BMI-TR-${selectedStudent.id.toUpperCase()}`}</text>
 
-  <!-- Document ID with gold border -->
-  <line x1="${width / 2 - 150}" y1="${footerY + 25}" x2="${width / 2 + 150}" y2="${footerY + 25}" stroke="#FFD700" stroke-width="2"/>
-  <text x="${width / 2}" y="${footerY + 40}" font-family="Arial, sans-serif" font-size="9" font-style="italic" fill="#9CA3AF" text-anchor="middle">
-    This is an official document issued by BMI University
-  </text>
+  <!-- CENTRE: physical seal zone (dashed circle + label) -->
+  <circle cx="${width / 2}" cy="${footerY + 30}" r="36" fill="none" stroke="#D1D5DB" stroke-width="1.5" stroke-dasharray="5,4"/>
+  <text x="${width / 2}" y="${footerY + 26}" font-family="Arial, sans-serif" font-size="7" font-weight="bold" fill="#D1D5DB" text-anchor="middle" letter-spacing="2">OFFICIAL</text>
+  <text x="${width / 2}" y="${footerY + 37}" font-family="Arial, sans-serif" font-size="7" font-weight="bold" fill="#D1D5DB" text-anchor="middle" letter-spacing="2">SEAL</text>
+
+  <!-- RIGHT: digital validation badge -->
+  <rect x="${width - 240}" y="${footerY + 8}" width="180" height="40" rx="0" fill="#FAF5FF" stroke="#DDD6FE" stroke-width="1"/>
+  <text x="${width - 150}" y="${footerY + 23}" font-family="Arial, sans-serif" font-size="8" font-weight="bold" fill="#4B0082" text-anchor="middle" letter-spacing="1">✓ DIGITAL VALIDATION ACTIVE</text>
+  <text x="${width - 150}" y="${footerY + 36}" font-family="Arial, sans-serif" font-size="6.5" fill="#9CA3AF" text-anchor="middle" letter-spacing="1">CERTIFIED TRUE COPY • E-TRANSCRIPT</text>
+
+  <!-- Bottom microtext -->
+  <text x="${width / 2}" y="${footerY + 80}" font-family="Arial, sans-serif" font-size="7" font-style="italic" fill="#9CA3AF" text-anchor="middle">This is an official document issued by BMI University</text>
 
   <!-- Bottom microtext security line -->
   <text x="${width / 2}" y="${height - 10}" font-family="Arial, sans-serif" font-size="5" fill="#999999" text-anchor="middle" opacity="0.6">
@@ -3302,7 +3400,8 @@ export const Transcripts: React.FC<TranscriptsProps> = (props) => {
                   onClick={() => editorMode && setSelectedBlock("footer")}
                   onMouseDown={(e) => startBlockDrag("footer", e)}
                 >
-                  <div className="flex flex-col text-[10px] text-gray-500 font-playfair font-bold uppercase tracking-widest leading-[1.8]">
+                  {/* LEFT — issuance metadata */}
+                  <div className="flex flex-col text-[10px] text-gray-500 font-playfair font-bold uppercase tracking-widest leading-[1.8] w-[30%]">
                     <span>
                       ISSUED:{" "}
                       {securityData?.issuedAt
@@ -3328,8 +3427,23 @@ export const Transcripts: React.FC<TranscriptsProps> = (props) => {
                     </span>
                   </div>
 
-                  <div className="w-[35%] flex justify-end mr-4">
-                    {/* Digital Validation Box */}
+                  {/* CENTRE — physical seal zone */}
+                  <div className="flex flex-col items-center justify-center w-[34%] py-1">
+                    {/* Dashed circle guides the stamp placement during printing */}
+                    <div
+                      className="w-24 h-24 rounded-full border-2 border-dashed border-gray-300 flex flex-col items-center justify-center"
+                      style={{ borderStyle: "dashed", borderSpacing: "4px" }}
+                    >
+                      <span className="text-[7px] font-bold text-gray-300 uppercase tracking-[0.15em] text-center leading-tight select-none">
+                        OFFICIAL
+                        <br />
+                        SEAL
+                      </span>
+                    </div>
+                  </div>
+
+                  {/* RIGHT — digital validation badge */}
+                  <div className="w-[30%] flex justify-end">
                     <div className="border border-purple-200 bg-purple-50/30 px-4 py-2.5 rounded-none flex flex-col items-center justify-center w-full relative z-10">
                       <div className="flex items-center gap-1.5">
                         <ShieldCheck size={11} className="text-[#4B0082]" />
