@@ -16,6 +16,7 @@ import {
   authenticateAdmin,
   createDefaultAdminIfNeeded,
   scheduleAdminTokenRefresh,
+  scheduleAutoBackups,
 } from "./services/pocketbase.js";
 import { seedAcademicReferenceDataIfEmpty } from "./services/academicSeed.js";
 import { checkOllamaHealth } from "./services/ollama.js";
@@ -282,7 +283,8 @@ async function startServer() {
     try {
       await authenticateAdmin();
       scheduleAdminTokenRefresh(); // keep token alive
-      logger.info("✓ PocketBase admin authenticated");
+      scheduleAutoBackups(); // Default: 24h interval
+      logger.info("✓ PocketBase admin authenticated & auto-backups scheduled");
     } catch (error) {
       logger.warn(
         "PocketBase admin auth failed (may need manual setup):",

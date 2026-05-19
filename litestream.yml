@@ -4,38 +4,65 @@
 # This streams every WAL change from PocketBase's SQLite files to
 # an S3-compatible bucket in near real-time (typically < 1 second lag).
 #
-# SETUP:
-#   1. Set LITESTREAM_ACCESS_KEY_ID and LITESTREAM_SECRET_ACCESS_KEY in .env
-#   2. Change the bucket name below to your bucket
-#   3. For local-only backup (no cloud), use the 'file' replica type instead
+# ─────────────────────────────────────────────────────────────────────────────
+# PRODUCTION SETUP (required before going live with real data):
+#
+#   1. Create an S3 bucket (AWS S3, Backblaze B2, Cloudflare R2, MinIO, etc.)
+#   2. Create IAM credentials with PutObject + GetObject + DeleteObject on the bucket
+#   3. Set in production .env (NEVER commit credentials to git):
+#        LITESTREAM_ACCESS_KEY_ID=<your-access-key>
+#        LITESTREAM_SECRET_ACCESS_KEY=<your-secret-key>
+#   4. Change "bmi-ums-backup-CHANGEME" to your actual bucket name below
+#   5. Change "us-east-1" to your bucket's region
 #
 # RESTORE after server failure:
-#   docker run --rm -v ./data/pb_data:/pb_data \
+#   docker run --rm \
+#     -v ./data/pb_data:/pb_data \
 #     -e LITESTREAM_ACCESS_KEY_ID=... \
 #     -e LITESTREAM_SECRET_ACCESS_KEY=... \
-#     litestream/litestream restore \
-#     -replica s3 /pb_data/data.db
+#     litestream/litestream:0.3.13 \
+#     restore -replica s3 /pb_data/data.db
+#
+# TEST YOUR RESTORE QUARTERLY. A backup you have never restored is untested.
+# ─────────────────────────────────────────────────────────────────────────────
 
 dbs:
   # Main PocketBase database
   - path: /pb_data/data.db
     replicas:
-      # Option A: S3-compatible cloud storage (MinIO, Backblaze B2, AWS S3, etc.)
-      # Uncomment and configure when ready for cloud backup
-      # - type: s3
-      #   bucket: bmi-ums-backup
-      #   path: pocketbase/data.db
-      #   region: us-east-1
-      #   access-key-id: ${LITESTREAM_ACCESS_KEY_ID}
-      #   secret-access-key: ${LITESTREAM_SECRET_ACCESS_KEY}
+      # ── Replica A: S3-compatible cloud storage ─────────────────────────────
+      # PRODUCTION REQUIRED: Replace bucket name and region with your values.
+      # SECURITY: Credentials are injected from environment variables set in
+      #           docker-compose.yml → environment section (never hardcoded).
+      - type: s3
+        bucket: bmi-ums-backup-CHANGEME
+        path: pocketbase/data.db
+        region: us-east-1
+        # Backblaze B2 example: endpoint: https://s3.us-west-004.backblazeb2.com
+        # Cloudflare R2 example: endpoint: https://<account-id>.r2.cloudflarestorage.com
+        # MinIO example:         endpoint: http://minio:9000
+        # For AWS S3, leave endpoint commented out (uses default AWS endpoint)
+        # endpoint: https://your-custom-endpoint
+        access-key-id: ${LITESTREAM_ACCESS_KEY_ID}
+        secret-access-key: ${LITESTREAM_SECRET_ACCESS_KEY}
+        # Sync interval — near real-time replication
+        sync-interval: 1s
 
-      # Option B: Local file replica (always active — backup to local disk)
-      # Good for development and as a secondary replica
+      # ── Replica B: Local file (always active — dev + staging + secondary backup)
+      # Good as a fast local restore option; insufficient alone for disaster recovery.
       - type: file
         path: /pb_data/replicas/data.db
 
-  # Auxiliary PocketBase database
+  # Auxiliary PocketBase database (schema metadata)
   - path: /pb_data/auxiliary.db
     replicas:
+      - type: s3
+        bucket: bmi-ums-backup-CHANGEME
+        path: pocketbase/auxiliary.db
+        region: us-east-1
+        access-key-id: ${LITESTREAM_ACCESS_KEY_ID}
+        secret-access-key: ${LITESTREAM_SECRET_ACCESS_KEY}
+        sync-interval: 1s
+
       - type: file
         path: /pb_data/replicas/auxiliary.db

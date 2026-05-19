@@ -1,0 +1,275 @@
+
+<style>
+  h2.sr-only { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0,0,0,0); }
+  * { box-sizing: border-box; }
+  body { font-family: var(--font-sans); margin: 0; }
+  .section-title { font-size: 11px; font-weight: 500; letter-spacing: 0.06em; text-transform: uppercase; color: var(--color-text-secondary); margin: 0 0 10px; }
+  .score-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: 10px; margin-bottom: 20px; }
+  .metric-card { background: var(--color-background-secondary); border-radius: var(--border-radius-md); padding: 14px 16px; }
+  .metric-label { font-size: 11px; color: var(--color-text-secondary); margin: 0 0 6px; font-weight: 500; }
+  .metric-val { font-size: 26px; font-weight: 500; line-height: 1; color: var(--color-text-primary); }
+  .metric-sub { font-size: 11px; color: var(--color-text-secondary); margin-top: 4px; }
+  .bar-section { margin-bottom: 20px; }
+  .bar-row { display: flex; align-items: center; gap: 10px; margin-bottom: 8px; cursor: pointer; border-radius: 6px; padding: 4px 6px; transition: background 0.15s; }
+  .bar-row:hover { background: var(--color-background-secondary); }
+  .bar-label { font-size: 13px; color: var(--color-text-primary); width: 180px; flex-shrink: 0; }
+  .bar-track { flex: 1; background: var(--color-background-secondary); border-radius: 4px; height: 10px; overflow: hidden; }
+  .bar-fill { height: 100%; border-radius: 4px; transition: width 0.8s cubic-bezier(0.4,0,0.2,1); }
+  .bar-score { font-size: 12px; color: var(--color-text-secondary); width: 36px; text-align: right; }
+  .panel { background: var(--color-background-primary); border: 0.5px solid var(--color-border-tertiary); border-radius: var(--border-radius-lg); padding: 16px 18px; margin-bottom: 14px; }
+  .panel-title { font-size: 14px; font-weight: 500; color: var(--color-text-primary); margin: 0 0 10px; display: flex; align-items: center; gap: 8px; }
+  .badge { font-size: 11px; padding: 2px 8px; border-radius: 20px; font-weight: 500; }
+  .badge-green { background: var(--color-background-success); color: var(--color-text-success); }
+  .badge-amber { background: var(--color-background-warning); color: var(--color-text-warning); }
+  .badge-red { background: var(--color-background-danger); color: var(--color-text-danger); }
+  .badge-info { background: var(--color-background-info); color: var(--color-text-info); }
+  .finding-list { list-style: none; margin: 0; padding: 0; }
+  .finding-list li { font-size: 13px; color: var(--color-text-secondary); line-height: 1.6; padding: 3px 0; display: flex; gap: 8px; align-items: flex-start; }
+  .finding-list li span.icon { flex-shrink: 0; font-size: 13px; margin-top: 1px; }
+  .tabs { display: flex; gap: 4px; margin-bottom: 14px; border-bottom: 0.5px solid var(--color-border-tertiary); }
+  .tab { font-size: 13px; padding: 8px 14px; cursor: pointer; color: var(--color-text-secondary); border-bottom: 2px solid transparent; margin-bottom: -0.5px; transition: color 0.15s; }
+  .tab.active { color: var(--color-text-primary); border-bottom-color: var(--color-text-primary); font-weight: 500; }
+  .tab-content { display: none; }
+  .tab-content.active { display: block; }
+  .compare-row { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-bottom: 10px; }
+  .compare-col { padding: 10px 12px; border-radius: var(--border-radius-md); font-size: 13px; line-height: 1.5; }
+  .compare-col .label { font-size: 11px; font-weight: 500; margin-bottom: 5px; color: var(--color-text-secondary); text-transform: uppercase; letter-spacing: 0.05em; }
+  .gap-item { background: var(--color-background-secondary); border-radius: var(--border-radius-md); padding: 10px 14px; margin-bottom: 8px; display: flex; justify-content: space-between; align-items: center; cursor: pointer; }
+  .gap-item:hover { background: var(--color-background-primary); border: 0.5px solid var(--color-border-secondary); }
+  .gap-name { font-size: 13px; font-weight: 500; color: var(--color-text-primary); }
+  .gap-desc { font-size: 12px; color: var(--color-text-secondary); margin-top: 2px; }
+  .priority { font-size: 11px; padding: 2px 8px; border-radius: 20px; font-weight: 500; white-space: nowrap; }
+</style>
+
+<h2 class="sr-only">BMI Portal feature analysis compared to world-class university management system best practices</h2>
+
+<div style="padding: 1rem 0;">
+
+  <!-- Header -->
+  <div style="margin-bottom: 18px;">
+    <p class="section-title">BMI University Portal · Feature gap analysis</p>
+    <div style="display:flex; align-items:baseline; gap:10px; flex-wrap:wrap;">
+      <span style="font-size:28px; font-weight:500; color:var(--color-text-primary);">64 / 100</span>
+      <span class="badge badge-amber">Developing</span>
+      <span style="font-size:13px; color:var(--color-text-secondary);">Overall readiness vs world-class UMS standards</span>
+    </div>
+  </div>
+
+  <!-- Summary metrics -->
+  <div class="score-grid">
+    <div class="metric-card">
+      <p class="metric-label">Architecture</p>
+      <p class="metric-val" style="color:#3B8BD4">78</p>
+      <p class="metric-sub">Strong open-source stack</p>
+    </div>
+    <div class="metric-card">
+      <p class="metric-label">Security</p>
+      <p class="metric-val" style="color:#EF9F27">62</p>
+      <p class="metric-sub">JWT + RBAC, gaps remain</p>
+    </div>
+    <div class="metric-card">
+      <p class="metric-label">DevOps / CI-CD</p>
+      <p class="metric-val" style="color:#EF9F27">55</p>
+      <p class="metric-sub">No automated pipelines</p>
+    </div>
+    <div class="metric-card">
+      <p class="metric-label">Testing</p>
+      <p class="metric-val" style="color:#E24B4A">28</p>
+      <p class="metric-sub">Critical gap</p>
+    </div>
+    <div class="metric-card">
+      <p class="metric-label">Accessibility</p>
+      <p class="metric-val" style="color:#E24B4A">30</p>
+      <p class="metric-sub">WCAG not addressed</p>
+    </div>
+    <div class="metric-card">
+      <p class="metric-label">Documentation</p>
+      <p class="metric-val" style="color:#639922">82</p>
+      <p class="metric-sub">Excellent coverage</p>
+    </div>
+  </div>
+
+  <!-- Tabs -->
+  <div class="tabs">
+    <div class="tab active" onclick="switchTab('scores')">Dimension scores</div>
+    <div class="tab" onclick="switchTab('compare')">BMI vs best practice</div>
+    <div class="tab" onclick="switchTab('gaps')">Priority gaps</div>
+  </div>
+
+  <!-- Tab: Scores -->
+  <div class="tab-content active" id="tab-scores">
+    <div class="bar-section">
+      <p class="section-title">Feature dimensions</p>
+
+      <div class="bar-row" onclick="sendPrompt('Tell me more about BMI Portal architecture strengths and weaknesses')">
+        <span class="bar-label">Architecture & stack</span>
+        <div class="bar-track"><div class="bar-fill" style="width:78%; background:#3B8BD4;"></div></div>
+        <span class="bar-score">78</span>
+      </div>
+      <div class="bar-row" onclick="sendPrompt('What documentation best practices is BMI Portal missing?')">
+        <span class="bar-label">Documentation</span>
+        <div class="bar-track"><div class="bar-fill" style="width:82%; background:#639922;"></div></div>
+        <span class="bar-score">82</span>
+      </div>
+      <div class="bar-row" onclick="sendPrompt('How does BMI Portal handle authentication and RBAC?')">
+        <span class="bar-label">Auth & RBAC</span>
+        <div class="bar-track"><div class="bar-fill" style="width:70%; background:#1D9E75;"></div></div>
+        <span class="bar-score">70</span>
+      </div>
+      <div class="bar-row" onclick="sendPrompt('What security gaps does BMI Portal have?')">
+        <span class="bar-label">Security posture</span>
+        <div class="bar-track"><div class="bar-fill" style="width:62%; background:#EF9F27;"></div></div>
+        <span class="bar-score">62</span>
+      </div>
+      <div class="bar-row" onclick="sendPrompt('How does BMI Portal handle data privacy?')">
+        <span class="bar-label">Data privacy</span>
+        <div class="bar-track"><div class="bar-fill" style="width:72%; background:#1D9E75;"></div></div>
+        <span class="bar-score">72</span>
+      </div>
+      <div class="bar-row" onclick="sendPrompt('What DevOps improvements does BMI Portal need?')">
+        <span class="bar-label">DevOps & CI/CD</span>
+        <div class="bar-track"><div class="bar-fill" style="width:55%; background:#EF9F27;"></div></div>
+        <span class="bar-score">55</span>
+      </div>
+      <div class="bar-row" onclick="sendPrompt('What is BMI Portal missing in terms of UMS academic features?')">
+        <span class="bar-label">Academic features</span>
+        <div class="bar-track"><div class="bar-fill" style="width:60%; background:#EF9F27;"></div></div>
+        <span class="bar-score">60</span>
+      </div>
+      <div class="bar-row" onclick="sendPrompt('Does BMI Portal have a scalability plan?')">
+        <span class="bar-label">Scalability</span>
+        <div class="bar-track"><div class="bar-fill" style="width:50%; background:#EF9F27;"></div></div>
+        <span class="bar-score">50</span>
+      </div>
+      <div class="bar-row" onclick="sendPrompt('What observability tools should BMI Portal add?')">
+        <span class="bar-label">Observability</span>
+        <div class="bar-track"><div class="bar-fill" style="width:40%; background:#D85A30;"></div></div>
+        <span class="bar-score">40</span>
+      </div>
+      <div class="bar-row" onclick="sendPrompt('Why does BMI Portal score so low on automated testing?')">
+        <span class="bar-label">Automated testing</span>
+        <div class="bar-track"><div class="bar-fill" style="width:28%; background:#E24B4A;"></div></div>
+        <span class="bar-score">28</span>
+      </div>
+      <div class="bar-row" onclick="sendPrompt('What WCAG accessibility requirements should BMI Portal meet?')">
+        <span class="bar-label">Accessibility (WCAG)</span>
+        <div class="bar-track"><div class="bar-fill" style="width:30%; background:#E24B4A;"></div></div>
+        <span class="bar-score">30</span>
+      </div>
+      <div class="bar-row" onclick="sendPrompt('What internationalisation features does BMI Portal need?')">
+        <span class="bar-label">Internationalisation</span>
+        <div class="bar-track"><div class="bar-fill" style="width:20%; background:#E24B4A;"></div></div>
+        <span class="bar-score">20</span>
+      </div>
+    </div>
+  </div>
+
+  <!-- Tab: Compare -->
+  <div class="tab-content" id="tab-compare">
+    <p class="section-title" style="margin-bottom:12px">BMI portal vs world-class UMS — side by side</p>
+
+    <div class="compare-row">
+      <div class="compare-col" style="background:var(--color-background-success)">
+        <div class="label" style="color:var(--color-text-success)">BMI portal — what it does well</div>
+        <ul class="finding-list" style="margin-top:6px;">
+          <li><span class="icon">✅</span>100% open-source, self-hosted, MIT-licensed stack — strong sovereignty stance</li>
+          <li><span class="icon">✅</span>Local LLM (Ollama + Llama 3.2) — no data leaves the server</li>
+          <li><span class="icon">✅</span>JWT auth + RBAC (Admin, Registrar, Staff) via PocketBase</li>
+          <li><span class="icon">✅</span>AES-256 encryption key planned; bcrypt password hashing</li>
+          <li><span class="icon">✅</span>QR code certificate generation with content hashing</li>
+          <li><span class="icon">✅</span>Audit logging for all actions</li>
+          <li><span class="icon">✅</span>Typed frontend (TypeScript 92%) with React 19 + Vite</li>
+          <li><span class="icon">✅</span>Automatic HTTPS via Caddy</li>
+          <li><span class="icon">✅</span>Docker Compose + Makefile for reproducible dev setup</li>
+          <li><span class="icon">✅</span>Extensive planning docs (README, ARCHITECTURE, SECURITY, CHANGELOG)</li>
+          <li><span class="icon">✅</span>Rate limiting middleware via Hono.js + Helmet headers</li>
+          <li><span class="icon">✅</span>Litestream for SQLite backup to S3-compatible storage</li>
+          <li><span class="icon">✅</span>CONTRIBUTING.md + SECURITY.md with responsible disclosure process</li>
+        </ul>
+      </div>
+      <div class="compare-col" style="background:var(--color-background-danger)">
+        <div class="label" style="color:var(--color-text-danger)">World-class standard — where BMI falls short</div>
+        <ul class="finding-list" style="margin-top:6px;">
+          <li><span class="icon">❌</span>No automated test suite (unit, integration, e2e) — 0 test files visible</li>
+          <li><span class="icon">❌</span>No GitHub Actions CI pipeline for lint/test/build on every PR</li>
+          <li><span class="icon">❌</span>No WCAG 2.1 accessibility compliance or audits</li>
+          <li><span class="icon">❌</span>No internationalisation (i18n) — English-only UI</li>
+          <li><span class="icon">❌</span>No OpenAPI / Swagger spec for the Hono.js API</li>
+          <li><span class="icon">❌</span>SQLite write-concurrency ceiling will hurt under load</li>
+          <li><span class="icon">❌</span>No MFA / 2FA for users (critical for institutional systems)</li>
+          <li><span class="icon">❌</span>Missing: timetabling, grading/rubrics, learning outcomes, LTI/LMS integration</li>
+          <li><span class="icon">❌</span>No structured student portal (self-service grade lookup, course registration)</li>
+          <li><span class="icon">❌</span>No observability stack (metrics, distributed traces, alerting)</li>
+          <li><span class="icon">❌</span>Dependency vulnerability scanning (Dependabot) referenced but not configured</li>
+          <li><span class="icon">❌</span>No GDPR/data-subject request workflow despite privacy-first claim</li>
+          <li><span class="icon">❌</span>Many root-level fix/restart scripts suggest brittle deployment</li>
+        </ul>
+      </div>
+    </div>
+  </div>
+
+  <!-- Tab: Gaps -->
+  <div class="tab-content" id="tab-gaps">
+    <p class="section-title" style="margin-bottom:12px">Priority remediation roadmap</p>
+
+    <div class="gap-item" onclick="sendPrompt('How should BMI Portal implement automated testing?')">
+      <div><div class="gap-name">Automated test suite</div><div class="gap-desc">Zero test coverage — vitest + Playwright for unit/e2e; API integration tests with supertest</div></div>
+      <span class="priority badge-red badge">P0 · Critical</span>
+    </div>
+
+    <div class="gap-item" onclick="sendPrompt('How should BMI Portal set up GitHub Actions CI/CD?')">
+      <div><div class="gap-name">CI/CD pipeline</div><div class="gap-desc">GitHub Actions: lint → test → build → Docker push on every PR; block merges on failure</div></div>
+      <span class="priority badge-red badge">P0 · Critical</span>
+    </div>
+
+    <div class="gap-item" onclick="sendPrompt('What MFA approach should BMI Portal use?')">
+      <div><div class="gap-name">Multi-factor authentication</div><div class="gap-desc">TOTP (PocketBase supports it) mandatory for Admin and Registrar roles</div></div>
+      <span class="priority badge-red badge">P0 · Critical</span>
+    </div>
+
+    <div class="gap-item" onclick="sendPrompt('How can BMI Portal add WCAG 2.1 accessibility?')">
+      <div><div class="gap-name">WCAG 2.1 AA compliance</div><div class="gap-desc">Axe-core audits, keyboard navigation, ARIA attributes, sufficient colour contrast</div></div>
+      <span class="priority badge-amber badge">P1 · High</span>
+    </div>
+
+    <div class="gap-item" onclick="sendPrompt('How should BMI Portal document its API?')">
+      <div><div class="gap-name">OpenAPI specification</div><div class="gap-desc">Auto-generate from Hono routes using @hono/zod-openapi; serve Swagger UI at /docs</div></div>
+      <span class="priority badge-amber badge">P1 · High</span>
+    </div>
+
+    <div class="gap-item" onclick="sendPrompt('What observability stack should BMI Portal adopt?')">
+      <div><div class="gap-name">Observability stack</div><div class="gap-desc">Prometheus + Grafana for metrics; Loki for log aggregation; Sentry for error tracking</div></div>
+      <span class="priority badge-amber badge">P1 · High</span>
+    </div>
+
+    <div class="gap-item" onclick="sendPrompt('How should BMI Portal handle GDPR data subject requests?')">
+      <div><div class="gap-name">GDPR data-subject workflow</div><div class="gap-desc">Data export and deletion API endpoints; retention policy; consent records</div></div>
+      <span class="priority badge-amber badge">P1 · High</span>
+    </div>
+
+    <div class="gap-item" onclick="sendPrompt('What academic features is BMI Portal missing?')">
+      <div><div class="gap-name">Full academic module set</div><div class="gap-desc">Timetabling, grading/rubrics, student self-service portal, LTI 1.3 for LMS integration</div></div>
+      <span class="priority badge-info badge">P2 · Medium</span>
+    </div>
+
+    <div class="gap-item" onclick="sendPrompt('How should BMI Portal scale beyond SQLite?')">
+      <div><div class="gap-name">Scalability path</div><div class="gap-desc">WAL mode tuning now; documented migration path to PostgreSQL when concurrent writes exceed ~50/s</div></div>
+      <span class="priority badge-info badge">P2 · Medium</span>
+    </div>
+
+    <div class="gap-item" onclick="sendPrompt('How should BMI Portal add internationalisation support?')">
+      <div><div class="gap-name">Internationalisation (i18n)</div><div class="gap-desc">react-i18next with Swahili + English as first targets; RTL layout support</div></div>
+      <span class="priority badge-info badge">P3 · Low</span>
+    </div>
+  </div>
+
+</div>
+
+<script>
+function switchTab(id) {
+  document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+  document.querySelectorAll('.tab-content').forEach(c => c.classList.remove('active'));
+  document.getElementById('tab-' + id).classList.add('active');
+  event.currentTarget.classList.add('active');
+}
+</script>

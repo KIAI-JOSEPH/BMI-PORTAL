@@ -29,13 +29,22 @@ export const openApiSpec = {
   tags: [
     { name: "Auth", description: "Authentication & session management" },
     { name: "Students", description: "Student registry CRUD" },
-    { name: "Staff", description: "Staff & faculty management" },
-    { name: "Courses", description: "Course catalogue" },
+    { name: "Staff", description: "Staff & faculty profiles" },
+    { name: "Courses", description: "Course catalogue & enrolments" },
     { name: "Grades", description: "Grade entry & GPA computation" },
     { name: "Finance", description: "Transaction management" },
     { name: "Certificates", description: "Certificate issuance & QR verification" },
     { name: "Dashboard", description: "Aggregated statistics & trends" },
     { name: "Library", description: "Library catalogue" },
+    { name: "Transcripts", description: "Transcript generation & verification" },
+    { name: "Campuses", description: "Campus registry" },
+    { name: "Hostels", description: "Hostel & room management" },
+    { name: "Medical", description: "Health center visits" },
+    { name: "Inventory", description: "Physical inventory" },
+    { name: "Visitors", description: "Visitor log" },
+    { name: "Attendance", description: "Course attendance records" },
+    { name: "GradeAppeals", description: "Grade appeal workflow" },
+    { name: "GradingScales", description: "Configurable grading scales" },
     { name: "AI", description: "Local LLM (Ollama) integration" },
   ],
   components: {
@@ -549,6 +558,133 @@ export const openApiSpec = {
         security: [],
         responses: { 200: { description: "Healthy" }, 503: { description: "PocketBase unavailable" } },
       },
+    },
+
+    // ── Staff ────────────────────────────────────────────────────────────────────
+    "/api/v1/staff": {
+      get: { tags: ["Staff"], summary: "List staff (paginated)", parameters: [
+        { name: "page", in: "query", schema: { type: "integer", default: 1 } },
+        { name: "perPage", in: "query", schema: { type: "integer", default: 50, maximum: 200 } },
+        { name: "search", in: "query", schema: { type: "string" } },
+        { name: "campus_id", in: "query", schema: { type: "string" } },
+      ], responses: { 200: { description: "Staff list" }, 401: { description: "Unauthorized" } } },
+      post: { tags: ["Staff"], summary: "Create staff member",
+        requestBody: { required: true, content: { "application/json": { schema: { type: "object", properties: {
+          staff_number: { type: "string" }, first_name: { type: "string" }, last_name: { type: "string" },
+          email: { type: "string", format: "email" }, phone: { type: "string" }, role: { type: "string" },
+          campus_id: { type: "string" },
+        }, required: ["staff_number", "first_name", "last_name", "role"] } } } },
+        responses: { 201: { description: "Staff created" }, 400: { description: "Validation error" } } },
+    },
+    "/api/v1/staff/{id}": {
+      get: { tags: ["Staff"], summary: "Get staff member", parameters: [{ name: "id", in: "path", required: true, schema: { type: "string" } }], responses: { 200: { description: "Staff record" }, 404: { description: "Not found" } } },
+      patch: { tags: ["Staff"], summary: "Update staff member", parameters: [{ name: "id", in: "path", required: true, schema: { type: "string" } }], requestBody: { required: true, content: { "application/json": { schema: { type: "object" } } } }, responses: { 200: { description: "Updated" } } },
+      delete: { tags: ["Staff"], summary: "Delete staff member (admin only)", parameters: [{ name: "id", in: "path", required: true, schema: { type: "string" } }], responses: { 200: { description: "Deleted" }, 403: { description: "Admin role required" } } },
+    },
+
+    // ── Courses ───────────────────────────────────────────────────────────────────
+    "/api/v1/courses": {
+      get: { tags: ["Courses"], summary: "List courses", parameters: [
+        { name: "page", in: "query", schema: { type: "integer" } }, { name: "perPage", in: "query", schema: { type: "integer" } },
+        { name: "campus_id", in: "query", schema: { type: "string" } }, { name: "search", in: "query", schema: { type: "string" } },
+      ], responses: { 200: { description: "Course list" } } },
+      post: { tags: ["Courses"], summary: "Create course",
+        requestBody: { required: true, content: { "application/json": { schema: { type: "object", properties: {
+          code: { type: "string" }, title: { type: "string" }, credit_hours: { type: "integer" }, campus_id: { type: "string" },
+        }, required: ["code", "title"] } } } },
+        responses: { 201: { description: "Course created" } } },
+    },
+    "/api/v1/courses/{id}": {
+      get: { tags: ["Courses"], summary: "Get course", parameters: [{ name: "id", in: "path", required: true, schema: { type: "string" } }], responses: { 200: { description: "Course" } } },
+      patch: { tags: ["Courses"], summary: "Update course", parameters: [{ name: "id", in: "path", required: true, schema: { type: "string" } }], requestBody: { required: true, content: { "application/json": { schema: { type: "object" } } } }, responses: { 200: { description: "Updated" } } },
+      delete: { tags: ["Courses"], summary: "Delete course", parameters: [{ name: "id", in: "path", required: true, schema: { type: "string" } }], responses: { 200: { description: "Deleted" }, 403: { description: "Admin only" } } },
+    },
+
+    // ── Library ───────────────────────────────────────────────────────────────────
+    "/api/v1/library": {
+      get: { tags: ["Library"], summary: "List library items", parameters: [
+        { name: "page", in: "query", schema: { type: "integer" } }, { name: "perPage", in: "query", schema: { type: "integer" } },
+        { name: "category", in: "query", schema: { type: "string" } }, { name: "search", in: "query", schema: { type: "string" } },
+      ], responses: { 200: { description: "Library items" } } },
+      post: { tags: ["Library"], summary: "Add library item", requestBody: { required: true, content: { "application/json": { schema: { type: "object", properties: {
+        title: { type: "string" }, author: { type: "string" }, category: { type: "string" }, type: { type: "string" }, status: { type: "string" },
+      }, required: ["title", "author", "category", "type", "status"] } } } }, responses: { 201: { description: "Created" } } },
+    },
+    "/api/v1/library/{id}": {
+      patch: { tags: ["Library"], summary: "Update library item", parameters: [{ name: "id", in: "path", required: true, schema: { type: "string" } }], requestBody: { required: true, content: { "application/json": { schema: { type: "object" } } } }, responses: { 200: { description: "Updated" } } },
+      delete: { tags: ["Library"], summary: "Delete library item", parameters: [{ name: "id", in: "path", required: true, schema: { type: "string" } }], responses: { 200: { description: "Deleted" } } },
+    },
+
+    // ── Transcripts ───────────────────────────────────────────────────────────────
+    "/api/v1/transcripts": {
+      get: { tags: ["Transcripts"], summary: "List transcripts", parameters: [
+        { name: "page", in: "query", schema: { type: "integer" } }, { name: "perPage", in: "query", schema: { type: "integer" } }, { name: "studentId", in: "query", schema: { type: "string" } },
+      ], responses: { 200: { description: "Transcript list" } } },
+      post: { tags: ["Transcripts"], summary: "Generate transcript", requestBody: { required: true, content: { "application/json": { schema: { type: "object", properties: { studentId: { type: "string" }, academicYear: { type: "string" } }, required: ["studentId"] } } } }, responses: { 201: { description: "Transcript generated" } } },
+    },
+    "/api/v1/transcripts/verify": {
+      post: { tags: ["Transcripts"], summary: "Verify transcript (public)", security: [], requestBody: { required: true, content: { "application/json": { schema: { type: "object", properties: { id: { type: "string" }, token: { type: "string" } }, required: ["id"] } } } }, responses: { 200: { description: "Verification result" }, 429: { description: "Rate limited" } } },
+    },
+
+    // ── Campuses ──────────────────────────────────────────────────────────────────
+    "/api/v1/campuses": {
+      get: { tags: ["Campuses"], summary: "List campuses", responses: { 200: { description: "Campus list" } } },
+      post: { tags: ["Campuses"], summary: "Create campus (admin only)", requestBody: { required: true, content: { "application/json": { schema: { type: "object", properties: { name: { type: "string" }, location: { type: "string" } }, required: ["name"] } } } }, responses: { 201: { description: "Created" }, 403: { description: "Admin only" } } },
+    },
+    "/api/v1/campuses/{id}": {
+      patch: { tags: ["Campuses"], summary: "Update campus", parameters: [{ name: "id", in: "path", required: true, schema: { type: "string" } }], requestBody: { required: true, content: { "application/json": { schema: { type: "object" } } } }, responses: { 200: { description: "Updated" } } },
+      delete: { tags: ["Campuses"], summary: "Delete campus (admin only)", parameters: [{ name: "id", in: "path", required: true, schema: { type: "string" } }], responses: { 200: { description: "Deleted" }, 409: { description: "Has associated students/staff" } } },
+    },
+
+    // ── Hostels ───────────────────────────────────────────────────────────────────
+    "/api/v1/hostels": {
+      get: { tags: ["Hostels"], summary: "List hostels", responses: { 200: { description: "Hostel list with occupancy" } } },
+      post: { tags: ["Hostels"], summary: "Create hostel", requestBody: { required: true, content: { "application/json": { schema: { type: "object", properties: { name: { type: "string" }, type: { type: "string", enum: ["Male", "Female"] }, capacity: { type: "integer" }, location: { type: "string" } }, required: ["name", "type", "capacity", "location"] } } } }, responses: { 201: { description: "Created" } } },
+    },
+    "/api/v1/hostels/assign": {
+      post: { tags: ["Hostels"], summary: "Assign student to room", requestBody: { required: true, content: { "application/json": { schema: { type: "object", properties: { studentId: { type: "string" }, hostelId: { type: "string" }, roomNumber: { type: "string" } }, required: ["studentId", "hostelId", "roomNumber"] } } } }, responses: { 201: { description: "Room assigned" } } },
+    },
+
+    // ── Medical ───────────────────────────────────────────────────────────────────
+    "/api/v1/medical": {
+      get: { tags: ["Medical"], summary: "List medical visits", parameters: [{ name: "page", in: "query", schema: { type: "integer" } }, { name: "perPage", in: "query", schema: { type: "integer" } }], responses: { 200: { description: "Visit list" } } },
+      post: { tags: ["Medical"], summary: "Record medical visit", requestBody: { required: true, content: { "application/json": { schema: { type: "object", properties: { studentId: { type: "string" }, condition: { type: "string" }, date: { type: "string" }, status: { type: "string", enum: ["Normal", "Urgent", "Follow-up"] } }, required: ["studentId", "condition", "date", "status"] } } } }, responses: { 201: { description: "Visit recorded" } } },
+    },
+
+    // ── Inventory ─────────────────────────────────────────────────────────────────
+    "/api/v1/inventory": {
+      get: { tags: ["Inventory"], summary: "List inventory items", responses: { 200: { description: "Inventory list" } } },
+      post: { tags: ["Inventory"], summary: "Add inventory item", requestBody: { required: true, content: { "application/json": { schema: { type: "object", properties: { name: { type: "string" }, category: { type: "string" }, quantity: { type: "integer" }, location: { type: "string" }, condition: { type: "string", enum: ["New", "Good", "Fair", "Poor"] } }, required: ["name", "category", "quantity", "location", "condition"] } } } }, responses: { 201: { description: "Created" } } },
+    },
+
+    // ── Visitors ──────────────────────────────────────────────────────────────────
+    "/api/v1/visitors": {
+      get: { tags: ["Visitors"], summary: "List visitors (today)", responses: { 200: { description: "Visitor log" } } },
+      post: { tags: ["Visitors"], summary: "Check in visitor", requestBody: { required: true, content: { "application/json": { schema: { type: "object", properties: { name: { type: "string" }, purpose: { type: "string" }, host: { type: "string" } }, required: ["name", "purpose", "host"] } } } }, responses: { 201: { description: "Checked in" } } },
+    },
+    "/api/v1/visitors/{id}/checkout": {
+      patch: { tags: ["Visitors"], summary: "Check out visitor", parameters: [{ name: "id", in: "path", required: true, schema: { type: "string" } }], responses: { 200: { description: "Checked out" } } },
+    },
+
+    // ── Attendance ────────────────────────────────────────────────────────────────
+    "/api/v1/attendance": {
+      get: { tags: ["Attendance"], summary: "List attendance records", parameters: [{ name: "courseId", in: "query", schema: { type: "string" } }, { name: "date", in: "query", schema: { type: "string", format: "date" } }], responses: { 200: { description: "Attendance records" } } },
+      post: { tags: ["Attendance"], summary: "Create attendance record", requestBody: { required: true, content: { "application/json": { schema: { type: "object", properties: { courseId: { type: "string" }, date: { type: "string" }, records: { type: "object", description: "Map of studentId \u2192 present/absent" } }, required: ["courseId", "date", "records"] } } } }, responses: { 201: { description: "Recorded" } } },
+    },
+
+    // ── Grade Appeals ─────────────────────────────────────────────────────────────
+    "/api/v1/grade-appeals": {
+      get: { tags: ["GradeAppeals"], summary: "List grade appeals", parameters: [{ name: "status", in: "query", schema: { type: "string", enum: ["Pending", "Under Review", "Approved", "Denied", "Withdrawn"] } }], responses: { 200: { description: "Appeal list" } } },
+      post: { tags: ["GradeAppeals"], summary: "Submit grade appeal", requestBody: { required: true, content: { "application/json": { schema: { type: "object", properties: { student_id: { type: "string" }, enrollment_id: { type: "string" }, appeal_reason: { type: "string" } }, required: ["student_id", "enrollment_id", "appeal_reason"] } } } }, responses: { 201: { description: "Appeal submitted" } } },
+    },
+    "/api/v1/grade-appeals/{id}": {
+      patch: { tags: ["GradeAppeals"], summary: "Update appeal status (admin/registrar/faculty)", parameters: [{ name: "id", in: "path", required: true, schema: { type: "string" } }], requestBody: { required: true, content: { "application/json": { schema: { type: "object", properties: { status: { type: "string" }, instructor_response: { type: "string" } } } } } }, responses: { 200: { description: "Updated" } } },
+    },
+
+    // ── Grading Scales ────────────────────────────────────────────────────────────
+    "/api/v1/grading-scales": {
+      get: { tags: ["GradingScales"], summary: "List grading scales", responses: { 200: { description: "Grading scale list" } } },
+      post: { tags: ["GradingScales"], summary: "Create grading scale", requestBody: { required: true, content: { "application/json": { schema: { type: "object", properties: { name: { type: "string" }, description: { type: "string" }, scale_data: { type: "object" }, is_default: { type: "boolean" } }, required: ["name", "scale_data"] } } } }, responses: { 201: { description: "Created" } } },
     },
   },
 } as const;

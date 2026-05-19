@@ -1,0 +1,33 @@
+# BMI UMS Backend — Docker build exclusions
+# Prevents unnecessary files from being sent to the Docker build context
+
+# Node.js
+node_modules/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# TypeScript build output (rebuilt inside Docker)
+dist/
+
+# Runtime logs
+logs/
+*.log
+out.log
+err.log
+
+# Development & test files
+coverage/
+*.test.ts
+*.spec.ts
+
+# Environment files (secrets must be passed as Docker env vars, never baked in)
+.env
+.env.*
+!.env.example
+
+# Miscellaneous
+.git/
+.gitignore
+README.md
+*.md

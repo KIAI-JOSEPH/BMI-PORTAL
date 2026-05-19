@@ -770,3 +770,66 @@ export async function healthCheck(): Promise<boolean> {
     return false;
   }
 }
+
+/**
+ * Create a database backup (manual snapshot)
+ * Uses PocketBase's internal backup API if available, or falls back to file copy
+ */
+export async function createDatabaseBackup(): Promise<{
+  success: boolean;
+  name?: string;
+  error?: string;
+}> {
+  const pb = getPocketBase();
+  try {
+    // PocketBase 0.22+ supports automated backups via API
+    // We'll trigger a manual backup through the admin client
+    const timestamp = new Date().toISOString().replace(/[:.]/g, "-");
+    const backupName = `backup_${timestamp}.zip`;
+
+    // Direct HTTP call to trigger backup
+    const response = await fetch(
+      `${CONFIG.POCKETBASE_URL}/api/backups/${backupName}`,
+      {
+        method: "POST",
+        headers: {
+          Authorization: pb.authStore.token,
+        },
+      },
+    );
+
+    if (response.ok) {
+      logger.info(`Database backup created: ${backupName}`);
+      return { success: true, name: backupName };
+    } else {
+      const errorData: any = await response.json();
+      throw new Error(errorData.message || "Backup failed");
+    }
+  } catch (error: any) {
+    logger.error("Failed to create database backup:", error);
+    return { success: false, error: error.message };
+  }
+}
+
+/**
+ * Schedule automatic database backups
+ * Default: Once every 24 hours
+ */
+export function scheduleAutoBackups(intervalMs: number = 24 * 60 * 60 * 1000): void {
+  logger.info(
+    `Scheduling automatic database backups every ${intervalMs / 3600000} hours`,
+  );
+  setInterval(async () => {
+    const pb = getPocketBase();
+    if (pb.authStore.isValid) {
+      await createDatabaseBackup();
+    } else {
+      try {
+        await authenticateAdmin();
+        await createDatabaseBackup();
+      } catch (error) {
+        logger.error("Scheduled backup failed: Admin authentication error", error);
+      }
+    }
+  }, intervalMs);
+}

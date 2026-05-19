@@ -65,3 +65,11 @@ Object.defineProperty(window, "IntersectionObserver", {
   writable: true,
   value: IntersectionObserverMock,
 });
+
+// ── Accessibility Testing ─────────────────────────────────────────────────────
+// axe-core is available for accessibility testing via src/test/axe.ts
+// Usage: import { checkA11y } from '../test/axe';
+// Then in a test: await checkA11y(container);
+//
+// Axe automatically uses the jsdom environment configured by vitest.
+// No additional setup is needed here.

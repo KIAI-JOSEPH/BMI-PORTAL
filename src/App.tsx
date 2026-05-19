@@ -11,7 +11,6 @@ import ErrorBoundary from "./components/ErrorBoundary";
 import { useAuthStore } from "./stores/authStore";
 import { useDataStore } from "./stores/dataStore";
 import { useUIStore } from "./stores/uiStore";
-import { useCoreDataPolling } from "./hooks/useCoreDataPolling";
 
 /** Public routes (no auth required) */
 function PublicRoutes() {
@@ -45,8 +44,11 @@ function AuthenticatedLayout() {
     openSidebar,
     closeAIModal,
   } = useUIStore();
-  // Polling for data freshness (60s interval)
-  useCoreDataPolling(true, 60000, fetchAllCoreData);
+  // Data freshness is now managed by TanStack Query (staleTime + refetchOnWindowFocus).
+  // See src/hooks/useEntityQueries.ts. Components that need paginated data should use
+  // useStudentsQuery(), useStaffQuery(), etc. directly instead of the global store.
+  // The initial fetchAllCoreData() call on login (in the App component) still populates
+  // the Zustand store for components not yet migrated to React Query.
 
   // Handle Theme
   useEffect(() => {

@@ -4,11 +4,12 @@ import './index.css';
 import App from './App';
 import { BrowserRouter } from 'react-router-dom';
 import { AccessibilityProvider } from './components/AccessibilityProvider';
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 
 /**
  * BMI UNIVERSITY MANAGEMENT SYSTEM
  * Institutional ERP Entry Point
- * 
+ *
  * Centralizing Global Layout Protocols and Print Handlers to ensure
  * consistency across Analytics, Transcripts, and Financial modules.
  */
@@ -19,7 +20,7 @@ const initializeInstitutionalStyles = () => {
     /* Institutional Print Protocol: Enforces strict vertical flow and prevents overlaps */
     @media print {
       .no-print { display: none !important; }
-      
+
       @page {
         size: auto;
         margin: 10mm;
@@ -37,13 +38,13 @@ const initializeInstitutionalStyles = () => {
       }
 
       /* Reset complex layouts to standard block flow for PDF generation */
-      .grid, .flex-row, .pdf-stack, .pdf-section { 
-        display: block !important; 
-        width: 100% !important; 
-        position: static !important; 
+      .grid, .flex-row, .pdf-stack, .pdf-section {
+        display: block !important;
+        width: 100% !important;
+        position: static !important;
         clear: both !important;
       }
-      
+
       /* Ensure grid items take full width and spacing */
       .grid > div, .pdf-section > div {
         width: 100% !important;
@@ -67,7 +68,7 @@ const initializeInstitutionalStyles = () => {
         overflow: visible !important;
         padding-right: 20px !important;
       }
-      
+
       /* Constrain inner chart width to prevent right-side bleed */
       .recharts-responsive-container {
         width: 98% !important;
@@ -82,12 +83,12 @@ const initializeInstitutionalStyles = () => {
       }
 
       /* Strip interactive overlays */
-      .absolute, .fixed, .opacity-0, .hover\:opacity-100 { 
-        position: static !important; 
-        opacity: 1 !important; 
+      .absolute, .fixed, .opacity-0, .hover\:opacity-100 {
+        position: static !important;
+        opacity: 1 !important;
         visibility: visible !important;
       }
-      
+
       /* Hide modal overlays during print */
       .fixed.inset-0 { display: none !important; }
     }
@@ -97,6 +98,21 @@ const initializeInstitutionalStyles = () => {
 
 // Initialize system-wide styling protocols
 initializeInstitutionalStyles();
+
+const queryClient = new QueryClient({
+  defaultOptions: {
+    queries: {
+      // Data is considered fresh for 5 minutes — no refetch within that window
+      staleTime: 5 * 60 * 1000,
+      // Keep unused data in cache for 10 minutes
+      gcTime: 10 * 60 * 1000,
+      // Refetch on window focus so returning users get fresh data
+      refetchOnWindowFocus: true,
+      // Retry once on failure before showing error
+      retry: 1,
+    },
+  },
+});
 
 const rootElement = document.getElementById('root');
 
@@ -126,13 +142,15 @@ console.log(
 );
 
 root.render(
-  <React.StrictMode>
-    <AccessibilityProvider>
-      <BrowserRouter>
-        <App />
-      </BrowserRouter>
-    </AccessibilityProvider>
-  </React.StrictMode>
+  <QueryClientProvider client={queryClient}>
+    <React.StrictMode>
+      <AccessibilityProvider>
+        <BrowserRouter>
+          <App />
+        </BrowserRouter>
+      </AccessibilityProvider>
+    </React.StrictMode>
+  </QueryClientProvider>
 );
 
 // Remove preloader after initial render

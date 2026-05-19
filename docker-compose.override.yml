@@ -1,0 +1,29 @@
+# BMI UMS — Development Compose Override
+# Docker Compose automatically merges this with docker-compose.yml in development.
+# This file is NOT used in production CI/CD which calls:
+#   docker compose -f docker-compose.yml up -d
+#
+# To use production config only: docker compose -f docker-compose.yml up -d
+# To use development overrides:  docker compose up -d (auto-merges this file)
+
+services:
+  api:
+    build:
+      # In development, target the builder stage for faster rebuilds
+      target: builder
+    command: ["npx", "tsx", "watch", "src/index.ts"]
+    environment:
+      - NODE_ENV=development
+    volumes:
+      # Bind-mount source for hot-reload in development
+      - ./backend:/app
+      - /app/node_modules
+      - /app/dist
+    ports:
+      # Expose API port directly for development debugging
+      - "3001:3001"
+
+  pocketbase:
+    ports:
+      # Expose PocketBase admin UI directly in development
+      - "8090:8090"

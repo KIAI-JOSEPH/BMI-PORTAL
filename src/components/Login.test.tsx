@@ -5,6 +5,7 @@ import React from "react";
 import { render, screen, fireEvent } from "@testing-library/react";
 import { describe, it, expect, vi } from "vitest";
 import Login from "./Login";
+import { checkA11y } from '../test/axe';
 
 describe("Login", () => {
   const mockOnLogin = vi.fn();
@@ -25,5 +26,15 @@ describe("Login", () => {
   it("does not call onLogin before submission", () => {
     render(<Login onLogin={mockOnLogin} />);
     expect(mockOnLogin).not.toHaveBeenCalled();
+  });
+});
+
+describe('Login — accessibility (WCAG 2.1 AA)', () => {
+  it('has no critical or serious accessibility violations', async () => {
+    // Use a mock logo prop to keep the component standalone
+    const { container } = render(
+      <Login onLogin={vi.fn()} logo="/test-logo.svg" />
+    );
+    await checkA11y(container);
   });
 });

@@ -13,13 +13,40 @@ export interface V2ImportData {
 }
 
 export function parseV2Template(file: File): Promise<V2ImportData> {
+  // Mitigate xlsx vulnerability (GHSA-4r6h-8v6p-xvw6, GHSA-5pgg-2g8v-p4x9):
+  // 1. Enforce a 10MB file size limit before parsing.
+  // 2. Validate MIME type to prevent non-spreadsheet files.
+  const MAX_FILE_SIZE_BYTES = 10 * 1024 * 1024; // 10 MB
+  const ALLOWED_MIME_TYPES = [
+    'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet', // .xlsx
+    'application/vnd.ms-excel', // .xls
+  ];
+
+  if (file.size > MAX_FILE_SIZE_BYTES) {
+    return Promise.reject(
+      new Error(`File too large. Maximum allowed size is 10 MB. Your file is ${(file.size / 1024 / 1024).toFixed(1)} MB.`)
+    );
+  }
+
+  if (file.type && !ALLOWED_MIME_TYPES.includes(file.type)) {
+    return Promise.reject(
+      new Error(`Invalid file type "${file.type}". Only .xlsx and .xls files are accepted.`)
+    );
+  }
+
   return new Promise((resolve, reject) => {
     const reader = new FileReader();
     reader.onload = (e) => {
       try {
         const data = new Uint8Array(e.target!.result as ArrayBuffer);
-        const workbook = XLSX.read(data, { type: 'array' });
-        
+        const workbook = XLSX.read(data, {
+          type: 'array',
+          // Disable potentially dangerous features
+          cellFormula: false,
+          cellHTML: false,
+          sheetStubs: false,
+        });
+
         const getSheetData = (sheetName: string) => {
           if (!workbook.Sheets[sheetName]) return [];
           return XLSX.utils.sheet_to_json(workbook.Sheets[sheetName], { defval: '', raw: false });
