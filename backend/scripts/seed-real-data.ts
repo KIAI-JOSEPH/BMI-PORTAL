@@ -941,7 +941,7 @@ async function main() {
         email:           s.email,
         admission_no:    s.admission_no,
         admission_date:  '2025-01-01',
-        programme:       'Diploma in Theology & Christian Ministry',
+        programme:       'Diploma in Christian Ministry and Theology',
         status:          'Active',
         campus_id:       cid,
         avatar_color:    nextColor(),

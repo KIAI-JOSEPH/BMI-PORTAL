@@ -46,7 +46,11 @@ catalogRouter.get('/programs', async (c) => {
       ...(filter ? { filter } : {}),
     });
     return c.json({ success: true, data: rows });
-  } catch (e) {
+  } catch (e: any) {
+    // Collection may not exist yet — return empty data instead of 500
+    if (e?.status === 404) {
+      return c.json({ success: true, data: [] });
+    }
     logger.error('catalog programs', e);
     return c.json({ success: false, error: 'Failed to load programs' }, 500);
   }

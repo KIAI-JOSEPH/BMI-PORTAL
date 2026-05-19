@@ -381,7 +381,7 @@ const Exams: React.FC = () => {
             <option>All Programs</option>
             <option>Bachelor of Theology</option>
             <option>B.Sc. Computer Science</option>
-            <option>Diploma in Theology</option>
+            <option>Diploma in Christian Ministry and Theology</option>
             <option>Masters in Divinity</option>
             <option>PhD in Biblical Studies</option>
           </select>

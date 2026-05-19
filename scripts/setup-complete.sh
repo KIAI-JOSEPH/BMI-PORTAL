@@ -47,7 +47,7 @@ echo -e "${GREEN}✓${NC} Services stopped"
 # Step 3: Start PocketBase
 echo ""
 echo "Step 3: Starting PocketBase..."
-nohup ./bin/pocketbase serve --http=127.0.0.1:8090 > logs/pocketbase.log 2>&1 &
+nohup ./bin/pocketbase serve --dir=data/pb_data --migrationsDir=pb_migrations --http=127.0.0.1:8090 > logs/pocketbase.log 2>&1 &
 echo $! > logs/pocketbase.pid
 sleep 3
 echo -e "${GREEN}✓${NC} PocketBase started"

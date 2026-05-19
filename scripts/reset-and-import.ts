@@ -344,7 +344,7 @@ async function importStudents(campusMap: Map<string, string>): Promise<Map<strin
       email: '',
       admission_no: s.admission_no,
       admission_date: '2025-01-01',
-      programme: 'Diploma in Theology & Christian Ministry',
+      programme: 'Diploma in Christian Ministry and Theology',
       status: 'Active',
       avatar_color: COLORS[Math.floor(Math.random() * COLORS.length)],
       photo_zoom: 1,

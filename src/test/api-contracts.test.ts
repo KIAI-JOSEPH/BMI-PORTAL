@@ -24,6 +24,8 @@
  * (see `vitest.config.ts` → `test.globals: true`).
  */
 
+import { describe, it, expect } from 'vitest';
+
 // ─────────────────────────────────────────────────────────────────────────────
 // Auth API contract
 // ─────────────────────────────────────────────────────────────────────────────
@@ -103,7 +105,7 @@ describe('Student API contract', () => {
       email: 'jane@bmi.edu',
       phone: '0712345678',
       gender: 'Female',
-      programme: 'Diploma in Theology & Christian Ministry',
+      programme: 'Diploma in Christian Ministry and Theology',
       admission_date: '2024-09-01',
       status: 'Active',
       campus_id: 'campus1',
@@ -249,7 +251,7 @@ describe('Certificate API contract', () => {
       serial_number: 'BMI-2024-000001',
       student_id: 'stu1',
       student_name: 'Jane Doe',
-      degree: 'Diploma in Theology & Christian Ministry',
+      degree: 'Diploma in Christian Ministry and Theology',
       faculty: 'School of Theology',
       issue_date: '2024-12-15',
       gpa: 3.8,

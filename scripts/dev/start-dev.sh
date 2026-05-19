@@ -93,7 +93,7 @@ else
         echo "  Run: make setup"
         exit 1
     fi
-    nohup ./bin/pocketbase serve --http=127.0.0.1:8090 > logs/pocketbase.log 2>&1 &
+    nohup ./bin/pocketbase serve --dir=data/pb_data --migrationsDir=pb_migrations --http=127.0.0.1:8090 > logs/pocketbase.log 2>&1 &
     echo $! > logs/pocketbase.pid
     wait_for_service "http://localhost:8090/api/health" "PocketBase"
 fi

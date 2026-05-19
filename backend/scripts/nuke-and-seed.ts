@@ -192,7 +192,7 @@ async function main() {
         student_code: s.student_code, reg_no: s.reg_no, full_name: s.full_name,
         first_name, last_name, gender: s.gender, nationality: s.nationality,
         phone: s.phone, email: s.email, admission_no: s.admission_no,
-        admission_date: '2025-01-01', programme: 'Diploma in Theology & Christian Ministry',
+        admission_date: '2025-01-01', programme: 'Diploma in Christian Ministry and Theology',
         status: 'Active', campus_id: cid, avatar_color: nextColor(),
         student_number: s.student_code, faculty: 'Theology',
         department: 'Theology & Ministry', yearOfStudy: 1, academicLevel: 'Diploma',

@@ -110,38 +110,86 @@ export function parseQRPayload(qrContent: string): VerifyRequest | null {
 /**
  * Verify a document against the backend.
  * Accepts any BMI document serial — the backend routes by prefix.
+ *
+ * Includes:
+ *   • 12-second timeout per attempt
+ *   • Up to 2 automatic retries (3 attempts total) for transient failures
+ *   • Graceful handling of non-JSON responses (e.g. 502 proxy errors)
  */
 export async function verifyDocument(
   req: VerifyRequest,
 ): Promise<DocumentVerifyResult> {
-  const controller = new AbortController();
-  const timeoutId = setTimeout(() => controller.abort(), 12_000);
-  try {
-    const res = await fetch(`${API_URL}/documents/verify`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(req),
-      signal: controller.signal,
-    });
-    clearTimeout(timeoutId);
-    const data = await res.json();
-    return data as DocumentVerifyResult;
-  } catch (err) {
-    clearTimeout(timeoutId);
-    if (err instanceof Error && err.name === "AbortError") {
+  const MAX_RETRIES = 2;
+  const RETRY_DELAY_MS = 1200;
+
+  for (let attempt = 0; attempt <= MAX_RETRIES; attempt++) {
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 12_000);
+    try {
+      const res = await fetch(`${API_URL}/documents/verify`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(req),
+        signal: controller.signal,
+      });
+      clearTimeout(timeoutId);
+
+      // Handle non-JSON responses (e.g. 502 from Vite proxy when backend is starting)
+      const contentType = res.headers.get("content-type") || "";
+      if (!contentType.includes("application/json")) {
+        // Retry on transient proxy errors (502, 503, 504)
+        if ([502, 503, 504].includes(res.status) && attempt < MAX_RETRIES) {
+          await new Promise((r) => setTimeout(r, RETRY_DELAY_MS));
+          continue;
+        }
+        return {
+          valid: false,
+          error:
+            res.status >= 500
+              ? "Verification server is temporarily unavailable. Please try again in a moment."
+              : `Unexpected response (HTTP ${res.status}). Please try again.`,
+          code: "SERVICE_ERROR",
+        };
+      }
+
+      const data = await res.json();
+      return data as DocumentVerifyResult;
+    } catch (err) {
+      clearTimeout(timeoutId);
+
+      if (err instanceof Error && err.name === "AbortError") {
+        // Timeout — retry if we have retries left
+        if (attempt < MAX_RETRIES) {
+          await new Promise((r) => setTimeout(r, RETRY_DELAY_MS));
+          continue;
+        }
+        return {
+          valid: false,
+          error:
+            "Verification timed out. Please check your connection and try again.",
+          code: "TIMEOUT",
+        };
+      }
+
+      // Network error (fetch itself failed) — retry
+      if (attempt < MAX_RETRIES) {
+        await new Promise((r) => setTimeout(r, RETRY_DELAY_MS));
+        continue;
+      }
       return {
         valid: false,
-        error:
-          "Verification timed out. Please check your connection and try again.",
-        code: "TIMEOUT",
+        error: "Network error. Please check your connection.",
+        code: "NETWORK_ERROR",
       };
     }
-    return {
-      valid: false,
-      error: "Network error. Please check your connection.",
-      code: "NETWORK_ERROR",
-    };
   }
+
+  // Should never reach here, but TypeScript needs it
+  return {
+    valid: false,
+    error: "Verification failed after multiple attempts. Please try again.",
+    code: "RETRY_EXHAUSTED",
+  };
 }
 
 /**

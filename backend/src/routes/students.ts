@@ -58,7 +58,7 @@ const StudentSchema = z
       .openapi({ example: "john@example.com" }),
     phone: z.string().optional().or(z.literal("")).openapi({ example: "+123456789" }),
     gender: z.enum(["Male", "Female"]).openapi({ example: "Male" }),
-    programme: z.string().min(1).openapi({ example: "Diploma in Theology" }),
+    programme: z.string().min(1).openapi({ example: "Diploma in Christian Ministry and Theology" }),
     admission_date: z.string().openapi({ example: "2024-05-19" }),
     status: z
       .enum(["Active", "Inactive", "Graduated", "Suspended"])

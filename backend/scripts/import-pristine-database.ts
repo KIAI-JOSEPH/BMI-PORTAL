@@ -157,7 +157,7 @@ async function syncCollections(token: string) {
                 { name: 'email', type: 'email' },
                 { name: 'admission_no', type: 'text' },
                 { name: 'admission_date', type: 'date' },
-                { name: 'programme', type: 'select', options: { values: ['Diploma in Theology & Christian Ministry'], maxSelect: 1 } },
+                { name: 'programme', type: 'select', options: { values: ['Diploma in Christian Ministry and Theology'], maxSelect: 1 } },
                 { name: 'status', type: 'select', options: { values: ['Active', 'Inactive', 'Graduated', 'Suspended'], maxSelect: 1 } },
                 { name: 'campus_id', type: 'relation', options: { collectionId: getCollId('campuses'), maxSelect: 1 } }
             ]

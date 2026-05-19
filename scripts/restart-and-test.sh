@@ -18,7 +18,7 @@ fi
 
 echo ""
 echo "Step 2: Starting PocketBase..."
-nohup ./bin/pocketbase serve > logs/pocketbase.log 2>&1 &
+nohup ./bin/pocketbase serve --dir=data/pb_data --migrationsDir=pb_migrations --http=127.0.0.1:8090 > logs/pocketbase.log 2>&1 &
 PID=$!
 echo $PID > logs/pocketbase.pid
 echo "   Started PocketBase (PID: $PID)"

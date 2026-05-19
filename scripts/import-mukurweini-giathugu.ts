@@ -685,7 +685,7 @@ async function importStudents(campusMap: Map<string, string>, students: StudentD
       first_name: s.first_name, last_name: s.last_name, nationality: 'Kenyan',
       phone: s.phone, email: '', admission_no: s.admission_no,
       admission_date: '2025-01-01',
-      programme: 'Diploma in Theology & Christian Ministry',
+      programme: 'Diploma in Christian Ministry and Theology',
       status: 'Active',
       avatar_color: AVATAR_COLORS[Math.floor(Math.random() * AVATAR_COLORS.length)],
       photo_zoom: 1, photo_position: { x: 0, y: 0 },

@@ -9,9 +9,7 @@ Write-Host ""
 $rootDir = Get-Location
 
 Write-Host "[1/3] Starting PocketBase Database..." -ForegroundColor Yellow
-Set-Location "$rootDir\bin"
-Start-Process -FilePath ".\pocketbase.exe" -ArgumentList "serve", "--dir=pb_data" -WindowStyle Normal
-Set-Location $rootDir
+Start-Process -FilePath "$rootDir\bin\pocketbase.exe" -ArgumentList "serve", "--dir=data\pb_data", "--migrationsDir=pb_migrations", "--http=127.0.0.1:8090" -WorkingDirectory $rootDir -WindowStyle Normal
 
 Write-Host "Waiting for PocketBase to initialize..." -ForegroundColor Gray
 Start-Sleep -Seconds 4

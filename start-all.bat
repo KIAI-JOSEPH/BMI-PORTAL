@@ -5,7 +5,7 @@ echo ========================================
 
 echo.
 echo [1/3] Starting PocketBase Database...
-start "PocketBase" /D "bin" pocketbase serve --dir=pb_data
+start "PocketBase" ..\bin\pocketbase.exe serve --dir=data\pb_data --migrationsDir=pb_migrations --http=127.0.0.1:8090
 
 echo Waiting for PocketBase to start...
 timeout /t 3 /nobreak >nul

@@ -18,6 +18,9 @@ export default defineConfig({
   server: {
     port: 3000,
     host: "0.0.0.0",
+    // Allow any host — needed when Ngrok Tunnel or a reverse proxy forwards
+    // requests from a public domain.
+    allowedHosts: true,
     // historyApiFallback is handled by Vite's SPA fallback natively
     proxy: {
       "/api": {
