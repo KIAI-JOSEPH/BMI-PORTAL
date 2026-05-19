@@ -1,435 +1,428 @@
 // BMI UMS - Campuses Routes
-import { Hono } from 'hono';
-import { zValidator } from '@hono/zod-validator';
-import { z } from 'zod';
-import { getPocketBase, authenticateAdmin } from '../services/pocketbase.js';
-import { authMiddleware, requireRole } from '../middleware/auth.js';
-import { auditMiddleware, logAction } from '../middleware/audit.js';
-import { logger } from '../utils/logger.js';
-import { parsePagination, sanitizeFilter } from '../utils/helpers.js';
-import type { ApiResponse } from '../types/index.js';
+import { OpenAPIHono, createRoute, z } from "@hono/zod-openapi";
+import { getPocketBase, authenticateAdmin } from "../services/pocketbase.js";
+import { authMiddleware, requireRole } from "../middleware/auth.js";
+import { auditMiddleware, logAction } from "../middleware/audit.js";
+import { logger } from "../utils/logger.js";
+import { parsePagination, sanitizeFilter } from "../utils/helpers.js";
+import { ApiResponseSchema, ErrorResponseSchema } from "../openapi/common.js";
+import type { AppEnv } from "../types/hono.js";
 
-const campusesRouter = new Hono();
+const campusesRouter = new OpenAPIHono<AppEnv>();
 
-interface Campus {
-  id: string;
-  name: string;
-  code: string;
-  location: string;
-  status: 'active' | 'inactive';
-  created: string;
-  updated: string;
-}
-
-// Apply auth middleware to all routes
-campusesRouter.use('*', authMiddleware);
-campusesRouter.use('*', auditMiddleware);
+// Apply middleware
+campusesRouter.use("*", authMiddleware);
+campusesRouter.use("*", auditMiddleware);
 
 // Validation schemas
-const campusSchema = z.object({
-  name: z.string().min(1).max(100),
-  code: z.string().min(1).max(50),
-  location: z.string().min(1).max(100),
-  status: z.enum(['active', 'inactive']).default('active'),
+const CampusSchema = z
+  .object({
+    id: z.string().openapi({ example: "123" }),
+    name: z.string().openapi({ example: "Main Campus" }),
+    code: z.string().openapi({ example: "MAIN" }),
+    location: z.string().openapi({ example: "Nairobi, Kenya" }),
+    status: z.enum(["active", "inactive"]).openapi({ example: "active" }),
+    created: z.string().openapi({ example: "2024-05-19T03:15:05Z" }),
+    updated: z.string().openapi({ example: "2024-05-19T03:15:05Z" }),
+  })
+  .openapi("Campus");
+
+const CampusInputSchema = z
+  .object({
+    name: z.string().min(1).max(100).openapi({ example: "Main Campus" }),
+    code: z.string().min(1).max(50).openapi({ example: "MAIN" }),
+    location: z.string().min(1).max(100).openapi({ example: "Nairobi, Kenya" }),
+    status: z.enum(["active", "inactive"]).default("active"),
+  })
+  .openapi("CampusInput");
+
+// Route definitions
+const listCampusesRoute = createRoute({
+  method: "get",
+  path: "/",
+  tags: ["Campuses"],
+  summary: "List campuses",
+  description: "List all campuses with pagination and filtering",
+  request: {
+    query: z.object({
+      page: z.string().optional().openapi({ example: "1" }),
+      perPage: z.string().optional().openapi({ example: "50" }),
+      status: z.string().optional().openapi({ example: "active" }),
+      search: z.string().optional().openapi({ example: "Main" }),
+    }),
+  },
+  responses: {
+    200: {
+      content: {
+        "application/json": {
+          schema: ApiResponseSchema(z.array(CampusSchema)),
+        },
+      },
+      description: "List of campuses",
+    },
+    500: {
+      content: {
+        "application/json": {
+          schema: ErrorResponseSchema,
+        },
+      },
+      description: "Server error",
+    },
+  },
 });
 
-const updateCampusSchema = campusSchema.partial();
+const listAllCampusesRoute = createRoute({
+  method: "get",
+  path: "/all",
+  tags: ["Campuses"],
+  summary: "List all campuses (no pagination)",
+  description: "Get a full list of all active campuses for dropdowns",
+  responses: {
+    200: {
+      content: {
+        "application/json": {
+          schema: ApiResponseSchema(z.array(CampusSchema)),
+        },
+      },
+      description: "All active campuses",
+    },
+    500: {
+      content: {
+        "application/json": {
+          schema: ErrorResponseSchema,
+        },
+      },
+      description: "Server error",
+    },
+  },
+});
 
-/**
- * GET /api/v1/campuses
- * List all campuses with pagination and filtering
- */
-campusesRouter.get('/', async (c) => {
+const getCampusRoute = createRoute({
+  method: "get",
+  path: "/{id}",
+  tags: ["Campuses"],
+  summary: "Get campus by ID",
+  description: "Get details of a single campus",
+  request: {
+    params: z.object({
+      id: z.string().openapi({ example: "123" }),
+    }),
+  },
+  responses: {
+    200: {
+      content: {
+        "application/json": {
+          schema: ApiResponseSchema(CampusSchema),
+        },
+      },
+      description: "Campus details",
+    },
+    404: {
+      content: {
+        "application/json": {
+          schema: ErrorResponseSchema,
+        },
+      },
+      description: "Campus not found",
+    },
+    500: {
+      content: {
+        "application/json": {
+          schema: ErrorResponseSchema,
+        },
+      },
+      description: "Server error",
+    },
+  },
+});
+
+const createCampusRoute = createRoute({
+  method: "post",
+  path: "/",
+  tags: ["Campuses"],
+  summary: "Create campus",
+  description: "Create a new campus record",
+  request: {
+    body: {
+      content: {
+        "application/json": {
+          schema: CampusInputSchema,
+        },
+      },
+    },
+  },
+  responses: {
+    201: {
+      content: {
+        "application/json": {
+          schema: ApiResponseSchema(CampusSchema),
+        },
+      },
+      description: "Campus created successfully",
+    },
+    500: {
+      content: {
+        "application/json": {
+          schema: ErrorResponseSchema,
+        },
+      },
+      description: "Server error",
+    },
+  },
+});
+
+const updateCampusRoute = createRoute({
+  method: "patch",
+  path: "/{id}",
+  tags: ["Campuses"],
+  summary: "Update campus",
+  description: "Update an existing campus record",
+  request: {
+    params: z.object({
+      id: z.string().openapi({ example: "123" }),
+    }),
+    body: {
+      content: {
+        "application/json": {
+          schema: CampusInputSchema.partial(),
+        },
+      },
+    },
+  },
+  responses: {
+    200: {
+      content: {
+        "application/json": {
+          schema: ApiResponseSchema(CampusSchema),
+        },
+      },
+      description: "Campus updated successfully",
+    },
+    404: {
+      content: {
+        "application/json": {
+          schema: ErrorResponseSchema,
+        },
+      },
+      description: "Campus not found",
+    },
+    500: {
+      content: {
+        "application/json": {
+          schema: ErrorResponseSchema,
+        },
+      },
+      description: "Server error",
+    },
+  },
+});
+
+const deleteCampusRoute = createRoute({
+  method: "delete",
+  path: "/{id}",
+  tags: ["Campuses"],
+  summary: "Delete campus",
+  description: "Delete a campus record",
+  request: {
+    params: z.object({
+      id: z.string().openapi({ example: "123" }),
+    }),
+  },
+  responses: {
+    200: {
+      content: {
+        "application/json": {
+          schema: ApiResponseSchema(z.null()),
+        },
+      },
+      description: "Campus deleted successfully",
+    },
+    404: {
+      content: {
+        "application/json": {
+          schema: ErrorResponseSchema,
+        },
+      },
+      description: "Campus not found",
+    },
+    500: {
+      content: {
+        "application/json": {
+          schema: ErrorResponseSchema,
+        },
+      },
+      description: "Server error",
+    },
+  },
+});
+
+// Implement routes
+campusesRouter.openapi(listCampusesRoute, async (c) => {
   try {
     const pb = getPocketBase();
-    
-    // Check if PocketBase is authenticated, re-authenticate if needed
     if (!pb.authStore.isValid) {
-      logger.warn('PocketBase auth expired, re-authenticating...');
       await authenticateAdmin();
     }
-    
-    // Parse query parameters
-    const { page, perPage } = parsePagination(
-      c.req.query('page'),
-      c.req.query('perPage'),
-      { page: 1, perPage: 50, maxPerPage: 100 }
-    );
-    
-    const status = c.req.query('status');
-    const search = c.req.query('search');
 
-    // Build filter
+    const { page: p, perPage: pp, status, search } = c.req.valid("query");
+    const { page, perPage } = parsePagination(p, pp, {
+      page: 1,
+      perPage: 50,
+      maxPerPage: 100,
+    });
+
     const filters: string[] = [];
     if (status) filters.push(`status = "${sanitizeFilter(status)}"`);
     if (search) {
       const s = sanitizeFilter(search);
       filters.push(`(name ~ "${s}" || code ~ "${s}" || location ~ "${s}")`);
     }
-    
-    const filterString = filters.length > 0 ? filters.join(' && ') : '';
-    
-    // Fetch campuses
-    const queryOptions: { sort: string; filter?: string } = { sort: 'name' };
-    if (filterString) {
-      queryOptions.filter = filterString;
-    }
-    
-    const result = await pb.collection('campuses').getList(page, perPage, queryOptions);
-    
-    return c.json<ApiResponse<Campus[]>>({
+
+    const filterString = filters.length > 0 ? filters.join(" && ") : "";
+
+    const result = await pb.collection("campuses").getList(page, perPage, {
+      sort: "name",
+      ...(filterString ? { filter: filterString } : {}),
+    });
+
+    return c.json({
       success: true,
-      data: result.items as unknown as Campus[],
+      data: result.items as any,
       meta: {
         page: result.page,
         perPage: result.perPage,
         total: result.totalItems,
       },
     });
-    
   } catch (error) {
-    logger.error('Get campuses error:', error);
-    return c.json<ApiResponse<never>>({
-      success: false,
-      error: 'Failed to fetch campuses',
-    }, 500);
-  }
-});
-
-/**
- * GET /api/v1/campuses/all
- * Get all campuses without pagination (for dropdowns)
- */
-campusesRouter.get('/all', async (c) => {
-  try {
-    const pb = getPocketBase();
-    
-    const campuses = await pb.collection('campuses').getFullList({
-      sort: 'name',
-    });
-    
-    return c.json<ApiResponse<Campus[]>>({
-      success: true,
-      data: campuses as unknown as Campus[],
-    });
-    
-  } catch (error) {
-    logger.error('Get all campuses error:', error);
-    return c.json<ApiResponse<never>>({
-      success: false,
-      error: 'Failed to fetch campuses',
-    }, 500);
-  }
-});
-
-/**
- * GET /api/v1/campuses/:id
- * Get a single campus by ID
- */
-campusesRouter.get('/:id', async (c) => {
-  try {
-    const id = c.req.param('id')!;
-    const pb = getPocketBase();
-    
-    const campus = await pb.collection('campuses').getOne(id);
-    
-    return c.json<ApiResponse<Campus>>({
-      success: true,
-      data: campus as unknown as Campus,
-    });
-    
-  } catch (error) {
-    logger.error('Get campus error:', error);
-    return c.json<ApiResponse<never>>({
-      success: false,
-      error: 'Campus not found',
-    }, 404);
-  }
-});
-
-/**
- * GET /api/v1/campuses/:id/students
- * Get all students in a campus
- */
-campusesRouter.get('/:id/students', async (c) => {
-  try {
-    const id = c.req.param('id')!;
-    const pb = getPocketBase();
-    
-    const { page, perPage } = parsePagination(
-      c.req.query('page'),
-      c.req.query('perPage'),
-      { page: 1, perPage: 20, maxPerPage: 100 }
-    );
-    
-    const result = await pb.collection('students').getList(page, perPage, {
-      filter: `campus_code = "${id}"`,
-      sort: '-created',
-    });
-    
-    return c.json<ApiResponse<any[]>>({
-      success: true,
-      data: result.items,
-      meta: {
-        page: result.page,
-        perPage: result.perPage,
-        total: result.totalItems,
-      },
-    });
-    
-  } catch (error) {
-    logger.error('Get campus students error:', error);
-    return c.json<ApiResponse<never>>({
-      success: false,
-      error: 'Failed to fetch campus students',
-    }, 500);
-  }
-});
-
-/**
- * GET /api/v1/campuses/:id/staff
- * Get all staff in a campus
- */
-campusesRouter.get('/:id/staff', async (c) => {
-  try {
-    const id = c.req.param('id')!;
-    const pb = getPocketBase();
-    
-    const { page, perPage } = parsePagination(
-      c.req.query('page'),
-      c.req.query('perPage'),
-      { page: 1, perPage: 20, maxPerPage: 100 }
-    );
-    
-    const result = await pb.collection('staff').getList(page, perPage, {
-      filter: `campus_code = "${id}"`,
-      sort: '-created',
-    });
-    
-    return c.json<ApiResponse<any[]>>({
-      success: true,
-      data: result.items,
-      meta: {
-        page: result.page,
-        perPage: result.perPage,
-        total: result.totalItems,
-      },
-    });
-    
-  } catch (error) {
-    logger.error('Get campus staff error:', error);
-    return c.json<ApiResponse<never>>({
-      success: false,
-      error: 'Failed to fetch campus staff',
-    }, 500);
-  }
-});
-
-/**
- * GET /api/v1/campuses/:id/courses
- * Get all courses in a campus
- */
-campusesRouter.get('/:id/courses', async (c) => {
-  try {
-    const id = c.req.param('id')!;
-    const pb = getPocketBase();
-    
-    const { page, perPage } = parsePagination(
-      c.req.query('page'),
-      c.req.query('perPage'),
-      { page: 1, perPage: 20, maxPerPage: 100 }
-    );
-    
-    const result = await pb.collection('courses').getList(page, perPage, {
-      filter: `campus_code = "${id}"`,
-      sort: 'course_code',
-    });
-    
-    return c.json<ApiResponse<any[]>>({
-      success: true,
-      data: result.items,
-      meta: {
-        page: result.page,
-        perPage: result.perPage,
-        total: result.totalItems,
-      },
-    });
-    
-  } catch (error) {
-    logger.error('Get campus courses error:', error);
-    return c.json<ApiResponse<never>>({
-      success: false,
-      error: 'Failed to fetch campus courses',
-    }, 500);
-  }
-});
-
-/**
- * GET /api/v1/campuses/:id/stats
- * Get campus statistics
- */
-campusesRouter.get('/:id/stats', async (c) => {
-  try {
-    const id = c.req.param('id')!;
-    const pb = getPocketBase();
-    
-    // Get campus details
-    const campus = await pb.collection('campuses').getOne(id);
-    
-    // Get counts
-    const studentsCount = await pb.collection('students').getList(1, 1, {
-      filter: `campus_code = "${id}"`,
-    });
-    
-    const staffCount = await pb.collection('staff').getList(1, 1, {
-      filter: `campus_code = "${id}"`,
-    });
-    
-    const coursesCount = await pb.collection('courses').getList(1, 1, {
-      filter: `campus_code = "${id}"`,
-    });
-    
-    const stats = {
-      campus: campus as unknown as Campus,
-      students: studentsCount.totalItems,
-      staff: staffCount.totalItems,
-      courses: coursesCount.totalItems,
-    };
-    
-    return c.json<ApiResponse<typeof stats>>({
-      success: true,
-      data: stats,
-    });
-    
-  } catch (error) {
-    logger.error('Get campus stats error:', error);
-    return c.json<ApiResponse<never>>({
-      success: false,
-      error: 'Failed to fetch campus statistics',
-    }, 500);
-  }
-});
-
-/**
- * POST /api/v1/campuses
- * Create a new campus
- */
-campusesRouter.post(
-  '/',
-  requireRole('admin'),
-  zValidator('json', campusSchema),
-  logAction('CREATE', 'campuses'),
-  async (c) => {
-    try {
-      const validData = c.req.valid('json');
-      const pb = getPocketBase();
-      
-      const newCampus = await pb.collection('campuses').create(validData);
-      
-      logger.info('Campus created', { campusId: newCampus.id });
-      
-      return c.json<ApiResponse<Campus>>({
-        success: true,
-        data: newCampus as unknown as Campus,
-        message: 'Campus created successfully',
-      }, 201);
-      
-    } catch (error) {
-      logger.error('Create campus error:', error);
-      return c.json<ApiResponse<never>>({
+    logger.error("Get campuses error:", error);
+    return c.json(
+      {
         success: false,
-        error: 'Failed to create campus',
-      }, 500);
-    }
+        error: "Failed to fetch campuses",
+      },
+      500,
+    );
   }
-);
+});
 
-/**
- * PATCH /api/v1/campuses/:id
- * Update a campus
- */
-campusesRouter.patch(
-  '/:id',
-  requireRole('admin'),
-  zValidator('json', updateCampusSchema),
-  logAction('UPDATE', 'campuses'),
-  async (c) => {
-    try {
-      const id = c.req.param('id')!;
-      const data = c.req.valid('json');
-      const pb = getPocketBase();
-      
-      const updated = await pb.collection('campuses').update(id, data);
-      
-      logger.info('Campus updated', { campusId: id });
-      
-      return c.json<ApiResponse<Campus>>({
-        success: true,
-        data: updated as unknown as Campus,
-        message: 'Campus updated successfully',
-      });
-      
-    } catch (error) {
-      logger.error('Update campus error:', error);
-      return c.json<ApiResponse<never>>({
-        success: false,
-        error: 'Failed to update campus',
-      }, 500);
-    }
-  }
-);
+campusesRouter.openapi(listAllCampusesRoute, async (c) => {
+  try {
+    const pb = getPocketBase();
+    const result = await pb.collection("campuses").getFullList({
+      filter: 'status = "active"',
+      sort: "name",
+    });
 
-/**
- * DELETE /api/v1/campuses/:id
- * Delete a campus
- */
-campusesRouter.delete(
-  '/:id',
-  requireRole('admin'),
-  logAction('DELETE', 'campuses'),
-  async (c) => {
-    try {
-      const id = c.req.param('id')!;
-      const pb = getPocketBase();
-      
-      // Check if campus has students, staff, or courses
-      const students = await pb.collection('students').getList(1, 1, {
-        filter: `campus_code = "${id}"`,
-      });
-      
-      const staff = await pb.collection('staff').getList(1, 1, {
-        filter: `campus_code = "${id}"`,
-      });
-      
-      const courses = await pb.collection('courses').getList(1, 1, {
-        filter: `campus_code = "${id}"`,
-      });
-      
-      if (students.totalItems > 0 || staff.totalItems > 0 || courses.totalItems > 0) {
-        return c.json<ApiResponse<never>>({
-          success: false,
-          error: 'Cannot delete campus with associated students, staff, or courses',
-        }, 400);
-      }
-      
-      await pb.collection('campuses').delete(id);
-      
-      logger.info('Campus deleted', { campusId: id });
-      
-      return c.json<ApiResponse<null>>({
-        success: true,
-        data: null,
-        message: 'Campus deleted successfully',
-      });
-      
-    } catch (error) {
-      logger.error('Delete campus error:', error);
-      return c.json<ApiResponse<never>>({
+    return c.json({
+      success: true,
+      data: result as any,
+    });
+  } catch (error) {
+    logger.error("Get all campuses error:", error);
+    return c.json(
+      {
         success: false,
-        error: 'Failed to delete campus',
-      }, 500);
-    }
+        error: "Failed to fetch all campuses",
+      },
+      500,
+    );
   }
-);
+});
+
+campusesRouter.openapi(getCampusRoute, async (c) => {
+  try {
+    const { id } = c.req.valid("param");
+    const pb = getPocketBase();
+    const campus = await pb.collection("campuses").getOne(id);
+
+    return c.json({
+      success: true,
+      data: campus as any,
+    });
+  } catch (error) {
+    logger.error("Get campus error:", error);
+    return c.json(
+      {
+        success: false,
+        error: "Campus not found",
+      },
+      404,
+    );
+  }
+});
+
+campusesRouter.openapi(createCampusRoute, requireRole("admin"), async (c) => {
+  try {
+    const data = c.req.valid("json");
+    const pb = getPocketBase();
+    const campus = await pb.collection("campuses").create(data);
+
+    return c.json(
+      {
+        success: true,
+        data: campus as any,
+        message: "Campus created successfully",
+      },
+      201,
+    );
+  } catch (error) {
+    logger.error("Create campus error:", error);
+    return c.json(
+      {
+        success: false,
+        error: "Failed to create campus",
+      },
+      500,
+    );
+  }
+});
+
+campusesRouter.openapi(updateCampusRoute, requireRole("admin"), async (c) => {
+  try {
+    const { id } = c.req.valid("param");
+    const data = c.req.valid("json");
+    const pb = getPocketBase();
+    const campus = await pb.collection("campuses").update(id, data);
+
+    return c.json({
+      success: true,
+      data: campus as any,
+      message: "Campus updated successfully",
+    });
+  } catch (error) {
+    logger.error("Update campus error:", error);
+    return c.json(
+      {
+        success: false,
+        error: "Failed to update campus",
+      },
+      500,
+    );
+  }
+});
+
+campusesRouter.openapi(deleteCampusRoute, requireRole("admin"), async (c) => {
+  try {
+    const { id } = c.req.valid("param");
+    const pb = getPocketBase();
+    await pb.collection("campuses").delete(id);
+
+    return c.json({
+      success: true,
+      data: null,
+      message: "Campus deleted successfully",
+    });
+  } catch (error) {
+    logger.error("Delete campus error:", error);
+    return c.json(
+      {
+        success: false,
+        error: "Failed to delete campus",
+      },
+      500,
+    );
+  }
+});
 
 export default campusesRouter;

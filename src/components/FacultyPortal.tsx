@@ -9,7 +9,7 @@ import {
 } from 'lucide-react';
 import { useAuthStore } from '../stores/authStore';
 import { useDataStore } from '../stores/dataStore';
-import { createGrade } from '../services/gradeService';
+import { createAcademicRecord } from '../services/academicRecordsService';
 
 interface GradeEntry {
   studentId: string;
@@ -49,23 +49,19 @@ const FacultyPortal: React.FC = () => {
     }
     setSubmitting(true);
     try {
-      const res = await createGrade({
+      // @ts-ignore - Backend accepts studentId/courseCode for compatibility
+      await createAcademicRecord({
         studentId: form.studentId,
         courseCode: form.courseCode,
         percentage: form.percentage,
         numericGrade: form.percentage,
         academicYear: form.academicYear,
         semester: form.semester,
-        createdBy: user?.email,
       });
-      if (res.success) {
-        showToast('success', 'Grade saved successfully.');
-        setForm(f => ({ ...f, studentId: '', percentage: 0 }));
-      } else {
-        showToast('error', res.error ?? 'Failed to save grade.');
-      }
-    } catch {
-      showToast('error', 'Network error. Please try again.');
+      showToast('success', 'Grade saved successfully.');
+      setForm(f => ({ ...f, studentId: '', percentage: 0 }));
+    } catch (err: any) {
+      showToast('error', err.message || 'Failed to save grade.');
     } finally {
       setSubmitting(false);
     }

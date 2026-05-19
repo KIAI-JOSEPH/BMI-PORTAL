@@ -1,58 +1,319 @@
 // BMI UMS - Courses Routes
-import { Hono } from 'hono';
-import { zValidator } from '@hono/zod-validator';
-import { z } from 'zod';
-import { getPocketBase } from '../services/pocketbase.js';
-import { authMiddleware, requireRole } from '../middleware/auth.js';
-import { auditMiddleware, logAction } from '../middleware/audit.js';
-import { logger } from '../utils/logger.js';
-import { parsePagination, sanitizeFilter } from '../utils/helpers.js';
-import type { ApiResponse, Course } from '../types/index.js';
+import { OpenAPIHono, createRoute, z } from "@hono/zod-openapi";
+import { getPocketBase } from "../services/pocketbase.js";
+import { authMiddleware, requireRole } from "../middleware/auth.js";
+import { auditMiddleware, logAction } from "../middleware/audit.js";
+import { logger } from "../utils/logger.js";
+import { parsePagination } from "../utils/helpers.js";
+import { CourseQueries } from "../services/queryOptimizer.js";
+import { ApiResponseSchema, ErrorResponseSchema } from "../openapi/common.js";
+import type { Course } from "../types/index.js";
+import type { AppEnv } from "../types/hono.js";
 
 function mapCourseRecord(record: Record<string, unknown>): Course {
   return {
     id: String(record.id),
-    title: String(record.title ?? record.name ?? ''),
-    name: String(record.title ?? record.name ?? ''),
-    code: String(record.course_code ?? record.code ?? ''),
-    faculty: String(record.faculty ?? ''),
-    department: String(record.department ?? ''),
-    level: (record.level as Course['level']) || 'Undergraduate',
+    title: String(record.title ?? record.name ?? ""),
+    name: String(record.title ?? record.name ?? ""),
+    code: String(record.course_code ?? record.code ?? ""),
+    faculty: String(record.faculty ?? ""),
+    department: String(record.department ?? ""),
+    level: (record.level as Course["level"]) || "Undergraduate",
     credits: Number(record.credits ?? 0),
     credit_hours: Number(record.credits ?? record.credit_hours ?? 0),
-    status: (record.status as Course['status']) || 'Published',
-    description: String(record.description ?? ''),
-    syllabus: String(record.syllabus ?? ''),
-    created: String(record.created ?? ''),
-    updated: String(record.updated ?? ''),
+    status: (record.status as Course["status"]) || "Published",
+    description: String(record.description ?? ""),
+    syllabus: String(record.syllabus ?? ""),
+    created: String(record.created ?? ""),
+    updated: String(record.updated ?? ""),
   } as Course;
 }
 
-const coursesRouter = new Hono();
+const coursesRouter = new OpenAPIHono<AppEnv>();
 
-// Apply auth middleware
-coursesRouter.use('*', authMiddleware);
-coursesRouter.use('*', auditMiddleware);
+// Apply middleware
+coursesRouter.use("*", authMiddleware);
+coursesRouter.use("*", auditMiddleware);
 
 // Validation schemas
-const courseSchema = z.object({
-  name: z.string().min(2),
-  code: z.string().min(3),
-  faculty: z.string().min(1),
-  department: z.string().min(1),
-  level: z.enum(['Undergraduate', 'Postgraduate', 'Diploma', 'Certificate']),
-  credits: z.number().positive(),
-  status: z.enum(['Published', 'Draft', 'Archived']).default('Draft'),
-  description: z.string().min(10),
-  syllabus: z.string().min(10),
+const CourseSchema = z
+  .object({
+    id: z.string().openapi({ example: "123" }),
+    title: z.string().openapi({ example: "Systematic Theology" }),
+    name: z.string().openapi({ example: "Systematic Theology" }),
+    code: z.string().openapi({ example: "THEO101" }),
+    faculty: z.string().openapi({ example: "Theology" }),
+    department: z.string().openapi({ example: "Theology" }),
+    level: z
+      .enum(["Undergraduate", "Postgraduate", "Diploma", "Certificate"])
+      .openapi({ example: "Undergraduate" }),
+    credits: z.number().openapi({ example: 3 }),
+    credit_hours: z.number().openapi({ example: 45 }),
+    status: z
+      .enum(["Published", "Draft", "Archived"])
+      .openapi({ example: "Published" }),
+    description: z.string().openapi({ example: "Introduction to theology..." }),
+    syllabus: z.string().openapi({ example: "Week 1: Foundations..." }),
+    created: z.string().openapi({ example: "2024-05-19T03:15:05Z" }),
+    updated: z.string().openapi({ example: "2024-05-19T03:15:05Z" }),
+  })
+  .openapi("Course");
+
+const CourseInputSchema = z
+  .object({
+    name: z.string().min(2).openapi({ example: "Systematic Theology" }),
+    code: z.string().min(3).openapi({ example: "THEO101" }),
+    faculty: z.string().min(1).openapi({ example: "Theology" }),
+    department: z.string().min(1).openapi({ example: "Theology" }),
+    level: z
+      .enum(["Undergraduate", "Postgraduate", "Diploma", "Certificate"])
+      .openapi({ example: "Undergraduate" }),
+    credits: z.number().positive().openapi({ example: 3 }),
+    status: z.enum(["Published", "Draft", "Archived"]).default("Draft"),
+    description: z.string().min(10).openapi({ example: "Introduction to..." }),
+    syllabus: z.string().min(10).openapi({ example: "Week 1: ..." }),
+  })
+  .openapi("CourseInput");
+
+// Route definitions
+const listCoursesRoute = createRoute({
+  method: "get",
+  path: "/",
+  tags: ["Courses"],
+  summary: "List courses",
+  description: "List courses with pagination and filtering",
+  request: {
+    query: z.object({
+      page: z.string().optional().openapi({ example: "1" }),
+      perPage: z.string().optional().openapi({ example: "20" }),
+      search: z.string().optional().openapi({ example: "Theology" }),
+      status: z.string().optional().openapi({ example: "Published" }),
+      campus_id: z.string().optional().openapi({ example: "CAMP001" }),
+    }),
+  },
+  responses: {
+    200: {
+      content: {
+        "application/json": {
+          schema: ApiResponseSchema(z.array(CourseSchema)),
+        },
+      },
+      description: "List of courses",
+    },
+    500: {
+      content: {
+        "application/json": {
+          schema: ErrorResponseSchema,
+        },
+      },
+      description: "Server error",
+    },
+  },
 });
 
-const updateCourseSchema = courseSchema.partial();
+const getCourseStatsRoute = createRoute({
+  method: "get",
+  path: "/stats/overview",
+  tags: ["Courses"],
+  summary: "Get course statistics",
+  description: "Get aggregated statistics for courses",
+  responses: {
+    200: {
+      content: {
+        "application/json": {
+          schema: ApiResponseSchema(
+            z.object({
+              total: z.number(),
+              byLevel: z.record(z.number()),
+              byStatus: z.record(z.number()),
+              byFaculty: z.record(z.number()),
+              totalCredits: z.number(),
+            }),
+          ),
+        },
+      },
+      description: "Course statistics",
+    },
+    500: {
+      content: {
+        "application/json": {
+          schema: ErrorResponseSchema,
+        },
+      },
+      description: "Server error",
+    },
+  },
+});
 
-type CourseCreate = z.infer<typeof courseSchema>;
-type CourseUpdate = z.infer<typeof updateCourseSchema>;
+const getCourseRoute = createRoute({
+  method: "get",
+  path: "/{id}",
+  tags: ["Courses"],
+  summary: "Get course by ID",
+  description: "Get details of a single course",
+  request: {
+    params: z.object({
+      id: z.string().openapi({ example: "123" }),
+    }),
+  },
+  responses: {
+    200: {
+      content: {
+        "application/json": {
+          schema: ApiResponseSchema(CourseSchema),
+        },
+      },
+      description: "Course details",
+    },
+    404: {
+      content: {
+        "application/json": {
+          schema: ErrorResponseSchema,
+        },
+      },
+      description: "Course not found",
+    },
+    500: {
+      content: {
+        "application/json": {
+          schema: ErrorResponseSchema,
+        },
+      },
+      description: "Server error",
+    },
+  },
+});
 
-function courseDtoToPb(data: CourseCreate) {
+const createCourseRoute = createRoute({
+  method: "post",
+  path: "/",
+  tags: ["Courses"],
+  summary: "Create course",
+  description: "Create a new course record",
+  request: {
+    body: {
+      content: {
+        "application/json": {
+          schema: CourseInputSchema,
+        },
+      },
+    },
+  },
+  responses: {
+    201: {
+      content: {
+        "application/json": {
+          schema: ApiResponseSchema(CourseSchema),
+        },
+      },
+      description: "Course created successfully",
+    },
+    409: {
+      content: {
+        "application/json": {
+          schema: ErrorResponseSchema,
+        },
+      },
+      description: "Course code already exists",
+    },
+    500: {
+      content: {
+        "application/json": {
+          schema: ErrorResponseSchema,
+        },
+      },
+      description: "Server error",
+    },
+  },
+});
+
+const updateCourseRoute = createRoute({
+  method: "patch",
+  path: "/{id}",
+  tags: ["Courses"],
+  summary: "Update course",
+  description: "Update an existing course record",
+  request: {
+    params: z.object({
+      id: z.string().openapi({ example: "123" }),
+    }),
+    body: {
+      content: {
+        "application/json": {
+          schema: CourseInputSchema.partial(),
+        },
+      },
+    },
+  },
+  responses: {
+    200: {
+      content: {
+        "application/json": {
+          schema: ApiResponseSchema(CourseSchema),
+        },
+      },
+      description: "Course updated successfully",
+    },
+    404: {
+      content: {
+        "application/json": {
+          schema: ErrorResponseSchema,
+        },
+      },
+      description: "Course not found",
+    },
+    500: {
+      content: {
+        "application/json": {
+          schema: ErrorResponseSchema,
+        },
+      },
+      description: "Server error",
+    },
+  },
+});
+
+const deleteCourseRoute = createRoute({
+  method: "delete",
+  path: "/{id}",
+  tags: ["Courses"],
+  summary: "Delete course",
+  description: "Delete a course record",
+  request: {
+    params: z.object({
+      id: z.string().openapi({ example: "123" }),
+    }),
+  },
+  responses: {
+    200: {
+      content: {
+        "application/json": {
+          schema: ApiResponseSchema(z.null()),
+        },
+      },
+      description: "Course deleted successfully",
+    },
+    404: {
+      content: {
+        "application/json": {
+          schema: ErrorResponseSchema,
+        },
+      },
+      description: "Course not found",
+    },
+    500: {
+      content: {
+        "application/json": {
+          schema: ErrorResponseSchema,
+        },
+      },
+      description: "Server error",
+    },
+  },
+});
+
+// Implementation helpers
+function courseDtoToPb(data: any) {
   return {
     course_code: data.code,
     title: data.name,
@@ -67,7 +328,7 @@ function courseDtoToPb(data: CourseCreate) {
   };
 }
 
-function coursePatchToPb(data: CourseUpdate): Record<string, unknown> {
+function coursePatchToPb(data: any): Record<string, unknown> {
   const out: Record<string, unknown> = {};
   if (data.name !== undefined) out.title = data.name;
   if (data.code !== undefined) out.course_code = data.code;
@@ -81,83 +342,85 @@ function coursePatchToPb(data: CourseUpdate): Record<string, unknown> {
   return out;
 }
 
-/**
- * GET /api/v1/courses
- * List all courses with pagination and filtering
- */
-coursesRouter.get('/', async (c) => {
+// Implement routes
+coursesRouter.openapi(listCoursesRoute, async (c) => {
   try {
-    const pb = getPocketBase();
-    
-    const { page, perPage } = parsePagination(
-      c.req.query('page'),
-      c.req.query('perPage'),
-      { page: 1, perPage: 20, maxPerPage: 500 }
-    );
-    
-    const faculty = c.req.query('faculty');
-    const level = c.req.query('level');
-    const status = c.req.query('status');
-    const search = c.req.query('search');
-
-    const filters: string[] = [];
-    if (faculty) filters.push(`faculty = "${sanitizeFilter(faculty)}"`);
-    if (level) filters.push(`level = "${sanitizeFilter(level)}"`);
-    if (status) filters.push(`status = "${sanitizeFilter(status)}"`);
-    if (search) {
-      const s = sanitizeFilter(search);
-      filters.push(`(title ~ "${s}" || course_code ~ "${s}" || description ~ "${s}")`);
-    }
-    
-    const filterString = filters.join(' && ');
-    
-    const result = await pb.collection('courses').getList(page, perPage, {
-      ...(filterString ? { filter: filterString } : {}),
-      sort: '-created',
+    const {
+      page: p,
+      perPage: pp,
+      search,
+      status,
+      campus_id,
+    } = c.req.valid("query");
+    const { page, perPage } = parsePagination(p, pp, {
+      page: 1,
+      perPage: 20,
+      maxPerPage: 500,
     });
-    
-    return c.json<ApiResponse<Course[]>>({
+
+    const result = await CourseQueries.getWithDetails({
+      page,
+      perPage,
+      campusId: campus_id && campus_id !== "all" ? campus_id : undefined,
+      status: status || undefined,
+      search: search || undefined,
+    });
+
+    return c.json({
       success: true,
-      data: result.items.map((r) => mapCourseRecord(r as unknown as Record<string, unknown>)),
+      data: result.items.map((r: any) =>
+        mapCourseRecord(r as unknown as Record<string, unknown>),
+      ),
       meta: {
         page: result.page,
         perPage: result.perPage,
         total: result.totalItems,
       },
     });
-    
   } catch (error) {
-    logger.error('Get courses error:', error);
-    return c.json<ApiResponse<never>>({
-      success: false,
-      error: 'Failed to fetch courses',
-    }, 500);
+    logger.error("Get courses error:", error);
+    return c.json(
+      {
+        success: false,
+        error: "Failed to fetch courses",
+      },
+      500,
+    );
   }
 });
 
-/**
- * GET /api/v1/courses/stats/overview (before /:id)
- */
-coursesRouter.get('/stats/overview', async (c) => {
+coursesRouter.openapi(getCourseStatsRoute, async (c) => {
   try {
     const pb = getPocketBase();
 
-    const [
-      all, ug, pg, dip, cert,
-      published, draft, archived,
-    ] = await Promise.all([
-      pb.collection('courses').getList(1, 1),
-      pb.collection('courses').getList(1, 1, { filter: 'level = "Undergraduate"' }),
-      pb.collection('courses').getList(1, 1, { filter: 'level = "Postgraduate"' }),
-      pb.collection('courses').getList(1, 1, { filter: 'level = "Diploma"' }),
-      pb.collection('courses').getList(1, 1, { filter: 'level = "Certificate"' }),
-      pb.collection('courses').getList(1, 1, { filter: 'status = "Published"' }),
-      pb.collection('courses').getList(1, 1, { filter: 'status = "Draft"' }),
-      pb.collection('courses').getList(1, 1, { filter: 'status = "Archived"' }),
-    ]);
+    const [all, ug, pg, dip, cert, published, draft, archived] =
+      await Promise.all([
+        pb.collection("courses").getList(1, 1),
+        pb
+          .collection("courses")
+          .getList(1, 1, { filter: 'level = "Undergraduate"' }),
+        pb
+          .collection("courses")
+          .getList(1, 1, { filter: 'level = "Postgraduate"' }),
+        pb.collection("courses").getList(1, 1, { filter: 'level = "Diploma"' }),
+        pb
+          .collection("courses")
+          .getList(1, 1, { filter: 'level = "Certificate"' }),
+        pb
+          .collection("courses")
+          .getList(1, 1, { filter: 'status = "Published"' }),
+        pb.collection("courses").getList(1, 1, { filter: 'status = "Draft"' }),
+        pb
+          .collection("courses")
+          .getList(1, 1, { filter: 'status = "Archived"' }),
+      ]);
 
-    const creditRecords = await pb.collection('courses').getList(1, 1000, { fields: 'faculty,credits' });
-    const courses = creditRecords.items.map((r) => mapCourseRecord(r as unknown as Record<string, unknown>));
+    const creditRecords = await pb
+      .collection("courses")
+      .getList(1, 1000, { fields: "faculty,credits" });
+    const courses = creditRecords.items.map(
+      (r) => mapCourseRecord(r as unknown as Record<string, unknown>),
+    );
 
     const stats = {
       total: all.totalItems,
@@ -173,157 +436,158 @@ coursesRouter.get('/stats/overview', async (c) => {
         Archived: archived.totalItems,
       },
       byFaculty: courses.reduce((acc: Record<string, number>, c: Course) => {
-        const f = c.faculty || 'Unknown';
+        const f = c.faculty || "Unknown";
         acc[f] = (acc[f] || 0) + 1;
         return acc;
       }, {}),
-      totalCredits: courses.reduce((sum: number, c: Course) => sum + (c.credits || 0), 0),
+      totalCredits: courses.reduce(
+        (sum: number, c: Course) => sum + (c.credits || 0),
+        0,
+      ),
     };
 
-    return c.json<ApiResponse<typeof stats>>({ success: true, data: stats });
+    return c.json({ success: true, data: stats });
   } catch (error) {
-    logger.error('Get course stats error:', error);
-    return c.json<ApiResponse<never>>({ success: false, error: 'Failed to fetch statistics' }, 500);
+    logger.error("Get course stats error:", error);
+    return c.json(
+      { success: false, error: "Failed to fetch statistics" },
+      500,
+    );
   }
 });
 
-/**
- * GET /api/v1/courses/:id
- * Get a single course
- */
-coursesRouter.get('/:id', async (c) => {
+coursesRouter.openapi(getCourseRoute, async (c) => {
   try {
-    const id = c.req.param('id')!;
+    const { id } = c.req.valid("param");
     const pb = getPocketBase();
-    
-    const course = await pb.collection('courses').getOne(id);
-    
-    return c.json<ApiResponse<Course>>({
+    const course = await pb.collection("courses").getOne(id);
+
+    return c.json({
       success: true,
       data: mapCourseRecord(course as unknown as Record<string, unknown>),
     });
-    
   } catch (error) {
-    logger.error('Get course error:', error);
-    return c.json<ApiResponse<never>>({
-      success: false,
-      error: 'Course not found',
-    }, 404);
+    logger.error("Get course error:", error);
+    return c.json(
+      {
+        success: false,
+        error: "Course not found",
+      },
+      404,
+    );
   }
 });
 
-/**
- * POST /api/v1/courses
- * Create a new course
- */
-coursesRouter.post(
-  '/',
-  requireRole('admin', 'registrar', 'staff'),
-  zValidator('json', courseSchema),
-  logAction('CREATE', 'courses'),
+coursesRouter.openapi(
+  createCourseRoute,
+  requireRole("admin", "registrar", "staff"),
+  logAction("CREATE", "courses"),
   async (c) => {
     try {
-      const data = c.req.valid('json');
+      const data = c.req.valid("json");
       const pb = getPocketBase();
-      
+
       // Check for duplicate course code
-      const existing = await pb.collection('courses').getList(1, 1, {
-        filter: `course_code = "${data.code.replace(/["'\\]/g, '')}"`,
+      const existing = await pb.collection("courses").getList(1, 1, {
+        filter: `course_code = "${data.code.replace(/["'\\]/g, "")}"`,
       });
-      
+
       if (existing.items.length > 0) {
-        return c.json<ApiResponse<never>>({
-          success: false,
-          error: 'Course code already exists',
-        }, 409);
+        return c.json(
+          {
+            success: false,
+            error: "Course code already exists",
+          },
+          409,
+        );
       }
-      
-      const newCourse = await pb.collection('courses').create(courseDtoToPb(data));
-      
-      logger.info('Course created', { courseId: newCourse.id });
-      
-      return c.json<ApiResponse<Course>>({
-        success: true,
-        data: mapCourseRecord(newCourse as unknown as Record<string, unknown>),
-        message: 'Course created successfully',
-      }, 201);
-      
+
+      const newCourse = await pb
+        .collection("courses")
+        .create(courseDtoToPb(data));
+
+      logger.info("Course created", { courseId: newCourse.id });
+
+      return c.json(
+        {
+          success: true,
+          data: mapCourseRecord(newCourse as unknown as Record<string, unknown>),
+          message: "Course created successfully",
+        },
+        201,
+      );
     } catch (error) {
-      logger.error('Create course error:', error);
-      return c.json<ApiResponse<never>>({
-        success: false,
-        error: 'Failed to create course',
-      }, 500);
+      logger.error("Create course error:", error);
+      return c.json(
+        {
+          success: false,
+          error: "Failed to create course",
+        },
+        500,
+      );
     }
-  }
+  },
 );
 
-/**
- * PATCH /api/v1/courses/:id
- * Update a course
- */
-coursesRouter.patch(
-  '/:id',
-  requireRole('admin', 'registrar', 'staff'),
-  zValidator('json', updateCourseSchema),
-  logAction('UPDATE', 'courses'),
+coursesRouter.openapi(
+  updateCourseRoute,
+  requireRole("admin", "registrar", "staff"),
+  logAction("UPDATE", "courses"),
   async (c) => {
     try {
-      const id = c.req.param('id')!;
-      const data = c.req.valid('json');
+      const { id } = c.req.valid("param");
+      const data = c.req.valid("json");
       const pb = getPocketBase();
-      
-      const updated = await pb.collection('courses').update(id, coursePatchToPb(data));
-      
-      logger.info('Course updated', { courseId: id });
-      
-      return c.json<ApiResponse<Course>>({
+
+      const updated = await pb
+        .collection("courses")
+        .update(id, coursePatchToPb(data));
+
+      return c.json({
         success: true,
         data: mapCourseRecord(updated as unknown as Record<string, unknown>),
-        message: 'Course updated successfully',
+        message: "Course updated successfully",
       });
-      
     } catch (error) {
-      logger.error('Update course error:', error);
-      return c.json<ApiResponse<never>>({
-        success: false,
-        error: 'Failed to update course',
-      }, 500);
+      logger.error("Update course error:", error);
+      return c.json(
+        {
+          success: false,
+          error: "Failed to update course",
+        },
+        500,
+      );
     }
-  }
+  },
 );
 
-/**
- * DELETE /api/v1/courses/:id
- * Delete a course
- */
-coursesRouter.delete(
-  '/:id',
-  requireRole('admin'),
-  logAction('DELETE', 'courses'),
+coursesRouter.openapi(
+  deleteCourseRoute,
+  requireRole("admin"),
+  logAction("DELETE", "courses"),
   async (c) => {
     try {
-      const id = c.req.param('id')!;
+      const { id } = c.req.valid("param");
       const pb = getPocketBase();
-      
-      await pb.collection('courses').delete(id);
-      
-      logger.info('Course deleted', { courseId: id });
-      
-      return c.json<ApiResponse<null>>({
+
+      await pb.collection("courses").delete(id);
+
+      return c.json({
         success: true,
         data: null,
-        message: 'Course deleted successfully',
+        message: "Course deleted successfully",
       });
-      
     } catch (error) {
-      logger.error('Delete course error:', error);
-      return c.json<ApiResponse<never>>({
-        success: false,
-        error: 'Failed to delete course',
-      }, 500);
+      logger.error("Delete course error:", error);
+      return c.json(
+        {
+          success: false,
+          error: "Failed to delete course",
+        },
+        500,
+      );
     }
-  }
+  },
 );
 
 export default coursesRouter;

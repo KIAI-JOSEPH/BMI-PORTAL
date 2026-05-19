@@ -3,15 +3,16 @@
 // License: MIT
 
 import { serve } from "@hono/node-server";
-import { Hono } from "hono";
+import { OpenAPIHono } from "@hono/zod-openapi";
 import { cors } from "hono/cors";
+import { secureHeaders } from "hono/secure-headers";
 import { logger as httpLogger } from "hono/logger";
 import { rateLimiter } from "hono-rate-limiter";
 import { CONFIG, validateConfig } from "./config/index.js";
 import { logger } from "./utils/logger.js";
 import {
   getPocketBase,
-  setupCollections,
+  verifyCollections,
   healthCheck as pbHealthCheck,
   authenticateAdmin,
   createDefaultAdminIfNeeded,
@@ -27,7 +28,6 @@ import { CacheManager, QueryMonitor } from "./services/queryOptimizer.js";
 
 // OpenAPI docs
 import { apiReference } from "@scalar/hono-api-reference";
-import { openApiSpec } from "./openapi/spec.js";
 
 // Import routes
 import authRouter from "./routes/auth.js";
@@ -40,7 +40,7 @@ import financeRouter from "./routes/finance.js";
 import libraryRouter from "./routes/library.js";
 import dashboardRouter from "./routes/dashboard.js";
 import importRouter from "./routes/import.js";
-import { gradeRouter } from "./routes/grades.js";
+import gradeRouter from "./routes/grades.js";
 import { gradingScalesRouter } from "./routes/grading-scales.js";
 import { gradeAppealsRouter } from "./routes/grade-appeals.js";
 import catalogRouter from "./routes/catalog.js";
@@ -58,7 +58,7 @@ import documentsRouter from "./routes/documents.js";
 validateConfig();
 
 // Create Hono app
-const app = new Hono();
+const app = new OpenAPIHono();
 
 // ── Body size limit middleware (must be first) ────────────────────────────────
 app.use("*", async (c, next) => {
@@ -74,6 +74,7 @@ app.use("*", async (c, next) => {
 });
 
 // Middleware
+app.use("*", secureHeaders());
 app.use("*", httpLogger());
 app.use(
   "*",
@@ -198,9 +199,17 @@ app.route("/api/v1/transcripts", transcriptsRouter);
 app.route("/api/v1/documents", documentsRouter);
 
 // ── OpenAPI Documentation ────────────────────────────────────────────────────
-// GET /api/openapi.json  — machine-readable spec (useful for code generators)
-app.get("/api/openapi.json", (c) => {
-  return c.json(openApiSpec);
+// Generate OpenAPI spec from routes
+app.doc("/api/openapi.json", {
+  openapi: "3.1.0",
+  info: {
+    title: "BMI University Management System API",
+    version: "1.0.0",
+    description: "REST API for the BMI University Management System.",
+  },
+  servers: [
+    { url: "http://localhost:3001", description: "Local development" },
+  ],
 });
 
 // GET /api/docs  — Scalar interactive API reference (MIT, self-hosted)
@@ -292,12 +301,12 @@ async function startServer() {
       );
     }
 
-    // Setup collections
+    // Verify collections
     try {
-      await setupCollections();
+      await verifyCollections();
       logger.info("✓ Database schema verified");
     } catch (error) {
-      logger.warn("Database schema setup failed (may already exist):", error);
+      logger.warn("Database schema verification failed:", error);
     }
 
     try {

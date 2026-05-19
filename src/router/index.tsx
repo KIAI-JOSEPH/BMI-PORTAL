@@ -58,14 +58,18 @@ function PageLoader() {
  * (i.e. admin / staff routes that are open to all authenticated users).
  */
 function RoleGuard({
-  role,
+  allowedRoles,
   children,
 }: {
-  role: string;
+  allowedRoles: string[];
   children: React.ReactNode;
 }) {
   const user = useAuthStore((s) => s.user);
-  if (!user || user.role !== role) {
+
+  // Admin bypasses all checks
+  if (user?.role === "admin") return <>{children}</>;
+
+  if (!user || !allowedRoles.includes(user.role)) {
     return <Navigate to="/dashboard" replace />;
   }
   return <>{children}</>;
@@ -81,29 +85,12 @@ export function AppRoutes() {
       <Routes>
         <Route path="/" element={<Dashboard />} />
         <Route path="/dashboard" element={<Dashboard />} />
-        <Route path="/students" element={<Students />} />
-        <Route path="/staff" element={<Staff />} />
-        <Route path="/attendance" element={<Attendance />} />
-        <Route path="/finance" element={<Finance />} />
-        <Route path="/courses" element={<Courses />} />
-        <Route path="/exams" element={<Exams />} />
-        <Route path="/grades" element={<Grades />} />
-        <Route path="/transcripts" element={<Transcripts />} />
-        <Route path="/certificates" element={<Certificates />} />
-        <Route path="/library" element={<Library />} />
-        <Route path="/hostels" element={<Hostels />} />
-        <Route path="/medical" element={<Medical />} />
-        <Route path="/inventory" element={<Inventory />} />
-        <Route path="/alumni" element={<Alumni />} />
-        <Route path="/communications" element={<Communications />} />
-        <Route path="/visitors" element={<Visitors />} />
-        <Route path="/reports" element={<Reports />} />
-        <Route path="/settings" element={<Settings />} />
-        {/* Role-specific portals — guarded by role */}
+
+        {/* Portals */}
         <Route
           path="/student"
           element={
-            <RoleGuard role="student">
+            <RoleGuard allowedRoles={["student"]}>
               <StudentPortal />
             </RoleGuard>
           }
@@ -111,12 +98,131 @@ export function AppRoutes() {
         <Route
           path="/faculty"
           element={
-            <RoleGuard role="faculty">
+            <RoleGuard allowedRoles={["faculty"]}>
               <FacultyPortal />
             </RoleGuard>
           }
         />
-        {/* Catch-all redirect to dashboard */}
+
+        {/* Standard Modules */}
+        <Route path="/students" element={<Students />} />
+        <Route
+          path="/staff"
+          element={
+            <RoleGuard allowedRoles={["registrar"]}>
+              <Staff />
+            </RoleGuard>
+          }
+        />
+        <Route
+          path="/attendance"
+          element={
+            <RoleGuard allowedRoles={["registrar", "faculty"]}>
+              <Attendance />
+            </RoleGuard>
+          }
+        />
+        <Route
+          path="/finance"
+          element={
+            <RoleGuard allowedRoles={["registrar"]}>
+              <Finance />
+            </RoleGuard>
+          }
+        />
+        <Route path="/courses" element={<Courses />} />
+        <Route
+          path="/exams"
+          element={
+            <RoleGuard allowedRoles={["registrar", "faculty"]}>
+              <Exams />
+            </RoleGuard>
+          }
+        />
+        <Route
+          path="/grades"
+          element={
+            <RoleGuard allowedRoles={["registrar", "faculty"]}>
+              <Grades />
+            </RoleGuard>
+          }
+        />
+        <Route
+          path="/transcripts"
+          element={
+            <RoleGuard allowedRoles={["registrar"]}>
+              <Transcripts />
+            </RoleGuard>
+          }
+        />
+        <Route
+          path="/certificates"
+          element={
+            <RoleGuard allowedRoles={["registrar"]}>
+              <Certificates />
+            </RoleGuard>
+          }
+        />
+        <Route path="/library" element={<Library />} />
+        <Route
+          path="/hostels"
+          element={
+            <RoleGuard allowedRoles={["staff"]}>
+              <Hostels />
+            </RoleGuard>
+          }
+        />
+        <Route path="/medical" element={<Medical />} />
+        <Route
+          path="/inventory"
+          element={
+            <RoleGuard allowedRoles={["staff"]}>
+              <Inventory />
+            </RoleGuard>
+          }
+        />
+        <Route
+          path="/alumni"
+          element={
+            <RoleGuard allowedRoles={["registrar"]}>
+              <Alumni />
+            </RoleGuard>
+          }
+        />
+        <Route
+          path="/communications"
+          element={
+            <RoleGuard allowedRoles={["registrar", "staff"]}>
+              <Communications />
+            </RoleGuard>
+          }
+        />
+        <Route
+          path="/visitors"
+          element={
+            <RoleGuard allowedRoles={["staff"]}>
+              <Visitors />
+            </RoleGuard>
+          }
+        />
+        <Route
+          path="/reports"
+          element={
+            <RoleGuard allowedRoles={["registrar"]}>
+              <Reports />
+            </RoleGuard>
+          }
+        />
+        <Route
+          path="/settings"
+          element={
+            <RoleGuard allowedRoles={["registrar", "faculty", "staff"]}>
+              <Settings />
+            </RoleGuard>
+          }
+        />
+
+        {/* Fallback */}
         <Route path="*" element={<Navigate to="/dashboard" replace />} />
       </Routes>
     </Suspense>

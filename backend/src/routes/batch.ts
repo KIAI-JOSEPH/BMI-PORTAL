@@ -217,11 +217,15 @@ batchRouter.post(
         }
 
         const { letterGrade, gradePoints } = calculateGradeResult(it.percentage);
-        const g = await pb.collection('grades').create({
-          enrollment_id: enrollmentId,
-          percentage: it.percentage,
-          grade_letter: letterGrade,
-          gpa: gradePoints,
+        const g = await pb.collection('academic_records').create({
+          student_id: studentUuid,
+          course_id: courseUuid,
+          academic_year: it.academicYear,
+          semester: it.semester,
+          total_score: it.percentage,
+          grade: letterGrade,
+          grade_point: gradePoints,
+          remarks: it.percentage >= 50 ? 'Pass' : 'Fail',
         });
         created.push(g.id);
       } catch (e: unknown) {

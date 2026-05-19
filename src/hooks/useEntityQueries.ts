@@ -35,6 +35,7 @@ export function useStudentsQuery(params?: {
   search?: string;
   status?: string;
   campus_id?: string;
+  programme?: string;
 }) {
   return useQuery({
     queryKey: QUERY_KEYS.students(params as Record<string, unknown> | undefined),
@@ -50,19 +51,41 @@ export function useStudentsQuery(params?: {
 }
 
 // ── Staff ─────────────────────────────────────────────────────────────────────
-export function useStaffQuery(params?: { page?: number; perPage?: number }) {
+export function useStaffQuery(params?: {
+  page?: number;
+  perPage?: number;
+  department?: string;
+  search?: string;
+  campus_id?: string;
+  category?: string;
+}) {
   return useQuery({
-    queryKey: QUERY_KEYS.staff(params),
-    queryFn: () => getStaff(params ?? { perPage: 50 }),
+    queryKey: QUERY_KEYS.staff(params as Record<string, unknown> | undefined),
+    queryFn: () => {
+      if (!params) return getStaff({ perPage: 50 });
+      const { campus_id, ...rest } = params;
+      return getStaff({ ...rest, campusId: campus_id });
+    },
     staleTime: 5 * 60 * 1000,
   });
 }
 
 // ── Courses ───────────────────────────────────────────────────────────────────
-export function useCoursesQuery(params?: { page?: number; perPage?: number }) {
+export function useCoursesQuery(params?: {
+  page?: number;
+  perPage?: number;
+  search?: string;
+  campus_id?: string;
+  status?: string;
+  module_id?: string;
+}) {
   return useQuery({
-    queryKey: QUERY_KEYS.courses(params),
-    queryFn: () => getCourses(params ?? { perPage: 100 }),
+    queryKey: QUERY_KEYS.courses(params as Record<string, unknown> | undefined),
+    queryFn: () => {
+      if (!params) return getCourses({ perPage: 100 });
+      const { campus_id, module_id, ...rest } = params;
+      return getCourses({ ...rest, campusId: campus_id, moduleId: module_id });
+    },
     // Courses change very rarely
     staleTime: 10 * 60 * 1000,
   });

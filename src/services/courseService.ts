@@ -24,14 +24,22 @@ export interface CourseListResponse {
   error?: string;
 }
 
-export async function getCourses(filters?: any): Promise<CourseListResponse> {
+export async function getCourses(filters?: {
+  page?: number;
+  perPage?: number;
+  search?: string;
+  campusId?: string;
+  status?: string;
+  moduleId?: string;
+}): Promise<CourseListResponse> {
   try {
     const params = new URLSearchParams();
     if (filters?.page) params.append('page', filters.page.toString());
     if (filters?.perPage) params.append('perPage', filters.perPage.toString());
-    if (filters?.faculty) params.append('faculty', filters.faculty);
-    if (filters?.level) params.append('level', filters.level);
     if (filters?.search) params.append('search', filters.search);
+    if (filters?.campusId) params.append('campus_id', filters.campusId);
+    if (filters?.status) params.append('status', filters.status);
+    if (filters?.moduleId) params.append('module_id', filters.moduleId);
 
     const queryString = params.toString();
     const url = `${API_URL}/courses${queryString ? `?${queryString}` : ''}`;

@@ -31,6 +31,8 @@ import { getAllCampuses, Campus } from "../services/campusService";
 
 import { useDataStore } from "../stores/dataStore";
 import { usePagination } from "../hooks/usePagination";
+import { useStudentsQuery } from "../hooks/useEntityQueries";
+import { useQueryClient } from "@tanstack/react-query";
 
 interface StudentsProps {
   students?: Student[];
@@ -90,6 +92,45 @@ const Students: React.FC<StudentsProps> = (props) => {
   );
   const [isSyncing, setIsSyncing] = useState(false);
   const { page, perPage, meta, setPage, setMeta } = usePagination(50);
+  const queryClient = useQueryClient();
+
+  // ── Server-side filtered+paginated fetch ──────────────────────────────────
+  const {
+    data: studentResponse,
+    isLoading,
+    isFetching,
+    refetch,
+  } = useStudentsQuery({
+    page,
+    perPage,
+    search: searchTerm,
+    status: statusFilter !== "All Status" ? statusFilter : undefined,
+    campus_id: campusFilter !== "All Campuses" ? campusFilter : undefined,
+    programme: programFilter !== "All Programs" ? programFilter : undefined,
+  });
+
+  const pagedStudents = useMemo(
+    () => (studentResponse?.success ? studentResponse.data : []),
+    [studentResponse],
+  );
+
+  useEffect(() => {
+    if (studentResponse?.success && studentResponse.meta) {
+      setMeta(studentResponse.meta);
+    }
+  }, [studentResponse, setMeta]);
+
+  useEffect(() => {
+    // When filter changes jump back to page 1
+    setPage(1);
+  }, [
+    searchTerm,
+    statusFilter,
+    campusFilter,
+    programFilter,
+    academicLevelFilter,
+    setPage,
+  ]);
 
   useEffect(() => {
     let cancelled = false;
@@ -123,71 +164,11 @@ const Students: React.FC<StudentsProps> = (props) => {
     };
   }, []);
 
-  // ── Server-side filtered+paginated fetch ──────────────────────────────────
-  // Resets to page 1 whenever filters change, then re-fetches.
-  const [pagedStudents, setPagedStudents] = useState<Student[]>([]);
-  const [isFetching, setIsFetching] = useState(false);
-
-  useEffect(() => {
-    // When filter changes jump back to page 1 — the page change itself will
-    // trigger the fetch below.
-    setPage(1);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [
-    searchTerm,
-    statusFilter,
-    campusFilter,
-    programFilter,
-    academicLevelFilter,
-  ]);
-
-  useEffect(() => {
-    let cancelled = false;
-    setIsFetching(true);
-    const filters: StudentFilters = { page, perPage };
-    if (searchTerm) filters.search = searchTerm;
-    if (statusFilter !== "All Status") filters.status = statusFilter;
-    if (campusFilter !== "All Campuses") filters.campusId = campusFilter;
-
-    getStudents(filters)
-      .then((r) => {
-        if (cancelled) return;
-        if (r.success && r.data) {
-          setPagedStudents(r.data);
-          // If the response carries pagination meta, propagate it
-          const raw = r as {
-            meta?: { page: number; perPage: number; total: number };
-          };
-          if (raw.meta) setMeta(raw.meta);
-          else setMeta({ page, perPage, total: r.data.length });
-        }
-      })
-      .catch(() => {
-        /* fall back to store data */
-      })
-      .finally(() => {
-        if (!cancelled) setIsFetching(false);
-      });
-
-    return () => {
-      cancelled = true;
-    };
-  }, [
-    page,
-    perPage,
-    searchTerm,
-    statusFilter,
-    campusFilter,
-    programFilter,
-    academicLevelFilter,
-    setPage,
-    setMeta,
-  ]);
-
   // Use server-fetched paginated list when available, else fall back to
   // the store's in-memory list (e.g. when backend is unreachable).
   const filteredStudents = useMemo(() => {
-    if (pagedStudents.length > 0 || isFetching) return pagedStudents;
+    if ((pagedStudents && pagedStudents.length > 0) || isFetching)
+      return pagedStudents || [];
     return students.filter((student) => {
       const matchesSearch =
         `${student.full_name || `${student.first_name} ${student.last_name}`} ${student.student_code}`
@@ -278,7 +259,11 @@ const Students: React.FC<StudentsProps> = (props) => {
         perPage: 50,
         campusId: activeCampusId,
       });
-      if (r.success && r.data) setStudents(r.data);
+      if (r.success && r.data) {
+        setStudents(r.data);
+        // Also invalidate the query to refresh the current view
+        queryClient.invalidateQueries({ queryKey: ["students"] });
+      }
     } finally {
       setIsSyncing(false);
     }
@@ -292,6 +277,8 @@ const Students: React.FC<StudentsProps> = (props) => {
     if (setCourses && newCourses.length > 0) {
       setCourses((prev) => [...(newCourses as Course[]), ...prev]);
     }
+    // Refresh the view
+    queryClient.invalidateQueries({ queryKey: ["students"] });
   };
 
   return (
@@ -722,7 +709,7 @@ const Students: React.FC<StudentsProps> = (props) => {
       <ImportModal
         isOpen={isImportOpen}
         onClose={() => setIsImportOpen(false)}
-        onSuccess={() => window.location.reload()}
+        onSuccess={() => queryClient.invalidateQueries({ queryKey: ["students"] })}
       />
 
       <BulkEntryModal

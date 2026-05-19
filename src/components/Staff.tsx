@@ -26,6 +26,9 @@ import { StaffMember } from "../types";
 import { getStaff } from "../services/staffService";
 import { getAllCampuses, Campus } from "../services/campusService";
 import { useDataStore } from "../stores/dataStore";
+import { usePagination } from "../hooks/usePagination";
+import { useStaffQuery } from "../hooks/useEntityQueries";
+import { useQueryClient } from "@tanstack/react-query";
 
 const departments = [
   "All Departments",
@@ -76,6 +79,36 @@ const Staff: React.FC = () => {
     officeHours: "",
     specialization: "",
   });
+  const { page, perPage, meta, setPage, setMeta } = usePagination(20);
+  const queryClient = useQueryClient();
+
+  const {
+    data: staffResponse,
+    isLoading,
+    isFetching,
+  } = useStaffQuery({
+    page,
+    perPage,
+    search: searchTerm,
+    campus_id: campusFilter !== "All Campuses" ? campusFilter : undefined,
+    department: deptFilter !== "All Departments" ? deptFilter : undefined,
+    category: activeTab !== "All" ? activeTab : undefined,
+  });
+
+  const pagedStaff = useMemo(
+    () => (staffResponse?.success ? staffResponse.data : []),
+    [staffResponse],
+  );
+
+  useEffect(() => {
+    if (staffResponse?.success && staffResponse.meta) {
+      setMeta(staffResponse.meta);
+    }
+  }, [staffResponse, setMeta]);
+
+  useEffect(() => {
+    setPage(1);
+  }, [searchTerm, deptFilter, campusFilter, activeTab, setPage]);
 
   useEffect(() => {
     let cancelled = false;
@@ -92,30 +125,9 @@ const Staff: React.FC = () => {
     };
   }, []);
 
-  const refreshStaff = async (targetCampusId?: string) => {
-    try {
-      const activeCampusId =
-        targetCampusId !== undefined
-          ? targetCampusId
-          : campusFilter === "All Campuses"
-            ? undefined
-            : campusFilter;
-      const r = await getStaff({
-        campusId: activeCampusId,
-      });
-      if (r.success && r.data) setStaff(r.data);
-    } catch (error) {
-      console.error("Failed to refresh staff:", error);
-    }
-  };
-
-  useEffect(() => {
-    const activeCampusId =
-      campusFilter === "All Campuses" ? undefined : campusFilter;
-    refreshStaff(activeCampusId);
-  }, [campusFilter]);
-
   const filteredStaff = useMemo(() => {
+    if ((pagedStaff && pagedStaff.length > 0) || isFetching)
+      return pagedStaff || [];
     return staff.filter((member) => {
       const name =
         `${member.first_name || ""} ${member.last_name || ""}`.trim();
@@ -520,6 +532,63 @@ const Staff: React.FC = () => {
                 ))}
               </tbody>
             </table>
+          </div>
+        )}
+
+        {/* ── Pagination Bar ────────────────────────────────────── */}
+        {meta.totalPages > 1 && (
+          <div className="flex items-center justify-between bg-white dark:bg-gray-800 border border-gray-100 dark:border-gray-700 px-6 py-3 shadow-sm mt-6">
+            <span className="text-[10px] font-bold text-gray-500 uppercase tracking-widest">
+              Page {meta.page} of {meta.totalPages}
+              &nbsp;·&nbsp;{meta.total.toLocaleString()} staff
+            </span>
+            <div className="flex items-center gap-2">
+              <button
+                onClick={() => setPage(1)}
+                disabled={meta.page === 1}
+                className="px-2 py-1 text-[10px] font-black uppercase border border-gray-200 dark:border-gray-700 disabled:opacity-40 hover:bg-[#4B0082] hover:text-white hover:border-[#4B0082] transition-all"
+              >
+                «
+              </button>
+              <button
+                onClick={() => setPage(Math.max(1, page - 1))}
+                disabled={meta.page <= 1}
+                className="px-3 py-1 text-[10px] font-black uppercase border border-gray-200 dark:border-gray-700 disabled:opacity-40 hover:bg-[#4B0082] hover:text-white hover:border-[#4B0082] transition-all"
+              >
+                Prev
+              </button>
+              {Array.from({ length: Math.min(5, meta.totalPages) }, (_, i) => {
+                const p =
+                  Math.max(1, Math.min(meta.totalPages - 4, page - 2)) + i;
+                return (
+                  <button
+                    key={p}
+                    onClick={() => setPage(p)}
+                    className={`px-3 py-1 text-[10px] font-black uppercase border transition-all ${
+                      p === meta.page
+                        ? "bg-[#4B0082] text-white border-[#4B0082]"
+                        : "border-gray-200 dark:border-gray-700 hover:bg-[#4B0082] hover:text-white hover:border-[#4B0082]"
+                    }`}
+                  >
+                    {p}
+                  </button>
+                );
+              })}
+              <button
+                onClick={() => setPage(Math.min(meta.totalPages, page + 1))}
+                disabled={meta.page >= meta.totalPages}
+                className="px-3 py-1 text-[10px] font-black uppercase border border-gray-200 dark:border-gray-700 disabled:opacity-40 hover:bg-[#4B0082] hover:text-white hover:border-[#4B0082] transition-all"
+              >
+                Next
+              </button>
+              <button
+                onClick={() => setPage(meta.totalPages)}
+                disabled={meta.page >= meta.totalPages}
+                className="px-2 py-1 text-[10px] font-black uppercase border border-gray-200 dark:border-gray-700 disabled:opacity-40 hover:bg-[#4B0082] hover:text-white hover:border-[#4B0082] transition-all"
+              >
+                »
+              </button>
+            </div>
           </div>
         )}
 

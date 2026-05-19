@@ -10,7 +10,7 @@ import {
 } from 'lucide-react';
 import { useAuthStore } from '../stores/authStore';
 import { authFetch } from '../services/authService';
-import type { Grade } from '../services/gradeService';
+import type { AcademicRecordFlat } from '../services/academicRecordsService';
 
 interface FeeSummary {
   paid: number;
@@ -21,7 +21,7 @@ interface FeeSummary {
 const StudentPortal: React.FC = () => {
   const user = useAuthStore((s) => s.user);
 
-  const [grades, setGrades] = useState<Grade[]>([]);
+  const [grades, setGrades] = useState<AcademicRecordFlat[]>([]);
   const [fees, setFees] = useState<FeeSummary>({ paid: 0, pending: 0, balance: 0 });
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -62,7 +62,7 @@ const StudentPortal: React.FC = () => {
 
   // Compute GPA from grades
   const gpa = grades.length
-    ? (grades.reduce((s, g) => s + (g.gpa ?? 0), 0) / grades.length).toFixed(2)
+    ? (grades.reduce((s, g) => s + (g.gradePoint ?? 0), 0) / grades.length).toFixed(2)
     : '—';
 
   return (

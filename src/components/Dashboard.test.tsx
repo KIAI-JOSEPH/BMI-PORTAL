@@ -16,16 +16,19 @@ vi.mock('../stores/authStore', () => ({
 vi.mock('../stores/dataStore', () => ({
   useDataStore: vi.fn((selector: any) =>
     selector({
-      students: [],
-      transactions: [],
       addStudent: vi.fn(),
       addTransaction: vi.fn(),
-      getStats: () => ({ students: 0, admissions: 0, tuition: 0, events: 5 }),
     }),
   ),
 }));
 
+vi.mock('../hooks/useEntityQueries', () => ({
+  useStudentsQuery: vi.fn(() => ({ data: { data: [] }, isLoading: false })),
+  useTransactionsQuery: vi.fn(() => ({ data: { data: [] }, isLoading: false })),
+}));
+
 import Dashboard from './Dashboard';
+import { checkA11y } from '../test/axe';
 
 describe('Dashboard', () => {
   it('renders the Executive Dashboard heading', () => {
@@ -56,5 +59,14 @@ describe('Dashboard', () => {
       </MemoryRouter>,
     );
     expect(screen.getByText(/test user/i)).toBeInTheDocument();
+  });
+
+  it('has no critical or serious accessibility violations', async () => {
+    const { container } = render(
+      <MemoryRouter>
+        <Dashboard />
+      </MemoryRouter>,
+    );
+    await checkA11y(container);
   });
 });

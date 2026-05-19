@@ -1,101 +1,309 @@
 // BMI UMS - Finance Routes
-import { Hono } from "hono";
-import { zValidator } from "@hono/zod-validator";
-import { z } from "zod";
+import { OpenAPIHono, createRoute, z } from "@hono/zod-openapi";
 import { getPocketBase } from "../services/pocketbase.js";
 import { authMiddleware, requireRole, getUser } from "../middleware/auth.js";
 import { auditMiddleware, logAction } from "../middleware/audit.js";
 import { logger } from "../utils/logger.js";
+import { FinanceQueries, CacheManager } from "../services/queryOptimizer.js";
 import {
   parsePagination,
   sanitizeFilter,
   buildFilter,
   pbRecord,
 } from "../utils/helpers.js";
-import type { ApiResponse, Transaction } from "../types/index.js";
+import { ApiResponseSchema, ErrorResponseSchema } from "../openapi/common.js";
+import type { Transaction } from "../types/index.js";
+import type { AppEnv } from "../types/hono.js";
 
-const financeRouter = new Hono();
+const financeRouter = new OpenAPIHono<AppEnv>();
 
-// Apply auth middleware
+// Apply middleware
 financeRouter.use("*", authMiddleware);
 financeRouter.use("*", auditMiddleware);
 
-// Validation schemas
-const transactionSchema = z.object({
-  ref: z.string().min(1).max(50),
-  name: z.string().min(1).max(200),
-  desc: z.string().min(1).max(500),
-  amt: z.number().positive().max(10_000_000), // max 10 million per transaction
-  status: z.enum(["Paid", "Pending", "Failed"]).default("Pending"),
-  date: z.string().min(1),
-  studentId: z.string().optional(),
+financeRouter.use("/transactions", async (c, next) => {
+  const method = c.req.method;
+  if (method === "GET") {
+    return requireRole("admin", "registrar", "student")(c, next);
+  }
+  if (method === "POST") {
+    return requireRole("admin", "registrar", "staff")(c, async () => {
+      return logAction("CREATE", "transactions")(c, next);
+    });
+  }
+  await next();
 });
 
-const updateTransactionSchema = transactionSchema.partial();
+financeRouter.use("/transactions/:id", async (c, next) => {
+  const method = c.req.method;
+  if (method === "GET") {
+    return requireRole("admin", "registrar", "student")(c, next);
+  }
+  if (method === "PATCH") {
+    return requireRole("admin", "registrar", "staff")(c, async () => {
+      return logAction("UPDATE", "transactions")(c, next);
+    });
+  }
+  if (method === "DELETE") {
+    return requireRole("admin")(c, async () => {
+      return logAction("DELETE", "transactions")(c, next);
+    });
+  }
+  await next();
+});
 
-/**
- * GET /api/v1/finance/transactions
- * List all transactions
- */
-financeRouter.get(
-  "/transactions",
-  requireRole("admin", "registrar", "student"),
+// Validation schemas
+const TransactionSchema = z
+  .object({
+    id: z.string().openapi({ example: "123" }),
+    ref: z.string().min(1).max(50).openapi({ example: "TXN-001" }),
+    name: z.string().min(1).max(200).openapi({ example: "Tuition Fee" }),
+    desc: z.string().min(1).max(500).openapi({ example: "First semester tuition" }),
+    amt: z.number().positive().max(10_000_000).openapi({ example: 1500.0 }),
+    status: z.enum(["Paid", "Pending", "Failed"]).openapi({ example: "Paid" }),
+    date: z.string().openapi({ example: "2024-05-19" }),
+    student_id: z.string().optional().openapi({ example: "STU001" }),
+    created: z.string().openapi({ example: "2024-05-19T03:15:05Z" }),
+    updated: z.string().openapi({ example: "2024-05-19T03:15:05Z" }),
+  })
+  .openapi("Transaction");
+
+const TransactionInputSchema = z
+  .object({
+    ref: z.string().min(1).max(50).openapi({ example: "TXN-001" }),
+    name: z.string().min(1).max(200).openapi({ example: "Tuition Fee" }),
+    desc: z.string().min(1).max(500).openapi({ example: "First semester tuition" }),
+    amt: z.number().positive().max(10_000_000).openapi({ example: 1500.0 }),
+    status: z.enum(["Paid", "Pending", "Failed"]).default("Pending"),
+    date: z.string().openapi({ example: "2024-05-19" }),
+    studentId: z.string().optional().openapi({ example: "STU001" }),
+  })
+  .openapi("TransactionInput");
+
+// Route definitions
+const listTransactionsRoute = createRoute({
+  method: "get",
+  path: "/transactions",
+  tags: ["Finance"],
+  summary: "List transactions",
+  description: "List financial transactions with pagination and filtering",
+  request: {
+    query: z.object({
+      page: z.string().optional().openapi({ example: "1" }),
+      perPage: z.string().optional().openapi({ example: "20" }),
+      status: z.string().optional().openapi({ example: "Paid" }),
+      search: z.string().optional().openapi({ example: "Tuition" }),
+    }),
+  },
+  responses: {
+    200: {
+      content: {
+        "application/json": {
+          schema: ApiResponseSchema(z.array(TransactionSchema)),
+        },
+      },
+      description: "List of transactions",
+    },
+    500: {
+      content: {
+        "application/json": {
+          schema: ErrorResponseSchema,
+        },
+      },
+      description: "Server error",
+    },
+  },
+});
+
+const getTransactionRoute = createRoute({
+  method: "get",
+  path: "/transactions/{id}",
+  tags: ["Finance"],
+  summary: "Get transaction by ID",
+  description: "Get details of a single financial transaction",
+  request: {
+    params: z.object({
+      id: z.string().openapi({ example: "123" }),
+    }),
+  },
+  responses: {
+    200: {
+      content: {
+        "application/json": {
+          schema: ApiResponseSchema(TransactionSchema),
+        },
+      },
+      description: "Transaction details",
+    },
+    403: {
+      content: {
+        "application/json": {
+          schema: ErrorResponseSchema,
+        },
+      },
+      description: "Forbidden",
+    },
+    404: {
+      content: {
+        "application/json": {
+          schema: ErrorResponseSchema,
+        },
+      },
+      description: "Transaction not found",
+    },
+    500: {
+      content: {
+        "application/json": {
+          schema: ErrorResponseSchema,
+        },
+      },
+      description: "Server error",
+    },
+  },
+});
+
+const createTransactionRoute = createRoute({
+  method: "post",
+  path: "/transactions",
+  tags: ["Finance"],
+  summary: "Create transaction",
+  description: "Create a new financial transaction record",
+  request: {
+    body: {
+      content: {
+        "application/json": {
+          schema: TransactionInputSchema,
+        },
+      },
+    },
+  },
+  responses: {
+    201: {
+      content: {
+        "application/json": {
+          schema: ApiResponseSchema(TransactionSchema),
+        },
+      },
+      description: "Transaction created successfully",
+    },
+    500: {
+      content: {
+        "application/json": {
+          schema: ErrorResponseSchema,
+        },
+      },
+      description: "Server error",
+    },
+  },
+});
+
+const updateTransactionRoute = createRoute({
+  method: "patch",
+  path: "/transactions/{id}",
+  tags: ["Finance"],
+  summary: "Update transaction",
+  description: "Update an existing financial transaction record",
+  request: {
+    params: z.object({
+      id: z.string().openapi({ example: "123" }),
+    }),
+    body: {
+      content: {
+        "application/json": {
+          schema: TransactionInputSchema.partial(),
+        },
+      },
+    },
+  },
+  responses: {
+    200: {
+      content: {
+        "application/json": {
+          schema: ApiResponseSchema(TransactionSchema),
+        },
+      },
+      description: "Transaction updated successfully",
+    },
+    404: {
+      content: {
+        "application/json": {
+          schema: ErrorResponseSchema,
+        },
+      },
+      description: "Transaction not found",
+    },
+    500: {
+      content: {
+        "application/json": {
+          schema: ErrorResponseSchema,
+        },
+      },
+      description: "Server error",
+    },
+  },
+});
+
+const deleteTransactionRoute = createRoute({
+  method: "delete",
+  path: "/transactions/{id}",
+  tags: ["Finance"],
+  summary: "Delete transaction",
+  description: "Delete a financial transaction record",
+  request: {
+    params: z.object({
+      id: z.string().openapi({ example: "123" }),
+    }),
+  },
+  responses: {
+    200: {
+      content: {
+        "application/json": {
+          schema: ApiResponseSchema(z.null()),
+        },
+      },
+      description: "Transaction deleted successfully",
+    },
+    404: {
+      content: {
+        "application/json": {
+          schema: ErrorResponseSchema,
+        },
+      },
+      description: "Transaction not found",
+    },
+    500: {
+      content: {
+        "application/json": {
+          schema: ErrorResponseSchema,
+        },
+      },
+      description: "Server error",
+    },
+  },
+});
+
+// Implement routes
+financeRouter.openapi(
+  listTransactionsRoute,
   async (c) => {
     try {
       const user = getUser(c);
-      const pb = getPocketBase();
+      const { page: p, perPage: pp, status, search } = c.req.valid("query");
+      const { page, perPage } = parsePagination(p, pp, {
+        page: 1,
+        perPage: 20,
+        maxPerPage: 500,
+      });
 
-      // Students can only see their own transactions
-      if (user?.role === "student") {
-        const { page, perPage } = parsePagination(
-          c.req.query("page"),
-          c.req.query("perPage"),
-          { page: 1, perPage: 20, maxPerPage: 500 },
-        );
-        const studentId = user?.studentId;
-        const result = await pb
-          .collection("transactions")
-          .getList(page, perPage, {
-            filter: `student_id = "${(studentId || "").replace(/["'\\]/g, "")}"`,
-            sort: "-date",
-          });
-        return c.json<ApiResponse<Transaction[]>>({
-          success: true,
-          data: result.items as unknown as Transaction[],
-          meta: {
-            page: result.page,
-            perPage: result.perPage,
-            total: result.totalItems,
-          },
-        });
-      }
+      const result = await FinanceQueries.getWithDetails({
+        page,
+        perPage,
+        studentId: user?.role === "student" ? user?.studentId : undefined,
+        status: status || undefined,
+        search: search || undefined,
+      });
 
-      const { page, perPage } = parsePagination(
-        c.req.query("page"),
-        c.req.query("perPage"),
-        { page: 1, perPage: 20, maxPerPage: 500 },
-      );
-
-      const status = c.req.query("status");
-      const search = c.req.query("search");
-
-      const filters: string[] = [];
-      if (status) filters.push(`status = "${sanitizeFilter(status)}"`);
-      if (search) {
-        const s = sanitizeFilter(search);
-        filters.push(`(name ~ "${s}" || ref ~ "${s}" || desc ~ "${s}")`);
-      }
-
-      const filterString = buildFilter(filters);
-
-      const result = await pb
-        .collection("transactions")
-        .getList(page, perPage, {
-          ...(filterString ? { filter: filterString } : {}),
-          sort: "-date",
-        });
-
-      return c.json<ApiResponse<Transaction[]>>({
+      return c.json({
         success: true,
         data: result.items as unknown as Transaction[],
         meta: {
@@ -106,7 +314,7 @@ financeRouter.get(
       });
     } catch (error) {
       logger.error("Get transactions error:", error);
-      return c.json<ApiResponse<never>>(
+      return c.json(
         {
           success: false,
           error: "Failed to fetch transactions",
@@ -117,16 +325,11 @@ financeRouter.get(
   },
 );
 
-/**
- * GET /api/v1/finance/transactions/:id
- * Get a single transaction
- */
-financeRouter.get(
-  "/transactions/:id",
-  requireRole("admin", "registrar", "student"),
+financeRouter.openapi(
+  getTransactionRoute,
   async (c) => {
     try {
-      const id = c.req.param("id")!;
+      const { id } = c.req.valid("param");
       const user = getUser(c);
       const pb = getPocketBase();
 
@@ -139,13 +342,13 @@ financeRouter.get(
         return c.json({ success: false, error: "Forbidden" }, 403);
       }
 
-      return c.json<ApiResponse<Transaction>>({
+      return c.json({
         success: true,
         data: transaction as unknown as Transaction,
       });
     } catch (error) {
       logger.error("Get transaction error:", error);
-      return c.json<ApiResponse<never>>(
+      return c.json(
         {
           success: false,
           error: "Transaction not found",
@@ -156,31 +359,23 @@ financeRouter.get(
   },
 );
 
-/**
- * POST /api/v1/finance/transactions
- * Create a new transaction
- */
-financeRouter.post(
-  "/transactions",
-  requireRole("admin", "registrar", "staff"),
-  zValidator("json", transactionSchema),
-  logAction("CREATE", "transactions"),
+financeRouter.openapi(
+  createTransactionRoute,
   async (c) => {
     try {
       const data = c.req.valid("json");
       const pb = getPocketBase();
 
-      const { studentId, ...rest } = data as typeof data & {
-        studentId?: string;
-      };
+      const { studentId, ...rest } = data as any;
       const newTransaction = await pb.collection("transactions").create({
         ...rest,
         ...(studentId ? { student_id: studentId } : {}),
       });
 
+      CacheManager.invalidate("transactions");
       logger.info("Transaction created", { transactionId: newTransaction.id });
 
-      return c.json<ApiResponse<Transaction>>(
+      return c.json(
         {
           success: true,
           data: newTransaction as unknown as Transaction,
@@ -190,7 +385,7 @@ financeRouter.post(
       );
     } catch (error) {
       logger.error("Create transaction error:", error);
-      return c.json<ApiResponse<never>>(
+      return c.json(
         {
           success: false,
           error: "Failed to create transaction",
@@ -201,39 +396,31 @@ financeRouter.post(
   },
 );
 
-/**
- * PATCH /api/v1/finance/transactions/:id
- * Update a transaction
- */
-financeRouter.patch(
-  "/transactions/:id",
-  requireRole("admin", "registrar", "staff"),
-  zValidator("json", updateTransactionSchema),
-  logAction("UPDATE", "transactions"),
+financeRouter.openapi(
+  updateTransactionRoute,
   async (c) => {
     try {
-      const id = c.req.param("id")!;
+      const { id } = c.req.valid("param");
       const data = c.req.valid("json");
       const pb = getPocketBase();
 
-      const { studentId, ...rest } = data as typeof data & {
-        studentId?: string;
-      };
+      const { studentId, ...rest } = data as any;
       const payload: Record<string, unknown> = { ...rest };
       if (studentId !== undefined) payload.student_id = studentId;
 
       const updated = await pb.collection("transactions").update(id, payload);
 
+      CacheManager.invalidate("transactions");
       logger.info("Transaction updated", { transactionId: id });
 
-      return c.json<ApiResponse<Transaction>>({
+      return c.json({
         success: true,
         data: updated as unknown as Transaction,
         message: "Transaction updated successfully",
       });
     } catch (error) {
       logger.error("Update transaction error:", error);
-      return c.json<ApiResponse<never>>(
+      return c.json(
         {
           success: false,
           error: "Failed to update transaction",
@@ -244,170 +431,30 @@ financeRouter.patch(
   },
 );
 
-/**
- * DELETE /api/v1/finance/transactions/:id
- * Delete a transaction
- */
-financeRouter.delete(
-  "/transactions/:id",
-  requireRole("admin"),
-  logAction("DELETE", "transactions"),
+financeRouter.openapi(
+  deleteTransactionRoute,
   async (c) => {
     try {
-      const id = c.req.param("id")!;
+      const { id } = c.req.valid("param");
       const pb = getPocketBase();
 
       await pb.collection("transactions").delete(id);
 
+      CacheManager.invalidate("transactions");
       logger.info("Transaction deleted", { transactionId: id });
 
-      return c.json<ApiResponse<null>>({
+      return c.json({
         success: true,
         data: null,
         message: "Transaction deleted successfully",
       });
     } catch (error) {
       logger.error("Delete transaction error:", error);
-      return c.json<ApiResponse<never>>(
+      return c.json(
         {
           success: false,
           error: "Failed to delete transaction",
         },
-        500,
-      );
-    }
-  },
-);
-
-/**
- * GET /api/v1/finance/stats
- * Get financial statistics
- */
-financeRouter.get("/stats", requireRole("admin", "registrar"), async (c) => {
-  try {
-    const pb = getPocketBase();
-
-    const [txAll, txPaid, txPending, txFailed] = await Promise.all([
-      pb.collection("transactions").getList(1, 1),
-      pb
-        .collection("transactions")
-        .getList(1, 1, { filter: 'status = "Paid"' }),
-      pb
-        .collection("transactions")
-        .getList(1, 1, { filter: 'status = "Pending"' }),
-      pb
-        .collection("transactions")
-        .getList(1, 1, { filter: 'status = "Failed"' }),
-    ]);
-
-    // Fetch amounts for revenue calculation (last 5000 paid transactions)
-    const paidRecords = await pb.collection("transactions").getList(1, 5000, {
-      filter: 'status = "Paid"',
-      fields: "amt",
-    });
-    const pendingRecords = await pb
-      .collection("transactions")
-      .getList(1, 5000, {
-        filter: 'status = "Pending"',
-        fields: "amt",
-      });
-    const failedRecords = await pb.collection("transactions").getList(1, 5000, {
-      filter: 'status = "Failed"',
-      fields: "amt",
-    });
-
-    const totalRevenue = paidRecords.items.reduce(
-      (sum: number, t) => sum + (pbRecord<Transaction>(t).amt || 0),
-      0,
-    );
-    const pendingAmount = pendingRecords.items.reduce(
-      (sum: number, t) => sum + (pbRecord<Transaction>(t).amt || 0),
-      0,
-    );
-    const failedAmount = failedRecords.items.reduce(
-      (sum: number, t) => sum + (pbRecord<Transaction>(t).amt || 0),
-      0,
-    );
-
-    const stats = {
-      totalTransactions: txAll.totalItems,
-      totalRevenue,
-      pendingAmount,
-      failedAmount,
-      byStatus: {
-        Paid: txPaid.totalItems,
-        Pending: txPending.totalItems,
-        Failed: txFailed.totalItems,
-      },
-      averageTransaction:
-        paidRecords.items.length > 0
-          ? (totalRevenue as number) / paidRecords.items.length
-          : 0,
-    };
-
-    return c.json<ApiResponse<typeof stats>>({ success: true, data: stats });
-  } catch (error) {
-    logger.error("Get finance stats error:", error);
-    return c.json<ApiResponse<never>>(
-      { success: false, error: "Failed to fetch statistics" },
-      500,
-    );
-  }
-});
-
-/**
- * GET /api/v1/finance/reports/monthly
- * Get monthly financial report
- */
-financeRouter.get(
-  "/reports/monthly",
-  requireRole("admin", "registrar"),
-  async (c) => {
-    try {
-      const rawYear =
-        c.req.query("year") || new Date().getFullYear().toString();
-      const year = /^\d{4}$/.test(rawYear)
-        ? rawYear
-        : new Date().getFullYear().toString();
-      const pb = getPocketBase();
-
-      const transactions = (await pb
-        .collection("transactions")
-        .getList(1, 5000, {
-          filter: `date >= "${year}-01-01" && date <= "${year}-12-31"`,
-          fields: "date,status,amt",
-        })) as { items: Transaction[] };
-
-      const monthlyData = Array.from({ length: 12 }, (_, i) => {
-        const month = i + 1;
-        const monthStr = month.toString().padStart(2, "0");
-        const monthTx = transactions.items.filter((t: Transaction) =>
-          t.date?.startsWith(`${year}-${monthStr}`),
-        );
-        return {
-          month,
-          monthName: new Date(`${year}-${monthStr}-01`).toLocaleString(
-            "en-US",
-            { month: "short" },
-          ),
-          revenue: monthTx
-            .filter((t: Transaction) => t.status === "Paid")
-            .reduce((sum: number, t: Transaction) => sum + (t.amt || 0), 0),
-          pending: monthTx
-            .filter((t: Transaction) => t.status === "Pending")
-            .reduce((sum: number, t: Transaction) => sum + (t.amt || 0), 0),
-          count: monthTx.length,
-        };
-      });
-
-      return c.json<ApiResponse<typeof monthlyData>>({
-        success: true,
-        data: monthlyData,
-      });
-    } catch (error) {
-      logger.error("Get monthly report error:", error);
-      return c.json<ApiResponse<never>>(
-        { success: false, error: "Failed to generate report" },
         500,
       );
     }

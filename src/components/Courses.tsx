@@ -26,6 +26,9 @@ import {
 import { BulkEntryModal } from "./BulkEntryModal";
 import { postCourseBatch } from "../services/batchService";
 import { useDataStore } from "../stores/dataStore";
+import { usePagination } from "../hooks/usePagination";
+import { useCoursesQuery } from "../hooks/useEntityQueries";
+import { useQueryClient } from "@tanstack/react-query";
 
 const Courses: React.FC = () => {
   const courses = useDataStore((s) => s.courses);
@@ -48,22 +51,51 @@ const Courses: React.FC = () => {
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingCourse, setEditingCourse] = useState<Course | null>(null);
   const [bulkCoursesOpen, setBulkCoursesOpen] = useState(false);
+  const { page, perPage, meta, setPage, setMeta } = usePagination(50);
+  const queryClient = useQueryClient();
+
+  const {
+    data: courseResponse,
+    isLoading,
+    isFetching,
+  } = useCoursesQuery({
+    page,
+    perPage,
+    search: searchTerm,
+  });
+
+  const pagedCourses = useMemo(
+    () => (courseResponse?.success ? courseResponse.data : []),
+    [courseResponse],
+  );
+
+  React.useEffect(() => {
+    if (courseResponse?.success && courseResponse.meta) {
+      setMeta(courseResponse.meta);
+    }
+  }, [courseResponse, setMeta]);
+
+  React.useEffect(() => {
+    setPage(1);
+  }, [searchTerm, facultyFilter, activeLevel, setPage]);
 
   const facultyOptions = useMemo(() => {
     const fromData = [
-      ...new Set(courses.map((c) => c.category).filter(Boolean)),
+      ...new Set(courses.map((c) => c.faculty).filter(Boolean)),
     ];
     return ["All Faculty", ...fromData.sort()];
   }, [courses]);
 
   const filteredCourses = useMemo(() => {
+    if ((pagedCourses && pagedCourses.length > 0) || isFetching)
+      return pagedCourses || [];
     return courses.filter((course) => {
       const matchesSearch =
         course.title.toLowerCase().includes(searchTerm.toLowerCase()) ||
         course.code.toLowerCase().includes(searchTerm.toLowerCase());
       const matchesFaculty =
         facultyFilter === "All Faculty" ||
-        (course.category ?? "") === facultyFilter;
+        (course.faculty ?? "") === facultyFilter;
 
       let matchesLevel = true;
       if (activeLevel !== "All Levels") {
@@ -467,6 +499,63 @@ const Courses: React.FC = () => {
                 </p>
               </div>
             )}
+          </div>
+        )}
+
+        {/* ── Pagination Bar ────────────────────────────────────── */}
+        {meta.totalPages > 1 && (
+          <div className="flex items-center justify-between bg-white dark:bg-gray-800 border border-gray-100 dark:border-gray-700 px-6 py-3 shadow-sm mt-6">
+            <span className="text-[10px] font-bold text-gray-500 uppercase tracking-widest">
+              Page {meta.page} of {meta.totalPages}
+              &nbsp;·&nbsp;{meta.total.toLocaleString()} courses
+            </span>
+            <div className="flex items-center gap-2">
+              <button
+                onClick={() => setPage(1)}
+                disabled={meta.page === 1}
+                className="px-2 py-1 text-[10px] font-black uppercase border border-gray-200 dark:border-gray-700 disabled:opacity-40 hover:bg-[#4B0082] hover:text-white hover:border-[#4B0082] transition-all"
+              >
+                «
+              </button>
+              <button
+                onClick={() => setPage(Math.max(1, page - 1))}
+                disabled={meta.page <= 1}
+                className="px-3 py-1 text-[10px] font-black uppercase border border-gray-200 dark:border-gray-700 disabled:opacity-40 hover:bg-[#4B0082] hover:text-white hover:border-[#4B0082] transition-all"
+              >
+                Prev
+              </button>
+              {Array.from({ length: Math.min(5, meta.totalPages) }, (_, i) => {
+                const p =
+                  Math.max(1, Math.min(meta.totalPages - 4, page - 2)) + i;
+                return (
+                  <button
+                    key={p}
+                    onClick={() => setPage(p)}
+                    className={`px-3 py-1 text-[10px] font-black uppercase border transition-all ${
+                      p === meta.page
+                        ? "bg-[#4B0082] text-white border-[#4B0082]"
+                        : "border-gray-200 dark:border-gray-700 hover:bg-[#4B0082] hover:text-white hover:border-[#4B0082]"
+                    }`}
+                  >
+                    {p}
+                  </button>
+                );
+              })}
+              <button
+                onClick={() => setPage(Math.min(meta.totalPages, page + 1))}
+                disabled={meta.page >= meta.totalPages}
+                className="px-3 py-1 text-[10px] font-black uppercase border border-gray-200 dark:border-gray-700 disabled:opacity-40 hover:bg-[#4B0082] hover:text-white hover:border-[#4B0082] transition-all"
+               >
+                Next
+              </button>
+              <button
+                onClick={() => setPage(meta.totalPages)}
+                disabled={meta.page >= meta.totalPages}
+                className="px-2 py-1 text-[10px] font-black uppercase border border-gray-200 dark:border-gray-700 disabled:opacity-40 hover:bg-[#4B0082] hover:text-white hover:border-[#4B0082] transition-all"
+              >
+                »
+              </button>
+            </div>
           </div>
         )}
       </div>

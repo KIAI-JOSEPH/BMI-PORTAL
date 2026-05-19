@@ -36,11 +36,30 @@ import {
 import { BulkEntryModal } from "./BulkEntryModal";
 import { postTransactionBatch } from "../services/batchService";
 import { useDataStore } from "../stores/dataStore";
+import { useTransactionsQuery, useStudentsQuery, useStaffQuery } from "../hooks/useEntityQueries";
+import { usePagination } from "../hooks/usePagination";
 
 const Finance: React.FC = () => {
-  const students = useDataStore((s) => s.students);
-  const staff = useDataStore((s) => s.staff);
-  const transactions = useDataStore((s) => s.transactions);
+  const { page, perPage, setPage, setMeta, meta } = usePagination(50);
+
+  // Fetch data using TanStack Query
+  const { data: studentsRes, isLoading: isLoadingStudents } = useStudentsQuery({
+    page: 1,
+    perPage: 1000, // Fetch more for ledger until server-side aggregation is ready
+  });
+  const { data: staffRes, isLoading: isLoadingStaff } = useStaffQuery({
+    page: 1,
+    perPage: 1000,
+  });
+  const { data: transactionsRes, isLoading: isLoadingTransactions } = useTransactionsQuery({
+    page: 1,
+    perPage: 1000,
+  });
+
+  const students = studentsRes?.data || [];
+  const staff = staffRes?.data || [];
+  const transactions = transactionsRes?.data || [];
+
   const _setTransactions = useDataStore((s) => s.setTransactions);
   const setTransactions = (action: React.SetStateAction<Transaction[]>) => {
     if (typeof action === "function") {

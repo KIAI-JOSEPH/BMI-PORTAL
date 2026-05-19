@@ -1,5 +1,5 @@
 import { describe, it, expect, vi } from "vitest";
-import { gradeRouter } from "./grades.js";
+import gradeRouter from "./grades.js";
 
 // Mock auth so we can exercise grading handlers without real JWTs.
 vi.mock("../middleware/auth.js", () => ({

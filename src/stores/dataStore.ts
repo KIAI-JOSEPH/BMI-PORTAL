@@ -100,7 +100,7 @@ export const useDataStore = create<DataState>((set, get) => ({
   fetchStudents: async () => {
     set({ isLoadingStudents: true });
     try {
-      const result = await getStudents({ perPage: 1000 });
+      const result = await getStudents({ perPage: 50 });
       if (result.success && result.data) {
         set({ students: result.data, isLoadingStudents: false });
       } else {
@@ -118,7 +118,7 @@ export const useDataStore = create<DataState>((set, get) => ({
   fetchStaff: async () => {
     set({ isLoadingStaff: true });
     try {
-      const result = await getStaff({ perPage: 500 });
+      const result = await getStaff({ perPage: 100 });
       if (result.success && result.data) {
         set({ staff: result.data, isLoadingStaff: false });
       } else {
@@ -132,7 +132,7 @@ export const useDataStore = create<DataState>((set, get) => ({
   fetchCourses: async () => {
     set({ isLoadingCourses: true });
     try {
-      const result = await getCourses({ perPage: 500 });
+      const result = await getCourses({ perPage: 100 });
       if (result.success && result.data) {
         set({ courses: result.data, isLoadingCourses: false });
       } else {
@@ -146,7 +146,7 @@ export const useDataStore = create<DataState>((set, get) => ({
   fetchTransactions: async () => {
     set({ isLoadingTransactions: true });
     try {
-      const result = await getTransactions({ perPage: 500 });
+      const result = await getTransactions({ perPage: 100 });
       if (result.success && result.data) {
         set({ transactions: result.data, isLoadingTransactions: false });
       } else {
@@ -160,7 +160,7 @@ export const useDataStore = create<DataState>((set, get) => ({
   fetchLibrary: async () => {
     set({ isLoadingLibrary: true });
     try {
-      const result = await getLibraryItems({ perPage: 500 });
+      const result = await getLibraryItems({ perPage: 100 });
       if (result.success && result.data) {
         set({ library: result.data, isLoadingLibrary: false });
       } else {
@@ -184,11 +184,11 @@ export const useDataStore = create<DataState>((set, get) => ({
   fetchAllCoreData: async () => {
     try {
       const [stuRes, st, co, lib, tx, ca] = await Promise.all([
-        getStudents({ perPage: 1000 }),
-        getStaff({ perPage: 500 }),
-        getCourses({ perPage: 500 }),
-        getLibraryItems({ perPage: 500 }),
-        getTransactions({ perPage: 500 }),
+        getStudents({ perPage: 50 }),
+        getStaff({ perPage: 100 }),
+        getCourses({ perPage: 100 }),
+        getLibraryItems({ perPage: 100 }),
+        getTransactions({ perPage: 100 }),
         getAllCampuses(),
       ]);
       set({

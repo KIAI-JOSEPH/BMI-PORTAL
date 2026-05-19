@@ -28,6 +28,7 @@ import {
 import { LibraryItem, Course } from "../types";
 import { getAIResponse } from "../services/aiService";
 import { useDataStore } from "../stores/dataStore";
+import { useLibraryQuery, useCoursesQuery } from "../hooks/useEntityQueries";
 
 function extractMetadataFromDoc(
   base64String: string,
@@ -44,7 +45,18 @@ function extractMetadataFromDoc(
 }
 
 export const Library: React.FC = () => {
-  const library = useDataStore((s) => s.library);
+  const { data: libraryRes, isLoading: isLoadingLibrary } = useLibraryQuery({
+    page: 1,
+    perPage: 500,
+  });
+  const { data: coursesRes } = useCoursesQuery({
+    page: 1,
+    perPage: 500,
+  });
+
+  const library = libraryRes?.data || [];
+  const courses = coursesRes?.data || [];
+
   const _setLibrary = useDataStore((s) => s.setLibrary);
   const setLibrary = (action: React.SetStateAction<LibraryItem[]>) => {
     if (typeof action === "function") {
@@ -57,7 +69,6 @@ export const Library: React.FC = () => {
       _setLibrary(action);
     }
   };
-  const courses = useDataStore((s) => s.courses);
   const [searchTerm, setSearchTerm] = useState("");
   const [categoryFilter, setCategoryFilter] = useState("All");
   const [typeFilter, setTypeFilter] = useState("All");

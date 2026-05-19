@@ -16,13 +16,18 @@ import {
 } from "lucide-react";
 import { Student } from "../types";
 import { useDataStore } from "../stores/dataStore";
+import { useStudentsQuery } from "../hooks/useEntityQueries";
 
 interface AttendanceState {
   [studentId: string]: "present" | "absent" | "late";
 }
 
 const Attendance: React.FC = () => {
-  const students = useDataStore((s) => s.students);
+  const { data: studentsRes, isLoading: isLoadingStudents } = useStudentsQuery({
+    page: 1,
+    perPage: 1000,
+  });
+  const students = studentsRes?.data || [];
   const [selectedCourse, setSelectedCourse] = useState("School of Theology");
   const [searchTerm, setSearchTerm] = useState("");
   const [attendance, setAttendance] = useState<AttendanceState>({});

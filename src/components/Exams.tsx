@@ -27,11 +27,11 @@ import GradeEntryModal, { GradeFormData } from "./grading/GradeEntryModal";
 import { GradingScaleType } from "../grading/types";
 
 import {
-  createGrade,
-  updateGrade,
-  getGrades,
-  Grade,
-} from "../services/gradeService";
+  createAcademicRecord,
+  updateAcademicRecord,
+  getAcademicRecords,
+  type AcademicRecordFlat,
+} from "../services/academicRecordsService";
 import { useDataStore } from "../stores/dataStore";
 
 interface ExamRecord {
@@ -74,7 +74,7 @@ const Exams: React.FC = () => {
   const [isAddGradeOpen, setIsAddGradeOpen] = useState(false);
   const [editingGrade, setEditingGrade] = useState<GradeRecord | null>(null);
 
-  const [savedGrades, setSavedGrades] = useState<Grade[]>([]);
+  const [savedGrades, setSavedGrades] = useState<AcademicRecordFlat[]>([]);
   const [isLoadingGrades, setIsLoadingGrades] = useState(false);
   const [isSavingGrade, setIsSavingGrade] = useState(false);
 
@@ -83,18 +83,14 @@ const Exams: React.FC = () => {
     const loadGrades = async () => {
       setIsLoadingGrades(true);
       try {
-        console.log("[Exams] Loading grades from database...");
-        const result = await getGrades({ perPage: 500 });
+        const result = await getAcademicRecords({ perPage: 500 });
 
-        if (result.success && result.data) {
-          console.log("[Exams] Loaded grades:", result.data.items.length);
-          setSavedGrades(result.data.items);
+        if (result.items) {
+          setSavedGrades(result.items);
         } else {
-          console.error("[Exams] Failed to load grades:", result.error);
           setSavedGrades([]);
         }
       } catch (error) {
-        console.error("[Exams] Exception loading grades:", error);
         setSavedGrades([]);
       } finally {
         setIsLoadingGrades(false);
@@ -104,69 +100,41 @@ const Exams: React.FC = () => {
     loadGrades();
   }, []);
 
-  const handleSaveGrade = async (gradeData: GradeFormData) => {
+  const handleSaveGrade = async (data: GradeFormData) => {
     setIsSavingGrade(true);
-
     try {
-      console.log("[Exams] Saving grade to database:", gradeData);
+      const student = students.find((s) => `${s.first_name} ${s.last_name}` === data.studentName);
+      const course = courses.find((c) => c.title === data.courseName);
 
-      const percentage =
-        gradeData.components?.reduce((sum, c) => sum + (c.score || 0), 0) || 0;
+      if (!student || !course) {
+        throw new Error("Student or course not found");
+      }
 
       if (editingGrade && editingGrade.id.startsWith("DB-")) {
-        // Update existing database grade
         const gradeId = editingGrade.id.replace("DB-", "");
-        const result = await updateGrade(gradeId, {
-          percentage: percentage,
-          academicYear: gradeData.academicYear,
-          semester: gradeData.semester,
+        await updateAcademicRecord(gradeId, {
+          total_score: data.percentage,
         });
-
-        if (result.success && result.data) {
-          console.log("[Exams] Grade updated successfully:", result.data);
-          // Update local state
-          setSavedGrades((prev) =>
-            prev.map((g) => (g.id === gradeId ? result.data! : g)),
-          );
-          alert("Grade updated successfully!");
-        } else {
-          console.error("[Exams] Failed to update grade:", result.error);
-          alert(`Failed to update grade: ${result.error}`);
-        }
-      } else if (editingGrade && !editingGrade.id.startsWith("DB-")) {
-        // Obsolete local imported exam update
-        alert("Cannot update local imported exam.");
-      } else {
-        // Create new grade in database
-        const result = await createGrade({
-          studentId: gradeData.studentId,
-          studentName: gradeData.studentName,
-          admissionNo: gradeData.admissionNo,
-          courseCode: gradeData.courseCode,
-          courseName: gradeData.courseName,
-          percentage: percentage,
-          academicYear:
-            gradeData.academicYear || new Date().getFullYear().toString(),
-          semester: gradeData.semester || "Fall",
+      } else if (!editingGrade) {
+        await createAcademicRecord({
+          student_id: student.id,
+          course_id: course.id,
+          total_score: data.percentage,
+          academic_year: data.academicYear || new Date().getFullYear().toString(),
         });
-
-        if (result.success && result.data) {
-          console.log("[Exams] Grade created successfully:", result.data);
-          // Add to local state
-          setSavedGrades((prev) => [result.data!, ...prev]);
-          alert("Grade saved successfully!");
-        } else {
-          console.error("[Exams] Failed to create grade:", result.error);
-          alert(`Failed to save grade: ${result.error}`);
-        }
       }
+
+      // Refresh grades
+      const result = await getAcademicRecords({ perPage: 500 });
+      if (result.items) setSavedGrades(result.items);
+
+      setIsAddGradeOpen(false);
+      setEditingGrade(null);
     } catch (error) {
-      console.error("[Exams] Exception saving grade:", error);
-      alert("An unexpected error occurred while saving the grade.");
+      console.error("Error saving grade:", error);
+      alert("An error occurred while saving the grade.");
     } finally {
       setIsSavingGrade(false);
-      setEditingGrade(null);
-      setIsAddGradeOpen(false);
     }
   };
 

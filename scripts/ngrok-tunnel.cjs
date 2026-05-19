@@ -180,7 +180,7 @@ async function main() {
   
   const ngPid = startDetached(
     NGROK_EXE,
-    ["http", `--domain=${ngrokDomain}`, String(TUNNEL_PORT), "--log=stdout"],
+    ["http", `--domain=${ngrokDomain}`, `127.0.0.1:${TUNNEL_PORT}`, "--log=stdout"],
     { cwd: ROOT, stdout: NGROK_LOG, stderr: NGROK_LOG },
   );
 

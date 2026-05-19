@@ -27,6 +27,7 @@ import StudentRegistrationModal from "./StudentRegistrationModal";
 import { Student } from "../types";
 import { useAuthStore } from "../stores/authStore";
 import { useDataStore } from "../stores/dataStore";
+import { useStudentsQuery, useTransactionsQuery } from "../hooks/useEntityQueries";
 
 /** Short month names for chart labels */
 const MONTHS = [
@@ -47,11 +48,14 @@ const MONTHS = [
 const Dashboard: React.FC = () => {
   const navigate = useNavigate();
   const user = useAuthStore((s) => s.user);
-  // Select stable array references — never call computed methods directly
-  // in a Zustand selector because they return new objects every render and
-  // trigger useSyncExternalStore's infinite-loop detection.
-  const transactions = useDataStore((s) => s.transactions);
-  const students = useDataStore((s) => s.students);
+
+  // Fetch data using TanStack Query
+  const { data: studentsRes } = useStudentsQuery({ page: 1, perPage: 1000 });
+  const { data: transactionsRes } = useTransactionsQuery({ page: 1, perPage: 1000 });
+
+  const students = studentsRes?.data || [];
+  const transactions = transactionsRes?.data || [];
+
   const addStudent = useDataStore((s) => s.addStudent);
   const addTransaction = useDataStore((s) => s.addTransaction);
 
@@ -241,7 +245,10 @@ const Dashboard: React.FC = () => {
           </p>
         </div>
         <div className="flex gap-3 pl-14 md:pl-0 w-full md:w-auto justify-end">
-          <button className="p-1.5 bg-white dark:bg-gray-800 rounded-none shadow-sm border border-gray-100 dark:border-gray-700 text-gray-500 hover:text-[#4B0082] transition-colors relative">
+          <button
+            aria-label="View Notifications"
+            className="p-1.5 bg-white dark:bg-gray-800 rounded-none shadow-sm border border-gray-100 dark:border-gray-700 text-gray-500 hover:text-[#4B0082] transition-colors relative"
+          >
             <Bell size={14} />
             <span className="absolute top-1.5 right-1.5 w-1.5 h-1.5 bg-red-500 rounded-full animate-pulse"></span>
           </button>

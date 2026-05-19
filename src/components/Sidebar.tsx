@@ -105,7 +105,68 @@ const Sidebar: React.FC<SidebarProps> = ({
     { id: "reports", label: "Reports", icon: FileBarChart },
     { id: "ai", label: "AI Assistant", icon: Bot },
     { id: "settings", label: "Settings", icon: Settings },
-  ];
+  ].filter((item) => {
+    // Admin sees everything
+    if (user?.role === "admin") return true;
+
+    // AI and Settings are available to all staff-level roles
+    if (["ai", "settings"].includes(item.id)) {
+      return user?.role !== "student";
+    }
+
+    // Role-specific visibility
+    switch (user?.role) {
+      case "student":
+        return ["student", "library", "medical", "ai"].includes(item.id);
+
+      case "faculty":
+        return [
+          "faculty",
+          "dashboard",
+          "students",
+          "attendance",
+          "courses",
+          "exams",
+          "grades",
+          "library",
+        ].includes(item.id);
+
+      case "registrar":
+        return [
+          "dashboard",
+          "students",
+          "staff",
+          "attendance",
+          "courses",
+          "exams",
+          "grades",
+          "transcripts",
+          "certificates",
+          "reports",
+          "alumni",
+        ].includes(item.id);
+
+      case "staff":
+        return [
+          "dashboard",
+          "students",
+          "library",
+          "hostels",
+          "medical",
+          "inventory",
+          "visitors",
+        ].includes(item.id);
+
+      case "viewer":
+        return ["dashboard", "students", "courses", "library"].includes(
+          item.id,
+        );
+
+      default:
+        // Default: only dashboard
+        return ["dashboard"].includes(item.id);
+    }
+  });
 
   const handleNavigate = (viewId: string) => {
     if (viewId === "ai") {

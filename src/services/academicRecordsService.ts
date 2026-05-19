@@ -170,12 +170,16 @@ export async function getAcademicRecords(
 
   if (!body.success) throw new Error(body.error ?? 'Failed to fetch academic records');
 
-  const items: AcademicRecordFlat[] = (body.data?.items ?? []).map(flattenRecord);
+  const rawItems = Array.isArray(body.data)
+    ? body.data
+    : (body.data?.items ?? []);
+  const items: AcademicRecordFlat[] = rawItems.map(flattenRecord);
+  
   return {
     items,
-    total:   body.data?.total    ?? body.data?.totalItems ?? items.length,
-    page:    body.data?.page     ?? 1,
-    perPage: body.data?.perPage  ?? items.length,
+    total:   body.meta?.total    ?? body.data?.total    ?? body.data?.totalItems ?? items.length,
+    page:    body.meta?.page     ?? body.data?.page     ?? 1,
+    perPage: body.meta?.perPage  ?? body.data?.perPage  ?? items.length,
   };
 }
 

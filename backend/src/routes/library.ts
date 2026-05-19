@@ -1,72 +1,364 @@
 // BMI UMS - Library Routes
-import { Hono } from 'hono';
-import { zValidator } from '@hono/zod-validator';
-import { z } from 'zod';
-import { getPocketBase } from '../services/pocketbase.js';
-import { authMiddleware, requireRole } from '../middleware/auth.js';
-import { auditMiddleware, logAction } from '../middleware/audit.js';
-import { logger } from '../utils/logger.js';
-import { parsePagination, sanitizeFilter, buildFilter } from '../utils/helpers.js';
-import type { ApiResponse, LibraryItem } from '../types/index.js';
+import { OpenAPIHono, createRoute, z } from "@hono/zod-openapi";
+import { getPocketBase } from "../services/pocketbase.js";
+import { authMiddleware, requireRole } from "../middleware/auth.js";
+import { auditMiddleware, logAction } from "../middleware/audit.js";
+import { logger } from "../utils/logger.js";
+import { LibraryQueries, CacheManager } from "../services/queryOptimizer.js";
+import {
+  parsePagination,
+  sanitizeFilter,
+  buildFilter,
+} from "../utils/helpers.js";
+import { ApiResponseSchema, ErrorResponseSchema } from "../openapi/common.js";
+import type { LibraryItem } from "../types/index.js";
+import type { AppEnv } from "../types/hono.js";
 
-const libraryRouter = new Hono();
+const libraryRouter = new OpenAPIHono<AppEnv>();
 
-// Apply auth middleware
-libraryRouter.use('*', authMiddleware);
-libraryRouter.use('*', auditMiddleware);
+// Apply middleware
+libraryRouter.use("*", authMiddleware);
+libraryRouter.use("*", auditMiddleware);
 
 // Validation schemas
-const libraryItemSchema = z.object({
-  title: z.string().min(2),
-  author: z.string().min(1),
-  category: z.enum(['Theology', 'ICT', 'Business', 'Education', 'General']),
-  type: z.enum(['PDF', 'E-Book', 'Hardcopy', 'Journal', 'Video']),
-  status: z.enum(['Digital', 'Available', 'Borrowed', 'Reserved']).default('Available'),
-  year: z.string().min(4),
-  description: z.string().min(10),
-  downloadUrl: z.string().url().optional().or(z.literal('')),
-  location: z.string().optional(),
-  isbn: z.string().optional(),
+const LibraryItemSchema = z
+  .object({
+    id: z.string().openapi({ example: "LIB-2024-123" }),
+    title: z.string().openapi({ example: "Introduction to Theology" }),
+    author: z.string().openapi({ example: "John Smith" }),
+    category: z
+      .enum(["Theology", "ICT", "Business", "Education", "General"])
+      .openapi({ example: "Theology" }),
+    type: z
+      .enum(["PDF", "E-Book", "Hardcopy", "Journal", "Video"])
+      .openapi({ example: "PDF" }),
+    status: z
+      .enum(["Digital", "Available", "Borrowed", "Reserved"])
+      .openapi({ example: "Digital" }),
+    year: z.string().openapi({ example: "2023" }),
+    description: z.string().openapi({ example: "A comprehensive guide..." }),
+    downloadUrl: z.string().optional().openapi({ example: "https://..." }),
+    location: z.string().optional().openapi({ example: "Shelf A1" }),
+    isbn: z.string().optional().openapi({ example: "978-3-16-148410-0" }),
+    created: z.string().openapi({ example: "2024-05-19T03:15:05Z" }),
+    updated: z.string().openapi({ example: "2024-05-19T03:15:05Z" }),
+  })
+  .openapi("LibraryItem");
+
+const LibraryItemInputSchema = z
+  .object({
+    title: z.string().min(2).openapi({ example: "Introduction to Theology" }),
+    author: z.string().min(1).openapi({ example: "John Smith" }),
+    category: z
+      .enum(["Theology", "ICT", "Business", "Education", "General"])
+      .openapi({ example: "Theology" }),
+    type: z
+      .enum(["PDF", "E-Book", "Hardcopy", "Journal", "Video"])
+      .openapi({ example: "PDF" }),
+    status: z
+      .enum(["Digital", "Available", "Borrowed", "Reserved"])
+      .default("Available"),
+    year: z.string().min(4).openapi({ example: "2023" }),
+    description: z.string().min(10).openapi({ example: "A comprehensive..." }),
+    downloadUrl: z.string().url().optional().or(z.literal("")),
+    location: z.string().optional().openapi({ example: "Shelf A1" }),
+    isbn: z.string().optional().openapi({ example: "978-3-16-148410-0" }),
+  })
+  .openapi("LibraryItemInput");
+
+// Route definitions
+const listLibraryItemsRoute = createRoute({
+  method: "get",
+  path: "/",
+  tags: ["Library"],
+  summary: "List library items",
+  description: "List library items with pagination and filtering",
+  request: {
+    query: z.object({
+      page: z.string().optional().openapi({ example: "1" }),
+      perPage: z.string().optional().openapi({ example: "20" }),
+      category: z.string().optional().openapi({ example: "Theology" }),
+      type: z.string().optional().openapi({ example: "PDF" }),
+      status: z.string().optional().openapi({ example: "Available" }),
+      search: z.string().optional().openapi({ example: "Theology" }),
+    }),
+  },
+  responses: {
+    200: {
+      content: {
+        "application/json": {
+          schema: ApiResponseSchema(z.array(LibraryItemSchema)),
+        },
+      },
+      description: "List of library items",
+    },
+    500: {
+      content: {
+        "application/json": {
+          schema: ErrorResponseSchema,
+        },
+      },
+      description: "Server error",
+    },
+  },
 });
 
-const updateLibraryItemSchema = libraryItemSchema.partial();
+const getLibraryItemRoute = createRoute({
+  method: "get",
+  path: "/{id}",
+  tags: ["Library"],
+  summary: "Get library item by ID",
+  description: "Get details of a single library item",
+  request: {
+    params: z.object({
+      id: z.string().openapi({ example: "LIB-2024-123" }),
+    }),
+  },
+  responses: {
+    200: {
+      content: {
+        "application/json": {
+          schema: ApiResponseSchema(LibraryItemSchema),
+        },
+      },
+      description: "Library item details",
+    },
+    404: {
+      content: {
+        "application/json": {
+          schema: ErrorResponseSchema,
+        },
+      },
+      description: "Library item not found",
+    },
+    500: {
+      content: {
+        "application/json": {
+          schema: ErrorResponseSchema,
+        },
+      },
+      description: "Server error",
+    },
+  },
+});
 
-/**
- * GET /api/v1/library
- * List all library items
- */
-libraryRouter.get('/', async (c) => {
+const createLibraryItemRoute = createRoute({
+  method: "post",
+  path: "/",
+  tags: ["Library"],
+  summary: "Create library item",
+  description: "Create a new library item record",
+  request: {
+    body: {
+      content: {
+        "application/json": {
+          schema: LibraryItemInputSchema,
+        },
+      },
+    },
+  },
+  responses: {
+    201: {
+      content: {
+        "application/json": {
+          schema: ApiResponseSchema(LibraryItemSchema),
+        },
+      },
+      description: "Library item created successfully",
+    },
+    500: {
+      content: {
+        "application/json": {
+          schema: ErrorResponseSchema,
+        },
+      },
+      description: "Server error",
+    },
+  },
+});
+
+const updateLibraryItemRoute = createRoute({
+  method: "patch",
+  path: "/{id}",
+  tags: ["Library"],
+  summary: "Update library item",
+  description: "Update an existing library item record",
+  request: {
+    params: z.object({
+      id: z.string().openapi({ example: "LIB-2024-123" }),
+    }),
+    body: {
+      content: {
+        "application/json": {
+          schema: LibraryItemInputSchema.partial(),
+        },
+      },
+    },
+  },
+  responses: {
+    200: {
+      content: {
+        "application/json": {
+          schema: ApiResponseSchema(LibraryItemSchema),
+        },
+      },
+      description: "Library item updated successfully",
+    },
+    404: {
+      content: {
+        "application/json": {
+          schema: ErrorResponseSchema,
+        },
+      },
+      description: "Library item not found",
+    },
+    500: {
+      content: {
+        "application/json": {
+          schema: ErrorResponseSchema,
+        },
+      },
+      description: "Server error",
+    },
+  },
+});
+
+const deleteLibraryItemRoute = createRoute({
+  method: "delete",
+  path: "/{id}",
+  tags: ["Library"],
+  summary: "Delete library item",
+  description: "Delete a library item record",
+  request: {
+    params: z.object({
+      id: z.string().openapi({ example: "LIB-2024-123" }),
+    }),
+  },
+  responses: {
+    200: {
+      content: {
+        "application/json": {
+          schema: ApiResponseSchema(z.null()),
+        },
+      },
+      description: "Library item deleted successfully",
+    },
+    404: {
+      content: {
+        "application/json": {
+          schema: ErrorResponseSchema,
+        },
+      },
+      description: "Library item not found",
+    },
+    500: {
+      content: {
+        "application/json": {
+          schema: ErrorResponseSchema,
+        },
+      },
+      description: "Server error",
+    },
+  },
+});
+
+const borrowItemRoute = createRoute({
+  method: "post",
+  path: "/{id}/borrow",
+  tags: ["Library"],
+  summary: "Borrow library item",
+  description: "Mark a library item as borrowed",
+  request: {
+    params: z.object({
+      id: z.string().openapi({ example: "LIB-2024-123" }),
+    }),
+  },
+  responses: {
+    200: {
+      content: {
+        "application/json": {
+          schema: ApiResponseSchema(LibraryItemSchema),
+        },
+      },
+      description: "Item marked as borrowed",
+    },
+    400: {
+      content: {
+        "application/json": {
+          schema: ErrorResponseSchema,
+        },
+      },
+      description: "Item not available",
+    },
+    500: {
+      content: {
+        "application/json": {
+          schema: ErrorResponseSchema,
+        },
+      },
+      description: "Server error",
+    },
+  },
+});
+
+const returnItemRoute = createRoute({
+  method: "post",
+  path: "/{id}/return",
+  tags: ["Library"],
+  summary: "Return library item",
+  description: "Mark a library item as available",
+  request: {
+    params: z.object({
+      id: z.string().openapi({ example: "LIB-2024-123" }),
+    }),
+  },
+  responses: {
+    200: {
+      content: {
+        "application/json": {
+          schema: ApiResponseSchema(LibraryItemSchema),
+        },
+      },
+      description: "Item marked as available",
+    },
+    500: {
+      content: {
+        "application/json": {
+          schema: ErrorResponseSchema,
+        },
+      },
+      description: "Server error",
+    },
+  },
+});
+
+// Implement routes
+libraryRouter.openapi(listLibraryItemsRoute, async (c) => {
   try {
-    const pb = getPocketBase();
-
-    const { page, perPage } = parsePagination(
-      c.req.query('page'),
-      c.req.query('perPage'),
-      { page: 1, perPage: 20, maxPerPage: 500 }
-    );
-
-    const category = c.req.query('category');
-    const type = c.req.query('type');
-    const status = c.req.query('status');
-    const search = c.req.query('search');
-
-    const filters: string[] = [];
-    if (category) filters.push(`category = "${sanitizeFilter(category)}"`);
-    if (type) filters.push(`type = "${sanitizeFilter(type)}"`);
-    if (status) filters.push(`status = "${sanitizeFilter(status)}"`);
-    if (search) {
-      const s = sanitizeFilter(search);
-      filters.push(`(title ~ "${s}" || author ~ "${s}" || isbn ~ "${s}")`);
-    }
-
-    const filterString = buildFilter(filters);
-
-    const result = await pb.collection('library_items').getList(page, perPage, {
-      ...(filterString ? { filter: filterString } : {}),
-      sort: '-created',
+    const {
+      page: p,
+      perPage: pp,
+      category,
+      type,
+      status,
+      search,
+    } = c.req.valid("query");
+    const { page, perPage } = parsePagination(p, pp, {
+      page: 1,
+      perPage: 20,
+      maxPerPage: 500,
     });
 
-    return c.json<ApiResponse<LibraryItem[]>>({
+    const result = await LibraryQueries.getWithDetails({
+      page,
+      perPage,
+      category: category || undefined,
+      type: type || undefined,
+      status: status || undefined,
+      search: search || undefined,
+    });
+
+    return c.json({
       success: true,
       data: result.items as unknown as LibraryItem[],
       meta: {
@@ -75,53 +367,48 @@ libraryRouter.get('/', async (c) => {
         total: result.totalItems,
       },
     });
-
   } catch (error) {
-    logger.error('Get library items error:', error);
-    return c.json<ApiResponse<never>>({
-      success: false,
-      error: 'Failed to fetch library items',
-    }, 500);
+    logger.error("Get library items error:", error);
+    return c.json(
+      {
+        success: false,
+        error: "Failed to fetch library items",
+      },
+      500,
+    );
   }
 });
 
-/**
- * GET /api/v1/library/:id
- * Get a single library item
- */
-libraryRouter.get('/:id', async (c) => {
+libraryRouter.openapi(getLibraryItemRoute, async (c) => {
   try {
-    const id = c.req.param('id')!;
+    const { id } = c.req.valid("param");
     const pb = getPocketBase();
 
-    const item = await pb.collection('library_items').getOne(id);
+    const item = await pb.collection("library_items").getOne(id);
 
-    return c.json<ApiResponse<LibraryItem>>({
+    return c.json({
       success: true,
       data: item as unknown as LibraryItem,
     });
-
   } catch (error) {
-    logger.error('Get library item error:', error);
-    return c.json<ApiResponse<never>>({
-      success: false,
-      error: 'Library item not found',
-    }, 404);
+    logger.error("Get library item error:", error);
+    return c.json(
+      {
+        success: false,
+        error: "Library item not found",
+      },
+      404,
+    );
   }
 });
 
-/**
- * POST /api/v1/library
- * Create a new library item
- */
-libraryRouter.post(
-  '/',
-  requireRole('admin', 'registrar', 'staff'),
-  zValidator('json', libraryItemSchema),
-  logAction('CREATE', 'library'),
+libraryRouter.openapi(
+  createLibraryItemRoute,
+  requireRole("admin", "registrar", "staff"),
+  logAction("CREATE", "library"),
   async (c) => {
     try {
-      const data = c.req.valid('json');
+      const data = c.req.valid("json");
       const pb = getPocketBase();
 
       // Generate item ID
@@ -129,240 +416,186 @@ libraryRouter.post(
       const randomSuffix = Math.floor(Math.random() * 900) + 100;
       const itemId = `LIB-${year}-${randomSuffix}`;
 
-      const newItem = await pb.collection('library_items').create({
+      const newItem = await pb.collection("library_items").create({
         id: itemId,
         ...data,
       });
 
-      logger.info('Library item created', { itemId: newItem.id });
+      CacheManager.invalidate("library_items");
+      logger.info("Library item created", { itemId: newItem.id });
 
-      return c.json<ApiResponse<LibraryItem>>({
-        success: true,
-        data: newItem as unknown as LibraryItem,
-        message: 'Library item added successfully',
-      }, 201);
-
+      return c.json(
+        {
+          success: true,
+          data: newItem as unknown as LibraryItem,
+          message: "Library item added successfully",
+        },
+        201,
+      );
     } catch (error) {
-      logger.error('Create library item error:', error);
-      return c.json<ApiResponse<never>>({
-        success: false,
-        error: 'Failed to add library item',
-      }, 500);
+      logger.error("Create library item error:", error);
+      return c.json(
+        {
+          success: false,
+          error: "Failed to add library item",
+        },
+        500,
+      );
     }
-  }
+  },
 );
 
-/**
- * PATCH /api/v1/library/:id
- * Update a library item
- */
-libraryRouter.patch(
-  '/:id',
-  requireRole('admin', 'registrar', 'staff'),
-  zValidator('json', updateLibraryItemSchema),
-  logAction('UPDATE', 'library'),
+libraryRouter.openapi(
+  updateLibraryItemRoute,
+  requireRole("admin", "registrar", "staff"),
+  logAction("UPDATE", "library"),
   async (c) => {
     try {
-      const id = c.req.param('id')!;
-      const data = c.req.valid('json');
+      const { id } = c.req.valid("param");
+      const data = c.req.valid("json");
       const pb = getPocketBase();
 
-      const updated = await pb.collection('library_items').update(id, data);
+      const updated = await pb.collection("library_items").update(id, data);
 
-      logger.info('Library item updated', { itemId: id });
+      CacheManager.invalidate("library_items");
+      logger.info("Library item updated", { itemId: id });
 
-      return c.json<ApiResponse<LibraryItem>>({
+      return c.json({
         success: true,
         data: updated as unknown as LibraryItem,
-        message: 'Library item updated successfully',
+        message: "Library item updated successfully",
       });
-
     } catch (error) {
-      logger.error('Update library item error:', error);
-      return c.json<ApiResponse<never>>({
-        success: false,
-        error: 'Failed to update library item',
-      }, 500);
+      logger.error("Update library item error:", error);
+      return c.json(
+        {
+          success: false,
+          error: "Failed to update library item",
+        },
+        500,
+      );
     }
-  }
+  },
 );
 
-/**
- * DELETE /api/v1/library/:id
- * Delete a library item
- */
-libraryRouter.delete(
-  '/:id',
-  requireRole('admin'),
-  logAction('DELETE', 'library'),
+libraryRouter.openapi(
+  deleteLibraryItemRoute,
+  requireRole("admin"),
+  logAction("DELETE", "library"),
   async (c) => {
     try {
-      const id = c.req.param('id')!;
+      const { id } = c.req.valid("param");
       const pb = getPocketBase();
 
-      await pb.collection('library_items').delete(id);
+      await pb.collection("library_items").delete(id);
 
-      logger.info('Library item deleted', { itemId: id });
+      CacheManager.invalidate("library_items");
+      logger.info("Library item deleted", { itemId: id });
 
-      return c.json<ApiResponse<null>>({
+      return c.json({
         success: true,
         data: null,
-        message: 'Library item deleted successfully',
+        message: "Library item deleted successfully",
       });
-
     } catch (error) {
-      logger.error('Delete library item error:', error);
-      return c.json<ApiResponse<never>>({
-        success: false,
-        error: 'Failed to delete library item',
-      }, 500);
+      logger.error("Delete library item error:", error);
+      return c.json(
+        {
+          success: false,
+          error: "Failed to delete library item",
+        },
+        500,
+      );
     }
-  }
+  },
 );
 
-/**
- * POST /api/v1/library/:id/borrow
- * Mark item as borrowed
- */
-libraryRouter.post(
-  '/:id/borrow',
-  requireRole('admin', 'registrar', 'staff'),
-  logAction('UPDATE', 'library'),
+libraryRouter.openapi(
+  borrowItemRoute,
+  requireRole("admin", "registrar", "staff"),
+  logAction("UPDATE", "library"),
   async (c) => {
     try {
-      const id = c.req.param('id')!;
+      const { id } = c.req.valid("param");
       const pb = getPocketBase();
 
-      const item = await pb.collection('library_items').getOne(id) as unknown as LibraryItem;
+      const item = (await pb
+        .collection("library_items")
+        .getOne(id)) as unknown as LibraryItem;
 
-      if (item.status !== 'Available' && item.status !== 'Digital') {
-        return c.json<ApiResponse<never>>({
-          success: false,
-          error: `Item is currently ${item.status.toLowerCase()}`,
-        }, 400);
+      if (item.status !== "Available" && item.status !== "Digital") {
+        return c.json(
+          {
+            success: false,
+            error: `Item is currently ${item.status.toLowerCase()}`,
+          },
+          400,
+        );
       }
 
-      const updated = await pb.collection('library_items').update(id, {
-        status: 'Borrowed',
+      const updated = await pb.collection("library_items").update(id, {
+        status: "Borrowed",
       });
 
-      logger.info('Library item borrowed', { itemId: id });
+      CacheManager.invalidate("library_items");
+      logger.info("Library item borrowed", { itemId: id });
 
-      return c.json<ApiResponse<LibraryItem>>({
+      return c.json({
         success: true,
         data: updated as unknown as LibraryItem,
-        message: 'Item marked as borrowed',
+        message: "Item marked as borrowed",
       });
-
     } catch (error) {
-      logger.error('Borrow library item error:', error);
-      return c.json<ApiResponse<never>>({
-        success: false,
-        error: 'Failed to borrow item',
-      }, 500);
+      logger.error("Borrow item error:", error);
+      return c.json(
+        {
+          success: false,
+          error: "Failed to process borrow request",
+        },
+        500,
+      );
     }
-  }
+  },
 );
 
-/**
- * POST /api/v1/library/:id/return
- * Mark item as returned
- */
-libraryRouter.post(
-  '/:id/return',
-  requireRole('admin', 'registrar', 'staff'),
-  logAction('UPDATE', 'library'),
+libraryRouter.openapi(
+  returnItemRoute,
+  requireRole("admin", "registrar", "staff"),
+  logAction("UPDATE", "library"),
   async (c) => {
     try {
-      const id = c.req.param('id')!;
+      const { id } = c.req.valid("param");
       const pb = getPocketBase();
 
-      const item = await pb.collection('library_items').getOne(id) as unknown as LibraryItem;
+      const item = (await pb
+        .collection("library_items")
+        .getOne(id)) as unknown as LibraryItem;
 
-      const newStatus = item.type === 'PDF' || item.type === 'E-Book' || item.type === 'Video'
-        ? 'Digital'
-        : 'Available';
+      const newStatus = item.type === "PDF" ? "Digital" : "Available";
 
-      const updated = await pb.collection('library_items').update(id, {
+      const updated = await pb.collection("library_items").update(id, {
         status: newStatus,
       });
 
-      logger.info('Library item returned', { itemId: id });
+      CacheManager.invalidate("library_items");
+      logger.info("Library item returned", { itemId: id });
 
-      return c.json<ApiResponse<LibraryItem>>({
+      return c.json({
         success: true,
         data: updated as unknown as LibraryItem,
-        message: 'Item marked as returned',
+        message: "Item marked as available",
       });
-
     } catch (error) {
-      logger.error('Return library item error:', error);
-      return c.json<ApiResponse<never>>({
-        success: false,
-        error: 'Failed to return item',
-      }, 500);
+      logger.error("Return item error:", error);
+      return c.json(
+        {
+          success: false,
+          error: "Failed to process return request",
+        },
+        500,
+      );
     }
-  }
+  },
 );
-
-/**
- * GET /api/v1/library/stats/overview
- * Get library statistics
- */
-libraryRouter.get('/stats/overview', async (c) => {
-  try {
-    const pb = getPocketBase();
-
-    const allItems = await pb.collection('library_items').getFullList();
-    const items = allItems as unknown as LibraryItem[];
-
-    const stats = {
-      total: items.length,
-      byCategory: {
-        Theology: items.filter(i => i.category === 'Theology').length,
-        ICT: items.filter(i => i.category === 'ICT').length,
-        Business: items.filter(i => i.category === 'Business').length,
-        Education: items.filter(i => i.category === 'Education').length,
-        General: items.filter(i => i.category === 'General').length,
-      },
-      byType: {
-        PDF: items.filter(i => i.type === 'PDF').length,
-        'E-Book': items.filter(i => i.type === 'E-Book').length,
-        Hardcopy: items.filter(i => i.type === 'Hardcopy').length,
-        Journal: items.filter(i => i.type === 'Journal').length,
-        Video: items.filter(i => i.type === 'Video').length,
-      },
-      byStatus: {
-        Digital: items.filter(i => i.status === 'Digital').length,
-        Available: items.filter(i => i.status === 'Available').length,
-        Borrowed: items.filter(i => i.status === 'Borrowed').length,
-        Reserved: items.filter(i => i.status === 'Reserved').length,
-      },
-    };
-
-    return c.json<ApiResponse<typeof stats>>({
-      success: true,
-      data: stats,
-    });
-
-  } catch (error) {
-    logger.error('Get library stats error:', error);
-    return c.json<ApiResponse<never>>({
-      success: false,
-      error: 'Failed to fetch statistics',
-    }, 500);
-  }
-});
-
-/**
- * GET /api/v1/library/categories
- * Get all library categories
- */
-libraryRouter.get('/meta/categories', async (c) => {
-  return c.json<ApiResponse<string[]>>({
-    success: true,
-    data: ['Theology', 'ICT', 'Business', 'Education', 'General'],
-  });
-});
 
 export default libraryRouter;

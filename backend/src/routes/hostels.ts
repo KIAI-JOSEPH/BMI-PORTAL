@@ -2,109 +2,360 @@
  * BMI UMS - Hostels Routes
  * API-backed CRUD for hostel management (previously localStorage-only).
  */
-import { Hono } from 'hono';
-import { z } from 'zod';
-import { zValidator } from '@hono/zod-validator';
-import { getPocketBase } from '../services/pocketbase.js';
-import { authMiddleware, requireRole } from '../middleware/auth.js';
-import { logger } from '../utils/logger.js';
-import type { ApiResponse } from '../types/index.js';
+import { OpenAPIHono, createRoute, z } from "@hono/zod-openapi";
+import { getPocketBase } from "../services/pocketbase.js";
+import { authMiddleware, requireRole } from "../middleware/auth.js";
+import { logger } from "../utils/logger.js";
+import { HostelQueries, CacheManager } from "../services/queryOptimizer.js";
+import { ApiResponseSchema, ErrorResponseSchema } from "../openapi/common.js";
+import type { AppEnv } from "../types/hono.js";
 
-const hostelRouter = new Hono();
-hostelRouter.use('*', authMiddleware);
+const hostelRouter = new OpenAPIHono<AppEnv>();
+hostelRouter.use("*", authMiddleware);
 
-const hostelSchema = z.object({
-  name: z.string().min(1),
-  type: z.enum(['Male', 'Female']),
-  capacity: z.number().int().positive(),
-  location: z.string().min(1),
-  status: z.enum(['Available', 'Near Capacity', 'Full']).default('Available'),
+// Validation schemas
+const HostelSchema = z
+  .object({
+    id: z.string().openapi({ example: "123" }),
+    name: z.string().openapi({ example: "Mount Zion Hostel" }),
+    type: z.enum(["Male", "Female"]).openapi({ example: "Male" }),
+    capacity: z.number().int().positive().openapi({ example: 100 }),
+    location: z.string().openapi({ example: "North Wing" }),
+    status: z
+      .enum(["Available", "Near Capacity", "Full"])
+      .openapi({ example: "Available" }),
+    created: z.string().openapi({ example: "2024-05-19T03:15:05Z" }),
+    updated: z.string().openapi({ example: "2024-05-19T03:15:05Z" }),
+  })
+  .openapi("Hostel");
+
+const RoomAssignmentSchema = z
+  .object({
+    id: z.string().openapi({ example: "assignment1" }),
+    studentId: z.string().openapi({ example: "STU001" }),
+    studentName: z.string().openapi({ example: "John Doe" }),
+    hostelId: z.string().openapi({ example: "hostel1" }),
+    roomNumber: z.string().openapi({ example: "101" }),
+    checkInDate: z.string().openapi({ example: "2024-05-19" }),
+    status: z.enum(["Active", "Revoked"]).openapi({ example: "Active" }),
+    created: z.string().openapi({ example: "2024-05-19T03:15:05Z" }),
+    updated: z.string().openapi({ example: "2024-05-19T03:15:05Z" }),
+  })
+  .openapi("RoomAssignment");
+
+const HostelInputSchema = HostelSchema.omit({
+  id: true,
+  created: true,
+  updated: true,
+});
+const RoomAssignmentInputSchema = RoomAssignmentSchema.omit({
+  id: true,
+  created: true,
+  updated: true,
 });
 
-const roomAssignmentSchema = z.object({
-  studentId: z.string().min(1),
-  studentName: z.string().min(1),
-  hostelId: z.string().min(1),
-  roomNumber: z.string().min(1),
-  checkInDate: z.string(),
-  status: z.enum(['Active', 'Revoked']).default('Active'),
+// Route definitions
+const listHostelsRoute = createRoute({
+  method: "get",
+  path: "/",
+  tags: ["Hostels"],
+  summary: "List all hostels",
+  description: "Get a full list of all hostels",
+  responses: {
+    200: {
+      content: {
+        "application/json": {
+          schema: ApiResponseSchema(z.array(HostelSchema)),
+        },
+      },
+      description: "List of hostels",
+    },
+    500: {
+      content: {
+        "application/json": {
+          schema: ErrorResponseSchema,
+        },
+      },
+      description: "Server error",
+    },
+  },
 });
 
-// GET /api/v1/hostels — List all hostels
-hostelRouter.get('/', async (c) => {
+const createHostelRoute = createRoute({
+  method: "post",
+  path: "/",
+  tags: ["Hostels"],
+  summary: "Create a hostel",
+  description: "Create a new hostel record",
+  request: {
+    body: {
+      content: {
+        "application/json": {
+          schema: HostelInputSchema,
+        },
+      },
+    },
+  },
+  responses: {
+    201: {
+      content: {
+        "application/json": {
+          schema: ApiResponseSchema(HostelSchema),
+        },
+      },
+      description: "Hostel created successfully",
+    },
+    500: {
+      content: {
+        "application/json": {
+          schema: ErrorResponseSchema,
+        },
+      },
+      description: "Server error",
+    },
+  },
+});
+
+const updateHostelRoute = createRoute({
+  method: "patch",
+  path: "/{id}",
+  tags: ["Hostels"],
+  summary: "Update a hostel",
+  description: "Update an existing hostel record",
+  request: {
+    params: z.object({
+      id: z.string().openapi({ example: "123" }),
+    }),
+    body: {
+      content: {
+        "application/json": {
+          schema: HostelInputSchema.partial(),
+        },
+      },
+    },
+  },
+  responses: {
+    200: {
+      content: {
+        "application/json": {
+          schema: ApiResponseSchema(HostelSchema),
+        },
+      },
+      description: "Hostel updated successfully",
+    },
+    404: {
+      content: {
+        "application/json": {
+          schema: ErrorResponseSchema,
+        },
+      },
+      description: "Hostel not found",
+    },
+    500: {
+      content: {
+        "application/json": {
+          schema: ErrorResponseSchema,
+        },
+      },
+      description: "Server error",
+    },
+  },
+});
+
+const deleteHostelRoute = createRoute({
+  method: "delete",
+  path: "/{id}",
+  tags: ["Hostels"],
+  summary: "Delete a hostel",
+  description: "Delete a hostel record",
+  request: {
+    params: z.object({
+      id: z.string().openapi({ example: "123" }),
+    }),
+  },
+  responses: {
+    200: {
+      content: {
+        "application/json": {
+          schema: ApiResponseSchema(z.null()),
+        },
+      },
+      description: "Hostel deleted successfully",
+    },
+    404: {
+      content: {
+        "application/json": {
+          schema: ErrorResponseSchema,
+        },
+      },
+      description: "Hostel not found",
+    },
+    500: {
+      content: {
+        "application/json": {
+          schema: ErrorResponseSchema,
+        },
+      },
+      description: "Server error",
+    },
+  },
+});
+
+const listAssignmentsRoute = createRoute({
+  method: "get",
+  path: "/assignments",
+  tags: ["Hostels"],
+  summary: "List room assignments",
+  description: "Get a full list of all room assignments",
+  responses: {
+    200: {
+      content: {
+        "application/json": {
+          schema: ApiResponseSchema(z.array(RoomAssignmentSchema)),
+        },
+      },
+      description: "List of room assignments",
+    },
+    500: {
+      content: {
+        "application/json": {
+          schema: ErrorResponseSchema,
+        },
+      },
+      description: "Server error",
+    },
+  },
+});
+
+const createAssignmentRoute = createRoute({
+  method: "post",
+  path: "/assignments",
+  tags: ["Hostels"],
+  summary: "Create a room assignment",
+  description: "Create a new room assignment record",
+  request: {
+    body: {
+      content: {
+        "application/json": {
+          schema: RoomAssignmentInputSchema,
+        },
+      },
+    },
+  },
+  responses: {
+    201: {
+      content: {
+        "application/json": {
+          schema: ApiResponseSchema(RoomAssignmentSchema),
+        },
+      },
+      description: "Room assignment created successfully",
+    },
+    500: {
+      content: {
+        "application/json": {
+          schema: ErrorResponseSchema,
+        },
+      },
+      description: "Server error",
+    },
+  },
+});
+
+// Implement routes
+hostelRouter.openapi(listHostelsRoute, async (c) => {
   try {
-    const pb = getPocketBase();
-    const records = await pb.collection('hostels').getFullList({ sort: '-created' });
-    return c.json<ApiResponse<any>>({ success: true, data: records });
+    const result = await HostelQueries.getHostels();
+    return c.json({ success: true, data: result.items as any });
   } catch (error) {
-    logger.error('List hostels error:', error);
-    return c.json<ApiResponse<never>>({ success: false, error: 'Failed to fetch hostels' }, 500);
+    logger.error("List hostels error:", error);
+    return c.json({ success: false, error: "Failed to fetch hostels" }, 500);
   }
 });
 
-// POST /api/v1/hostels — Create a hostel
-hostelRouter.post('/', requireRole('admin', 'registrar', 'staff'), zValidator('json', hostelSchema), async (c) => {
+hostelRouter.openapi(
+  createHostelRoute,
+  requireRole("admin", "registrar", "staff"),
+  async (c) => {
+    try {
+      const data = c.req.valid("json");
+      const pb = getPocketBase();
+      const record = await pb.collection("hostels").create(data);
+      CacheManager.invalidate("hostels");
+      return c.json({ success: true, data: record as any }, 201);
+    } catch (error) {
+      logger.error("Create hostel error:", error);
+      return c.json({ success: false, error: "Failed to create hostel" }, 500);
+    }
+  },
+);
+
+hostelRouter.openapi(
+  updateHostelRoute,
+  requireRole("admin", "registrar", "staff"),
+  async (c) => {
+    try {
+      const { id } = c.req.valid("param");
+      const data = c.req.valid("json");
+      const pb = getPocketBase();
+      const record = await pb.collection("hostels").update(id, data);
+      CacheManager.invalidate("hostels");
+      return c.json({ success: true, data: record as any });
+    } catch (error) {
+      logger.error("Update hostel error:", error);
+      return c.json({ success: false, error: "Failed to update hostel" }, 500);
+    }
+  },
+);
+
+hostelRouter.openapi(
+  deleteHostelRoute,
+  requireRole("admin", "registrar"),
+  async (c) => {
+    try {
+      const { id } = c.req.valid("param");
+      const pb = getPocketBase();
+      await pb.collection("hostels").delete(id);
+      CacheManager.invalidate("hostels");
+      return c.json({ success: true, data: null });
+    } catch (error) {
+      logger.error("Delete hostel error:", error);
+      return c.json({ success: false, error: "Failed to delete hostel" }, 500);
+    }
+  },
+);
+
+hostelRouter.openapi(listAssignmentsRoute, async (c) => {
   try {
-    const data = c.req.valid('json');
-    const pb = getPocketBase();
-    const record = await pb.collection('hostels').create(data);
-    return c.json<ApiResponse<any>>({ success: true, data: record }, 201);
+    const result = await HostelQueries.getAssignments();
+    return c.json({ success: true, data: result.items as any });
   } catch (error) {
-    logger.error('Create hostel error:', error);
-    return c.json<ApiResponse<never>>({ success: false, error: 'Failed to create hostel' }, 500);
+    logger.error("List room assignments error:", error);
+    return c.json(
+      { success: false, error: "Failed to fetch room assignments" },
+      500,
+    );
   }
 });
 
-// PATCH /api/v1/hostels/:id — Update a hostel
-hostelRouter.patch('/:id', requireRole('admin', 'registrar', 'staff'), zValidator('json', hostelSchema.partial()), async (c) => {
-  try {
-    const id = c.req.param('id')!;
-    const data = c.req.valid('json');
-    const pb = getPocketBase();
-    const record = await pb.collection('hostels').update(id, data);
-    return c.json<ApiResponse<any>>({ success: true, data: record });
-  } catch (error) {
-    logger.error('Update hostel error:', error);
-    return c.json<ApiResponse<never>>({ success: false, error: 'Failed to update hostel' }, 500);
-  }
-});
-
-// DELETE /api/v1/hostels/:id — Delete a hostel
-hostelRouter.delete('/:id', requireRole('admin', 'registrar'), async (c) => {
-  try {
-    const id = c.req.param('id')!;
-    const pb = getPocketBase();
-    await pb.collection('hostels').delete(id);
-    return c.json<ApiResponse<null>>({ success: true, data: null });
-  } catch (error) {
-    logger.error('Delete hostel error:', error);
-    return c.json<ApiResponse<never>>({ success: false, error: 'Failed to delete hostel' }, 500);
-  }
-});
-
-// GET /api/v1/hostels/assignments — List room assignments
-hostelRouter.get('/assignments', async (c) => {
-  try {
-    const pb = getPocketBase();
-    const records = await pb.collection('room_assignments').getFullList({ sort: '-created' });
-    return c.json<ApiResponse<any>>({ success: true, data: records });
-  } catch (error) {
-    logger.error('List room assignments error:', error);
-    return c.json<ApiResponse<never>>({ success: false, error: 'Failed to fetch room assignments' }, 500);
-  }
-});
-
-// POST /api/v1/hostels/assignments — Create a room assignment
-hostelRouter.post('/assignments', requireRole('admin', 'registrar', 'staff'), zValidator('json', roomAssignmentSchema), async (c) => {
-  try {
-    const data = c.req.valid('json');
-    const pb = getPocketBase();
-    const record = await pb.collection('room_assignments').create(data);
-    return c.json<ApiResponse<any>>({ success: true, data: record }, 201);
-  } catch (error) {
-    logger.error('Create room assignment error:', error);
-    return c.json<ApiResponse<never>>({ success: false, error: 'Failed to create room assignment' }, 500);
-  }
-});
+hostelRouter.openapi(
+  createAssignmentRoute,
+  requireRole("admin", "registrar", "staff"),
+  async (c) => {
+    try {
+      const data = c.req.valid("json");
+      const pb = getPocketBase();
+      const record = await pb.collection("room_assignments").create(data);
+      CacheManager.invalidate("room_assignments");
+      return c.json({ success: true, data: record as any }, 201);
+    } catch (error) {
+      logger.error("Create room assignment error:", error);
+      return c.json(
+        { success: false, error: "Failed to create room assignment" },
+        500,
+      );
+    }
+  },
+);
 
 export default hostelRouter;

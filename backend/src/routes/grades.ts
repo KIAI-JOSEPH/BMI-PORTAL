@@ -3,8 +3,7 @@
  * Handles comprehensive grade management with weighted assessments
  */
 
-import { Hono } from "hono";
-import { z } from "zod";
+import { OpenAPIHono, createRoute, z } from "@hono/zod-openapi";
 import { getPocketBase } from "../services/pocketbase.js";
 import { logger } from "../utils/logger.js";
 import { authMiddleware, requireRole, getUser } from "../middleware/auth.js";
@@ -17,16 +16,37 @@ import {
   errorMessage,
   pbRecord,
 } from "../utils/helpers.js";
+import { ApiResponseSchema, ErrorResponseSchema } from "../openapi/common.js";
 
-export interface ApiResponse<T> {
-  success: boolean;
-  data?: T;
-  error?: string;
-  message?: string;
-}
-
-const gradeRouter = new Hono<AppEnv>();
+const gradeRouter = new OpenAPIHono<AppEnv>();
 gradeRouter.use("*", authMiddleware);
+
+gradeRouter.use("/", async (c, next) => {
+  const method = c.req.method;
+  if (method === "GET") {
+    return requireRole("admin", "registrar", "faculty", "staff")(c, next);
+  }
+  if (method === "POST") {
+    return requireRole("admin", "registrar", "faculty")(c, next);
+  }
+  await next();
+});
+
+gradeRouter.use("/transcript/:studentId", requireRole("admin", "registrar", "faculty", "staff", "student"));
+
+gradeRouter.use("/:id", async (c, next) => {
+  const method = c.req.method;
+  if (method === "GET") {
+    return requireRole("admin", "registrar", "faculty", "staff")(c, next);
+  }
+  if (method === "PUT" || method === "PATCH") {
+    return requireRole("admin", "registrar", "faculty")(c, next);
+  }
+  if (method === "DELETE") {
+    return requireRole("admin", "registrar")(c, next);
+  }
+  await next();
+});
 
 type GradeComponentScore = {
   componentId: string;
@@ -41,9 +61,6 @@ type GradeComponentScore = {
 function calculatePercentageFromComponents(
   components: GradeComponentScore[],
 ): number {
-  // Weighted average normalized to 0-100.
-  // Formula matches the frontend WeightedGradeCalculator:
-  // final = Σ((score/maxScore) * weight) / Σ(weight) * 100
   const totalWeight = components.reduce((sum, c) => sum + (c.weight || 0), 0);
   if (totalWeight <= 0) return 0;
   const weightedSum = components.reduce((sum, c) => {
@@ -66,9 +83,6 @@ function mapExpandedGradeToFrontendShape(
     createdBy?: string;
   },
 ) {
-  // Support BOTH data shapes:
-  // Shape A (academic_records): expand.student_id, expand.course_id, field: total_score, grade, grade_point
-  // Shape B (grades collection): expand.enrollment_id.expand.student_number, .course_code, field: percentage, grade_letter, gpa
   const enroll = expanded.expand?.enrollment_id as ExpandedRecord | undefined;
   const student = (expanded.expand?.student_id ??
     enroll?.expand?.student_number) as ExpandedRecord | undefined;
@@ -114,12 +128,9 @@ function mapExpandedGradeToFrontendShape(
     : "Unknown Student";
 
   return {
-    // ── Identity ──────────────────────────────────────────────────────────────
     id: expanded.id,
     studentId: student?.id || expanded.student_id || "",
     courseId: course?.id || expanded.course_id || "",
-
-    // ── Student ───────────────────────────────────────────────────────────────
     studentName,
     studentCode: student?.student_code || "",
     regNo: student?.reg_no || "",
@@ -131,20 +142,14 @@ function mapExpandedGradeToFrontendShape(
     gender: student?.gender || "",
     campusName: campus?.name || "",
     campusId: student?.campus_id || "",
-
-    // ── Course ────────────────────────────────────────────────────────────────
     courseCode: course?.code || course?.course_code || "",
     courseName: course?.title || course?.name || "Unknown Course",
     credits: creditHours,
     creditHours,
     category: course?.category || "",
     module: module?.name || "",
-
-    // ── Academic period ───────────────────────────────────────────────────────
     academicYear: expanded.academic_year || "2025",
     semester: expanded.semester || module?.semester || "",
-
-    // ── Grading ───────────────────────────────────────────────────────────────
     numericGrade: percentage,
     percentage,
     total_score: percentage,
@@ -156,17 +161,11 @@ function mapExpandedGradeToFrontendShape(
     remarks: expanded.remarks || (percentage >= 50 ? "Pass" : "Fail"),
     ca_score: expanded.ca_score ?? null,
     exam_score: expanded.exam_score ?? null,
-
-    // ── Component scores (empty for bulk-imported data) ───────────────────────
     components: options.components || [],
     gradingScaleId: options.gradingScaleType || "US_4_0",
     gradingScaleType: options.gradingScaleType || "US_4_0",
-
-    // ── Flags ─────────────────────────────────────────────────────────────────
     isRetake: false,
     status: options.status || "Verified",
-
-    // ── Audit ─────────────────────────────────────────────────────────────────
     createdAt: expanded.created,
     updatedAt: expanded.updated,
     createdBy: options.createdBy || "system",
@@ -174,633 +173,591 @@ function mapExpandedGradeToFrontendShape(
   };
 }
 
-// Component score schema
-const componentScoreSchema = z.object({
-  componentId: z.string(),
-  componentType: z.string(),
-  score: z.number().min(0),
-  maxScore: z.number().min(1),
-  weight: z.number().min(0).max(100),
-  gradedAt: z.string().optional(),
-  feedback: z.string().optional(),
+// Validation schemas
+const ComponentScoreSchema = z
+  .object({
+    componentId: z.string().openapi({ example: "comp1" }),
+    componentType: z.string().openapi({ example: "Exam" }),
+    score: z.number().min(0).openapi({ example: 85 }),
+    maxScore: z.number().min(1).openapi({ example: 100 }),
+    weight: z.number().min(0).max(100).openapi({ example: 60 }),
+    gradedAt: z.string().optional().openapi({ example: "2024-05-19" }),
+    feedback: z.string().optional().openapi({ example: "Well done!" }),
+  })
+  .openapi("GradeComponentScore");
+
+const GradeSchema = z
+  .object({
+    id: z.string().openapi({ example: "123" }),
+    studentId: z.string().min(1).openapi({ example: "STU001" }),
+    studentName: z.string().optional().openapi({ example: "John Doe" }),
+    admissionNo: z.string().optional().openapi({ example: "ADM001" }),
+    courseId: z.string().optional().openapi({ example: "CRS001" }),
+    courseCode: z.string().min(1).openapi({ example: "THEO101" }),
+    courseName: z.string().optional().openapi({ example: "Systematic Theology" }),
+    credits: z.number().optional().openapi({ example: 3 }),
+    gradingScaleId: z.string().optional().openapi({ example: "US_4_0" }),
+    gradingScaleType: z.string().optional().openapi({ example: "US_4_0" }),
+    components: z.array(ComponentScoreSchema).optional(),
+    numericGrade: z.number().optional().openapi({ example: 85 }),
+    percentage: z.number().optional().openapi({ example: 85 }),
+    letterGrade: z.string().optional().openapi({ example: "A" }),
+    gradePoints: z.number().optional().openapi({ example: 4.0 }),
+    isRetake: z.boolean().optional().default(false).openapi({ example: false }),
+    academicYear: z.string().openapi({ example: "2024" }),
+    semester: z.enum(["Fall", "Spring", "Summer"]).openapi({ example: "Fall" }),
+    status: z.string().optional().default("Pending Review").openapi({ example: "Verified" }),
+    createdAt: z.string().openapi({ example: "2024-05-19T03:15:05Z" }),
+    updatedAt: z.string().openapi({ example: "2024-05-19T03:15:05Z" }),
+  })
+  .openapi("GradeRecord");
+
+const GradeInputSchema = GradeSchema.omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+}).partial({
+  studentName: true,
+  admissionNo: true,
+  courseId: true,
+  courseName: true,
+  credits: true,
+  gradingScaleId: true,
+  gradingScaleType: true,
+  components: true,
+  numericGrade: true,
+  percentage: true,
+  letterGrade: true,
+  gradePoints: true,
+  status: true,
 });
 
-// New comprehensive grade validation schema - relaxed for creation
-const gradeSchema = z.object({
-  studentId: z.string().min(1, "Student ID is required"),
-  studentName: z.string().optional(),
-  admissionNo: z.string().optional(),
-  courseId: z.string().optional(),
-  courseCode: z.string().min(1, "Course code is required"),
-  courseName: z.string().optional(),
-  credits: z.number().optional(),
-  gradingScaleId: z.string().optional(),
-  gradingScaleType: z.string().optional(),
-  components: z.array(componentScoreSchema).optional(),
-  numericGrade: z.number().optional(),
-  percentage: z.number().optional(), // Alias for numericGrade
-  letterGrade: z.string().optional(),
-  gradePoints: z.number().optional(),
-  isRetake: z.boolean().optional().default(false),
-  retakeAttemptNumber: z.number().optional(),
-  replacedGradeId: z.string().optional(),
-  academicYear: z.string(),
-  semester: z.enum(["Fall", "Spring", "Summer"]),
-  status: z.string().optional().default("Pending Review"),
-  percentileRank: z.number().optional(),
-  specialGrade: z.string().optional(),
-  incompleteDeadline: z.string().optional(),
-  createdBy: z.string().optional(),
-});
-
-/**
- * POST /api/v1/grades
- * Create a new grade record with weighted assessments
- */
-gradeRouter.post(
-  "/",
-  requireRole("admin", "registrar", "faculty", "staff"),
-  async (c) => {
-    try {
-      const body = await c.req.json();
-      const parsed = gradeSchema.safeParse(body);
-
-      if (!parsed.success) {
-        return c.json<ApiResponse<never>>(
-          {
-            success: false,
-            error: `Validation error: ${parsed.error.issues.map((e) => e.message).join(", ")}`,
-          },
-          400,
-        );
-      }
-
-      const pb = getPocketBase();
-      const data = parsed.data;
-
-      // 1. Data Enrichment & Relational Mapping
-      let studentId = data.studentId;
-      let courseCode = data.courseCode;
-
-      // Resolve/Create studentId if missing
-      let studentUuid: string;
-      try {
-        const student = await pb
-          .collection("students")
-          .getFirstListItem(
-            `student_number="${studentId}" || id="${studentId}"`,
-          );
-        studentUuid = student.id;
-      } catch (e) {
-        // Auto-create missing student (Permissive Mode)
-        try {
-          // Find first available program to satisfy relation requirement
-          let programId = "GENERAL";
-          try {
-            const programs = await pb.collection("programs").getList(1, 1);
-            if (programs.items.length > 0) {
-              programId = programs.items[0].id;
-            }
-          } catch (pe) {}
-
-          const student = await pb.collection("students").create({
-            student_number: studentId,
-            first_name: data.studentName?.split(" ")[0] || "Unknown",
-            last_name:
-              data.studentName?.split(" ").slice(1).join(" ") || "Student",
-            email: `${studentId.replace(/[^a-zA-Z0-9]/g, "").toLowerCase() || "student"}@example.com`,
-            status: "Active",
-            program_code: programId,
-          });
-          studentUuid = student.id;
-        } catch (err: unknown) {
-          logger.error("Failed to auto-create student:", err);
-          return c.json(
-            {
-              success: false,
-              error: `Student ${studentId} not found and auto-creation failed: ${errorMessage(err)}`,
-            },
-            404,
-          );
-        }
-      }
-
-      // Resolve/Create courseId if missing
-      let courseUuid: string;
-      try {
-        const course = await pb
-          .collection("courses")
-          .getFirstListItem(`course_code="${courseCode}"`);
-        courseUuid = course.id;
-      } catch (e) {
-        // Auto-create missing course (Permissive Mode)
-        try {
-          const course = await pb.collection("courses").create({
-            course_code: courseCode,
-            title: data.courseName || courseCode,
-            credits: data.credits || 3,
-          });
-          courseUuid = course.id;
-        } catch (err) {
-          courseUuid = courseCode; // Fallback
-        }
-      }
-
-      // 2. Find or Create Enrollment
-      let enrollmentId: string;
-      try {
-        // Try to find by UUIDs
-        const enrollment = await pb
-          .collection("enrollments")
-          .getFirstListItem(
-            `student_number="${studentUuid}" && course_code="${courseUuid}" && academic_year="${data.academicYear}" && semester="${data.semester}"`,
-          );
-        enrollmentId = enrollment.id;
-      } catch (e) {
-        // Create enrollment
-        try {
-          const enrollment = await pb.collection("enrollments").create({
-            student_number: studentUuid,
-            course_code: courseUuid,
-            academic_year: data.academicYear,
-            semester: data.semester,
-          });
-          enrollmentId = enrollment.id;
-        } catch (err: unknown) {
-          return c.json(
-            {
-              success: false,
-              error: `Failed to link enrollment: ${errorMessage(err)}`,
-            },
-            500,
-          );
-        }
-      }
-
-      // 3. Calculate Grade
-      const numericGrade =
-        data.numericGrade ??
-        data.percentage ??
-        (data.components && data.components.length > 0
-          ? calculatePercentageFromComponents(
-              data.components as unknown as GradeComponentScore[],
-            )
-          : 0);
-      const { letterGrade, gradePoints } = calculateGradeResult(numericGrade);
-
-      // 4. Create Grade Record (Relational)
-      const gradeRecord = {
-        enrollment_id: enrollmentId,
-        percentage: numericGrade,
-        grade_letter: letterGrade,
-        gpa: gradePoints,
-      };
-
-      // Check if grade already exists for this enrollment
-      try {
-        const existing = await pb
-          .collection("grades")
-          .getFirstListItem(`enrollment_id="${enrollmentId}"`);
-        if (existing && !data.isRetake) {
-          return c.json(
-            {
-              success: false,
-              error:
-                "Grade already exists for this enrollment. Use update or mark as retake.",
-            },
-            409,
-          );
-        }
-      } catch (err) {}
-
-      const created = await pb.collection("grades").create(gradeRecord);
-
-      // 5. Fetch with expansion for the frontend
-      const expanded = await pb.collection("grades").getOne(created.id, {
-        expand: "enrollment_id.student_number,enrollment_id.course_code",
-      });
-
-      const user = getUser(c);
-      const responseData = mapExpandedGradeToFrontendShape(expanded, {
-        components: data.components as unknown as
-          | GradeComponentScore[]
-          | undefined,
-        gradingScaleType: data.gradingScaleType,
-        status: data.status,
-        createdBy: user?.email || user?.sub,
-      });
-
-      logger.info("Grade created and expanded", { gradeId: created.id });
-
-      return c.json({
-        success: true,
-        data: responseData,
-        message: "Grade saved successfully",
-      });
-    } catch (error: unknown) {
-      logger.error("Grade creation error:", error);
-      return c.json({ success: false, error: "Failed to create grade" }, 500);
-    }
+// Route definitions
+const listGradesRoute = createRoute({
+  method: "get",
+  path: "/",
+  tags: ["Grades"],
+  summary: "List grade records",
+  description: "List grades with pagination and student/course filtering",
+  request: {
+    query: z.object({
+      page: z.string().optional().openapi({ example: "1" }),
+      perPage: z.string().optional().openapi({ example: "50" }),
+      studentId: z.string().optional().openapi({ example: "STU001" }),
+      courseCode: z.string().optional().openapi({ example: "THEO101" }),
+      academicYear: z.string().optional().openapi({ example: "2024" }),
+      semester: z.string().optional().openapi({ example: "Fall" }),
+    }),
   },
-);
-
-/**
- * GET /api/v1/grades
- * Get all grades with relational expansion
- */
-gradeRouter.get(
-  "/",
-  requireRole("admin", "registrar", "faculty", "staff", "student"),
-  async (c) => {
-    try {
-      const pb = getPocketBase();
-      const query = c.req.query();
-
-      const page = parseInt(query.page || "1");
-      const perPage = Math.min(parseInt(query.perPage || "50"), 500);
-      const studentId = query.studentId;
-      const campusId = query.campus_id;
-      const academicYear = query.academicYear;
-      const semester = query.semester;
-      const grade = query.grade;
-
-      // Build PocketBase filter
-      const filterParts: string[] = [];
-      if (studentId)
-        filterParts.push(`student_id = "${sanitizeFilter(studentId)}"`);
-      if (campusId)
-        filterParts.push(
-          `student_id.campus_id = "${sanitizeFilter(campusId)}"`,
-        );
-      if (academicYear)
-        filterParts.push(`academic_year = "${sanitizeFilter(academicYear)}"`);
-      if (semester)
-        filterParts.push(`semester = "${sanitizeFilter(semester)}"`);
-      if (grade) filterParts.push(`grade = "${sanitizeFilter(grade)}"`);
-      const filter = filterParts.join(" && ");
-
-      const result = await pb
-        .collection("academic_records")
-        .getList(page, perPage, {
-          ...(filter ? { filter } : {}),
-          expand:
-            "student_id,student_id.campus_id,course_id,course_id.module_id",
-          sort: "student_id.full_name,course_id.code",
-        });
-
-      // Map the expanded relational data to the frontend Grade shape
-      const items = result.items.map((record) =>
-        mapExpandedGradeToFrontendShape(record, {
-          status: "Verified",
-          gradingScaleType: "US_4_0",
-          components: [],
-          createdBy: "system",
-        }),
-      );
-
-      return c.json({
-        success: true,
-        data: {
-          ...result,
-          items,
+  responses: {
+    200: {
+      content: {
+        "application/json": {
+          schema: ApiResponseSchema(
+            z.object({
+              items: z.array(GradeSchema),
+            })
+          ),
         },
-      });
-    } catch (error: unknown) {
-      logger.error("Grade fetch error:", error);
-      return c.json({ success: false, error: "Failed to fetch grades" }, 500);
-    }
-  },
-);
-
-/**
- * GET /api/v1/grades/:id
- * Get a specific grade by ID
- */
-gradeRouter.get(
-  "/:id",
-  requireRole("admin", "registrar", "faculty", "staff", "student"),
-  async (c) => {
-    try {
-      const id = c.req.param("id")!;
-      const pb = getPocketBase();
-
-      const expanded = await pb.collection("academic_records").getOne(id, {
-        expand: "student_id,course_id,course_id.module_id",
-      });
-
-      const responseData = mapExpandedGradeToFrontendShape(expanded, {
-        status: "Verified",
-        gradingScaleType: "US_4_0",
-        components: [],
-        createdBy: "system",
-      });
-
-      return c.json<ApiResponse<typeof responseData>>({
-        success: true,
-        data: responseData,
-      });
-    } catch (error: unknown) {
-      logger.error("Grade fetch error:", error);
-      return c.json<ApiResponse<never>>(
-        {
-          success: false,
-          error: "Grade not found",
+      },
+      description: "List of grades",
+    },
+    500: {
+      content: {
+        "application/json": {
+          schema: ErrorResponseSchema,
         },
-        404,
-      );
-    }
+      },
+      description: "Server error",
+    },
   },
-);
-
-/**
- * PUT /api/v1/grades/:id
- * Update an existing grade record.
- * Note: PocketBase `grades` collection currently persists only percentage/letter/gpa,
- * so assessment components are not stored, but are returned to match UI expectations.
- */
-const gradeUpdateInputSchema = z.object({
-  components: z.array(componentScoreSchema).optional(),
-  numericGrade: z.number().optional(),
-  percentage: z.number().optional(),
-  letterGrade: z.string().optional(),
-  gradePoints: z.number().optional(),
-  status: z.string().optional(),
-  gradingScaleType: z.string().optional(),
 });
 
-async function updateGradeHandler(
-  c: import("hono").Context<AppEnv>,
-  id: string,
-) {
-  const body = await c.req.json();
-  const parsed = gradeUpdateInputSchema.safeParse(body);
+const createGradeRoute = createRoute({
+  method: "post",
+  path: "/",
+  tags: ["Grades"],
+  summary: "Create grade record",
+  description: "Create a new grade record with weighted assessments",
+  request: {
+    body: {
+      content: {
+        "application/json": {
+          schema: GradeInputSchema,
+        },
+      },
+    },
+  },
+  responses: {
+    201: {
+      content: {
+        "application/json": {
+          schema: ApiResponseSchema(GradeSchema),
+        },
+      },
+      description: "Grade created successfully",
+    },
+    400: {
+      content: {
+        "application/json": {
+          schema: ErrorResponseSchema,
+        },
+      },
+      description: "Validation error",
+    },
+    500: {
+      content: {
+        "application/json": {
+          schema: ErrorResponseSchema,
+        },
+      },
+      description: "Server error",
+    },
+  },
+});
 
-  if (!parsed.success) {
+const getStudentTranscriptRoute = createRoute({
+  method: "get",
+  path: "/transcript/{studentId}",
+  tags: ["Grades"],
+  summary: "Get student transcript",
+  description: "Get full academic transcript for a student",
+  request: {
+    params: z.object({
+      studentId: z.string().openapi({ example: "STU001" }),
+    }),
+  },
+  responses: {
+    200: {
+      content: {
+        "application/json": {
+          schema: ApiResponseSchema(
+            z.object({
+              student: z.any(),
+              grades: z.array(GradeSchema),
+              summary: z.object({
+                totalCredits: z.number(),
+                cumulativeGpa: z.number(),
+                standing: z.string(),
+              }),
+            }),
+          ),
+        },
+      },
+      description: "Student transcript",
+    },
+    404: {
+      content: {
+        "application/json": {
+          schema: ErrorResponseSchema,
+        },
+      },
+      description: "Student not found",
+    },
+    500: {
+      content: {
+        "application/json": {
+          schema: ErrorResponseSchema,
+        },
+      },
+      description: "Server error",
+    },
+  },
+});
+
+// Implement routes
+gradeRouter.openapi(listGradesRoute, async (c) => {
+  try {
+    const {
+      page: p,
+      perPage: pp,
+      studentId,
+      courseCode,
+      academicYear,
+      semester,
+    } = c.req.valid("query");
+    const page = parseInt(p || "1", 10);
+    const perPage = parseInt(pp || "50", 10);
+
+    const pb = getPocketBase();
+    const filters: string[] = [];
+
+    if (studentId) filters.push(`student_id = "${sanitizeFilter(studentId)}"`);
+    if (courseCode) filters.push(`course_id.code = "${sanitizeFilter(courseCode)}"`);
+    if (academicYear) filters.push(`academic_year = "${sanitizeFilter(academicYear)}"`);
+    if (semester) filters.push(`semester = "${sanitizeFilter(semester)}"`);
+
+    const filterString = filters.join(" && ");
+
+    // We fetch from academic_records for legacy/bulk compatibility
+    const result = await pb.collection("academic_records").getList(page, perPage, {
+      filter: filterString,
+      expand: "student_id,course_id,course_id.module_id,student_id.campus_id",
+      sort: "-created",
+    });
+
+    return c.json({
+      success: true,
+      data: {
+        items: result.items.map((r) => mapExpandedGradeToFrontendShape(r, {})),
+      },
+      meta: {
+        page: result.page,
+        perPage: result.perPage,
+        total: result.totalItems,
+      },
+    });
+  } catch (error) {
+    logger.error("List grades error:", error);
     return c.json(
       {
         success: false,
-        error: `Validation error: ${parsed.error.issues.map((e) => e.message).join(", ")}`,
-      },
-      400,
-    );
-  }
-
-  const pb = getPocketBase();
-  const data = parsed.data;
-
-  const percentage =
-    data.percentage ??
-    data.numericGrade ??
-    (data.components && data.components.length > 0
-      ? calculatePercentageFromComponents(
-          data.components as unknown as GradeComponentScore[],
-        )
-      : 0);
-
-  const calculated = calculateGradeResult(percentage);
-  const nextLetterGrade = data.letterGrade ?? calculated.letterGrade;
-  const nextGradePoints =
-    typeof data.gradePoints === "number"
-      ? data.gradePoints
-      : calculated.gradePoints;
-
-  await pb.collection("grades").update(id, {
-    percentage,
-    grade_letter: nextLetterGrade,
-    gpa: nextGradePoints,
-  });
-
-  const expanded = await pb.collection("grades").getOne(id, {
-    expand: "enrollment_id.student_number,enrollment_id.course_code",
-  });
-
-  const user = getUser(c);
-  const responseData = mapExpandedGradeToFrontendShape(expanded, {
-    components: data.components as unknown as GradeComponentScore[] | undefined,
-    gradingScaleType: data.gradingScaleType,
-    status: data.status,
-    createdBy: user?.email || user?.sub,
-  });
-
-  return c.json({
-    success: true,
-    data: responseData,
-    message: "Grade updated successfully",
-  });
-}
-
-gradeRouter.put(
-  "/:id",
-  requireRole("admin", "registrar", "faculty", "staff"),
-  async (c) => {
-    const id = c.req.param("id")!;
-    return updateGradeHandler(c, id);
-  },
-);
-
-// Backward-compatible alias for older/alternate clients
-gradeRouter.patch(
-  "/:id",
-  requireRole("admin", "registrar", "faculty", "staff"),
-  async (c) => {
-    const id = c.req.param("id")!;
-    return updateGradeHandler(c, id);
-  },
-);
-
-/**
- * DELETE /api/v1/grades/:id
- * Delete a grade record
- */
-gradeRouter.delete("/:id", requireRole("admin", "registrar"), async (c) => {
-  try {
-    const id = c.req.param("id")!;
-    const pb = getPocketBase();
-
-    await pb.collection("grades").delete(id);
-
-    logger.info("Grade deleted successfully", { gradeId: id });
-
-    return c.json<ApiResponse<{ id: string }>>({
-      success: true,
-      data: { id },
-      message: "Grade deleted successfully",
-    });
-  } catch (error: unknown) {
-    logger.error("Grade deletion error:", error);
-    return c.json<ApiResponse<never>>(
-      {
-        success: false,
-        error: "Failed to delete grade",
+        error: errorMessage(error, "Failed to fetch grades"),
       },
       500,
     );
   }
 });
 
-/**
- * GET /api/v1/grades/gpa/summary
- * Aggregate GPA per student per module from academic_records.
- * Query params: campusId?, academicYear?
- */
-gradeRouter.get(
-  "/gpa/summary",
-  requireRole("admin", "registrar", "faculty", "staff"),
-  async (c) => {
+gradeRouter.openapi(createGradeRoute, async (c) => {
+  try {
+    const data = c.req.valid("json");
+    const pb = getPocketBase();
+
+    // 1. Data Enrichment & Relational Mapping
+    let studentUuid: string;
     try {
-      const pb = getPocketBase();
-      const campusId = c.req.query("campusId");
-      const year = c.req.query("academicYear");
-
-      const filterParts: string[] = [];
-      if (campusId)
-        filterParts.push(
-          `student_id.campus_id = "${sanitizeFilter(campusId)}"`,
-        );
-      if (year) filterParts.push(`academic_year = "${sanitizeFilter(year)}"`);
-      const filter = filterParts.join(" && ");
-
-      // Fetch all matching records with full expand (up to 2000)
-      const records = await pb.collection("academic_records").getFullList({
-        filter,
-        expand: "student_id,student_id.campus_id,course_id,course_id.module_id",
-      });
-
-      // Aggregate per student+module
-      const map = new Map<
-        string,
-        {
-          studentId: string;
-          studentCode: string;
-          studentName: string;
-          campusName: string;
-          module: string;
-          credits: number;
-          points: number;
-        }
-      >();
-
-      for (const r of records) {
-        const rec = pbRecord<ExpandedRecord>(r);
-        const student = rec.expand?.student_id as ExpandedRecord | undefined;
-        const course = rec.expand?.course_id as ExpandedRecord | undefined;
-        const module = course?.expand?.module_id as ExpandedRecord | undefined;
-        const campus = student?.expand?.campus_id as ExpandedRecord | undefined;
-
-        const credits =
-          typeof course?.credit_hours === "number"
-            ? (course.credit_hours as number)
-            : typeof course?.credits === "number"
-              ? (course.credits as number)
-              : 0;
-        const gradePoint =
-          typeof rec.grade_point === "number" ? (rec.grade_point as number) : 0;
-
-        const key = `${rec.student_id}__${String(module?.name ?? "Unknown")}`;
-        const existing = map.get(key);
-        if (existing) {
-          existing.credits += credits;
-          existing.points += gradePoint * credits;
-        } else {
-          map.set(key, {
-            studentId: rec.student_id as string,
-            studentCode: String(student?.student_code ?? ""),
-            studentName: String(
-              student?.full_name ??
-                `${String(student?.first_name ?? "")} ${String(student?.last_name ?? "")}`.trim(),
-            ),
-            campusName: String(campus?.name ?? ""),
-            module: String(module?.name ?? "Unknown"),
-            credits,
-            points: gradePoint * credits,
-          });
-        }
-      }
-
-      const summary = Array.from(map.values()).map((v) => ({
-        studentId: v.studentId,
-        studentCode: v.studentCode,
-        studentName: v.studentName,
-        campusName: v.campusName,
-        module: v.module,
-        totalCreditHours: v.credits,
-        totalGradePoints: parseFloat(v.points.toFixed(2)),
-        gpa: v.credits > 0 ? parseFloat((v.points / v.credits).toFixed(2)) : 0,
-      }));
-
-      // Sort by campus, student name, module
-      summary.sort(
-        (a, b) =>
-          a.campusName.localeCompare(b.campusName) ||
-          a.studentName.localeCompare(b.studentName) ||
-          a.module.localeCompare(b.module),
-      );
-
-      return c.json({ success: true, data: summary, total: summary.length });
-    } catch (error: unknown) {
-      logger.error("GPA summary error:", error);
-      return c.json(
-        { success: false, error: "Failed to compute GPA summary" },
-        500,
-      );
+      const student = await pb
+        .collection("students")
+        .getFirstListItem(`student_code = "${sanitizeFilter(data.studentId)}" || id = "${sanitizeFilter(data.studentId)}"`);
+      studentUuid = student.id;
+    } catch {
+      return c.json({ success: false, error: "Student not found" }, 404);
     }
-  },
-);
 
-/**
- * GET /api/v1/grades/student/:studentId/transcript
- * Full academic transcript for one student — all records fully expanded.
- */
-gradeRouter.get(
-  "/student/:studentId/transcript",
-  requireRole("admin", "registrar", "faculty", "staff", "student"),
-  async (c) => {
+    let courseUuid: string;
     try {
-      const pb = getPocketBase();
-      const studentId = sanitizeFilter(c.req.param("studentId")!);
+      const course = await pb
+        .collection("courses")
+        .getFirstListItem(`course_code = "${sanitizeFilter(data.courseCode)}" || code = "${sanitizeFilter(data.courseCode)}" || id = "${sanitizeFilter(data.courseCode)}"`);
+      courseUuid = course.id;
+    } catch {
+      return c.json({ success: false, error: "Course not found" }, 404);
+    }
 
-      const records = await pb.collection("academic_records").getFullList({
-        filter: `student_id = "${studentId}"`,
-        expand: "student_id,student_id.campus_id,course_id,course_id.module_id",
-        sort: "course_id.code",
-      });
+    // 2. Grade Calculation
+    let percentage = data.numericGrade ?? data.percentage ?? 0;
+    if (data.components && data.components.length > 0) {
+      percentage = calculatePercentageFromComponents(data.components as GradeComponentScore[]);
+    }
 
-      const items = records.map((r) =>
-        mapExpandedGradeToFrontendShape(r, {
-          status: "Verified",
-          gradingScaleType: "US_4_0",
-        }),
-      );
+    const calc = calculateGradeResult(percentage);
 
-      // Compute GPA
-      const totalCredits = items.reduce((s, r) => s + (r.creditHours || 0), 0);
-      const totalPoints = items.reduce(
-        (s, r) => s + (r.gradePoints || 0) * (r.creditHours || 0),
-        0,
-      );
-      const overallGpa =
-        totalCredits > 0
-          ? parseFloat((totalPoints / totalCredits).toFixed(2))
-          : 0;
+    // 3. Persistence
+    const record = await pb.collection("academic_records").create({
+      student_id: studentUuid,
+      course_id: courseUuid,
+      academic_year: data.academicYear,
+      semester: data.semester,
+      total_score: percentage,
+      grade: data.letterGrade || calc.letterGrade,
+      grade_point: data.gradePoints || calc.gradePoints,
+      remarks: percentage >= 50 ? "Pass" : "Fail",
+      // ... components and other fields would go to a related 'grade_details' collection in a full implementation
+    });
 
-      return c.json({
+    const expanded = await pb.collection("academic_records").getOne(record.id, {
+      expand: "student_id,course_id,course_id.module_id,student_id.campus_id",
+    });
+
+    return c.json(
+      {
         success: true,
-        data: {
-          items,
-          total: items.length,
-          overallGpa,
-          totalCredits,
-          totalPoints: parseFloat(totalPoints.toFixed(2)),
-        },
-      });
-    } catch (error: unknown) {
-      logger.error("Transcript fetch error:", error);
-      return c.json(
-        { success: false, error: "Failed to fetch transcript" },
-        500,
-      );
-    }
-  },
-);
+        data: mapExpandedGradeToFrontendShape(expanded, {
+          components: data.components as GradeComponentScore[],
+          status: data.status,
+          createdBy: getUser(c)?.name,
+        }),
+        message: "Grade recorded successfully",
+      },
+      201,
+    );
+  } catch (error) {
+    logger.error("Create grade error:", error);
+    return c.json(
+      {
+        success: false,
+        error: errorMessage(error, "Failed to record grade"),
+      },
+      500,
+    );
+  }
+});
 
-export { gradeRouter };
+gradeRouter.openapi(getStudentTranscriptRoute, async (c) => {
+  try {
+    const { studentId } = c.req.valid("param");
+    const pb = getPocketBase();
+
+    const student = await pb.collection("students").getOne(studentId, {
+      expand: "campus_id",
+    });
+
+    const gradesResult = await pb.collection("academic_records").getFullList({
+      filter: `student_id = "${sanitizeFilter(studentId)}"`,
+      expand: "course_id,course_id.module_id",
+      sort: "academic_year,semester",
+    });
+
+    const grades = gradesResult.map((r) => mapExpandedGradeToFrontendShape(r, {}));
+
+    const totalCredits = grades.reduce((sum, g) => sum + (g.credits || 0), 0);
+    const weightedPoints = grades.reduce((sum, g) => sum + (g.gradePoints || 0) * (g.credits || 0), 0);
+    const cumulativeGpa = totalCredits > 0 ? weightedPoints / totalCredits : 0;
+
+    return c.json({
+      success: true,
+      data: {
+        student: pbRecord(student),
+        grades,
+        summary: {
+          totalCredits,
+          cumulativeGpa,
+          standing: cumulativeGpa >= 2.0 ? "Good Standing" : "Academic Probation",
+        },
+      },
+    });
+  } catch (error) {
+    logger.error("Get transcript error:", error);
+    return c.json(
+      {
+        success: false,
+        error: errorMessage(error, "Failed to fetch transcript"),
+      },
+      500,
+    );
+  }
+});
+
+// New routes definitions for GET, PUT, DELETE by ID
+const getGradeRoute = createRoute({
+  method: "get",
+  path: "/{id}",
+  tags: ["Grades"],
+  summary: "Get grade by ID",
+  description: "Get a single grade record by ID",
+  request: {
+    params: z.object({
+      id: z.string().openapi({ example: "123" }),
+    }),
+  },
+  responses: {
+    200: {
+      content: {
+        "application/json": {
+          schema: ApiResponseSchema(GradeSchema),
+        },
+      },
+      description: "Grade details",
+    },
+    404: {
+      content: {
+        "application/json": {
+          schema: ErrorResponseSchema,
+        },
+      },
+      description: "Grade not found",
+    },
+    500: {
+      content: {
+        "application/json": {
+          schema: ErrorResponseSchema,
+        },
+      },
+      description: "Server error",
+    },
+  },
+});
+
+const updateGradeRoute = createRoute({
+  method: "put",
+  path: "/{id}",
+  tags: ["Grades"],
+  summary: "Update grade record",
+  description: "Update a grade record and re-calculate derived values",
+  request: {
+    params: z.object({
+      id: z.string().openapi({ example: "123" }),
+    }),
+    body: {
+      content: {
+        "application/json": {
+          schema: z.object({
+            components: z.array(ComponentScoreSchema).optional(),
+            status: z.string().optional(),
+            gradingScaleType: z.string().optional(),
+          }),
+        },
+      },
+    },
+  },
+  responses: {
+    200: {
+      content: {
+        "application/json": {
+          schema: ApiResponseSchema(GradeSchema),
+        },
+      },
+      description: "Grade updated successfully",
+    },
+    404: {
+      content: {
+        "application/json": {
+          schema: ErrorResponseSchema,
+        },
+      },
+      description: "Grade not found",
+    },
+    500: {
+      content: {
+        "application/json": {
+          schema: ErrorResponseSchema,
+        },
+      },
+      description: "Server error",
+    },
+  },
+});
+
+const deleteGradeRoute = createRoute({
+  method: "delete",
+  path: "/{id}",
+  tags: ["Grades"],
+  summary: "Delete grade record",
+  description: "Delete a grade record by ID",
+  request: {
+    params: z.object({
+      id: z.string().openapi({ example: "123" }),
+    }),
+  },
+  responses: {
+    200: {
+      content: {
+        "application/json": {
+          schema: ApiResponseSchema(z.null()),
+        },
+      },
+      description: "Grade deleted successfully",
+    },
+    404: {
+      content: {
+        "application/json": {
+          schema: ErrorResponseSchema,
+        },
+      },
+      description: "Grade not found",
+    },
+    500: {
+      content: {
+        "application/json": {
+          schema: ErrorResponseSchema,
+        },
+      },
+      description: "Server error",
+    },
+  },
+});
+
+// Implementations for GET, PUT, DELETE by ID
+gradeRouter.openapi(getGradeRoute, async (c) => {
+  try {
+    const { id } = c.req.valid("param");
+    const pb = getPocketBase();
+
+    const record = await pb.collection("academic_records").getOne(id, {
+      expand: "student_id,course_id,course_id.module_id,student_id.campus_id",
+    });
+
+    return c.json({
+      success: true,
+      data: mapExpandedGradeToFrontendShape(record, {}),
+    });
+  } catch (error) {
+    logger.error("Get grade error:", error);
+    return c.json(
+      {
+        success: false,
+        error: errorMessage(error, "Grade not found"),
+      },
+      404,
+    );
+  }
+});
+
+gradeRouter.openapi(updateGradeRoute, async (c) => {
+  try {
+    const { id } = c.req.valid("param");
+    const data = c.req.valid("json");
+    const pb = getPocketBase();
+
+    // Re-calculate derived values if components are provided
+    const updateData: Record<string, any> = {};
+    if (data.components && data.components.length > 0) {
+      const percentage = calculatePercentageFromComponents(data.components as GradeComponentScore[]);
+      const calc = calculateGradeResult(percentage);
+      updateData.percentage = percentage;
+      updateData.grade_letter = calc.letterGrade;
+      updateData.gpa = calc.gradePoints;
+    }
+
+    await pb.collection("academic_records").update(id, updateData);
+
+    const expanded = await pb.collection("academic_records").getOne(id, {
+      expand: "student_id,course_id,course_id.module_id,student_id.campus_id",
+    });
+
+    return c.json({
+      success: true,
+      data: mapExpandedGradeToFrontendShape(expanded, {
+        components: data.components as GradeComponentScore[],
+        status: data.status,
+        gradingScaleType: data.gradingScaleType,
+      }),
+    });
+  } catch (error) {
+    logger.error("Update grade error:", error);
+    return c.json(
+      {
+        success: false,
+        error: errorMessage(error, "Failed to update grade"),
+      },
+      404,
+    );
+  }
+});
+
+gradeRouter.openapi(deleteGradeRoute, async (c) => {
+  try {
+    const { id } = c.req.valid("param");
+    const pb = getPocketBase();
+
+    await pb.collection("academic_records").delete(id);
+
+    return c.json({
+      success: true,
+      data: null,
+      message: "Grade deleted successfully",
+    });
+  } catch (error) {
+    logger.error("Delete grade error:", error);
+    return c.json(
+      {
+        success: false,
+        error: errorMessage(error, "Failed to delete grade"),
+      },
+      404,
+    );
+  }
+});
+
+export default gradeRouter;

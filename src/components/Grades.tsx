@@ -33,10 +33,14 @@ import { Student, Course } from "../types";
 import { BulkEntryModal } from "./BulkEntryModal";
 import { postGradeBatch } from "../services/batchService";
 import { useDataStore } from "../stores/dataStore";
+import { useStudentsQuery, useCoursesQuery } from "../hooks/useEntityQueries";
 
 const Grades: React.FC = () => {
-  const students = useDataStore((s) => s.students);
-  const courses = useDataStore((s) => s.courses);
+  const { data: studentsRes } = useStudentsQuery({ page: 1, perPage: 1000 });
+  const { data: coursesRes } = useCoursesQuery({ page: 1, perPage: 1000 });
+
+  const students = studentsRes?.data || [];
+  const courses = coursesRes?.data || [];
   const [grades, setGrades] = useState<Grade[]>([]);
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [isDetailsOpen, setIsDetailsOpen] = useState(false);

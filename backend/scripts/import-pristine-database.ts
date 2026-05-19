@@ -1,11 +1,20 @@
 import fs from 'fs';
 import path from 'path';
 import PocketBase from 'pocketbase';
+import dotenv from 'dotenv';
+
+// Load .env relative to script
+const rootDir = fs.existsSync(path.resolve(process.cwd(), './backend'))
+    ? path.resolve(process.cwd(), './backend')
+    : process.cwd();
+dotenv.config({ path: path.join(rootDir, '.env') });
 
 const pb = new PocketBase('http://127.0.0.1:8090');
 pb.autoCancellation(false);
 
-const DB_DIR = path.resolve(process.cwd(), './DATABASE');
+const DB_DIR = fs.existsSync(path.resolve(process.cwd(), './DATABASE'))
+    ? path.resolve(process.cwd(), './DATABASE')
+    : path.resolve(process.cwd(), '../DATABASE');
 
 // Helper to parse CSV
 function parseCSV(filename: string) {

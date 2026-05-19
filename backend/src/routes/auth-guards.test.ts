@@ -2,7 +2,7 @@ import { describe, it, expect, vi } from 'vitest';
 import studentsRouter from './students.js';
 import financeRouter from './finance.js';
 import certificatesRouter from './certificates.js';
-import { gradeRouter } from './grades.js';
+import gradeRouter from './grades.js';
 import { gradingScalesRouter } from './grading-scales.js';
 import { gradeAppealsRouter } from './grade-appeals.js';
 

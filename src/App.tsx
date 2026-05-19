@@ -108,7 +108,6 @@ function AuthenticatedLayout() {
 
 function App() {
   const { isLoggedIn, isAuthenticating, checkSession } = useAuthStore();
-  const { fetchStudents, fetchAllCoreData, clearAll } = useDataStore();
   const { logo } = useUIStore();
 
   // Session verification on mount
@@ -149,17 +148,13 @@ function App() {
       // If parsing fails, remove the entire key so we start clean
       localStorage.removeItem("bmi_documents");
     }
+  }, []);
 
+  // Fetch core data on login is now managed by TanStack Query in each component.
+  // We only keep checkSession here.
+  useEffect(() => {
     checkSession();
   }, [checkSession]);
-
-  // Fetch data after login
-  useEffect(() => {
-    if (isLoggedIn) {
-      fetchStudents();
-      fetchAllCoreData();
-    }
-  }, [isLoggedIn, fetchStudents, fetchAllCoreData]);
 
   // Authenticating spinner
   if (isAuthenticating) {

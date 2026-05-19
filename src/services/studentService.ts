@@ -34,6 +34,7 @@ export interface StudentFilters {
   status?: string;
   search?: string;
   campusId?: string;
+  programme?: string;
 }
 
 type StudentLike = Partial<Student> & Record<string, any>;
@@ -106,6 +107,7 @@ export async function getStudents(filters?: StudentFilters): Promise<StudentsLis
     if (filters?.status) params.append('status', filters.status);
     if (filters?.search) params.append('search', filters.search);
     if (filters?.campusId) params.append('campus_id', filters.campusId);
+    if (filters?.programme) params.append('programme', filters.programme);
 
     const queryString = params.toString();
     const url = `${API_URL}/students${queryString ? `?${queryString}` : ''}`;

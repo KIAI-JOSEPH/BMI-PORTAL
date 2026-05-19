@@ -24,7 +24,14 @@ export interface StaffListResponse {
   error?: string;
 }
 
-export async function getStaff(filters?: any): Promise<StaffListResponse> {
+export async function getStaff(filters?: {
+  page?: number;
+  perPage?: number;
+  department?: string;
+  search?: string;
+  campusId?: string;
+  category?: string;
+}): Promise<StaffListResponse> {
   try {
     const params = new URLSearchParams();
     if (filters?.page) params.append('page', filters.page.toString());
@@ -32,6 +39,7 @@ export async function getStaff(filters?: any): Promise<StaffListResponse> {
     if (filters?.department) params.append('department', filters.department);
     if (filters?.search) params.append('search', filters.search);
     if (filters?.campusId) params.append('campus_id', filters.campusId);
+    if (filters?.category) params.append('category', filters.category);
 
     const queryString = params.toString();
     const url = `${API_URL}/staff${queryString ? `?${queryString}` : ''}`;

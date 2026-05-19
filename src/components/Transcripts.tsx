@@ -21,13 +21,13 @@ import {
   computeOverallGpa,
   type AcademicRecordFlat,
 } from "../services/academicRecordsService";
-import { Grade } from "../services/gradeService";
 import { getPrograms } from "../services/catalogService";
 import { getHtml2Pdf } from "../services/pdfService";
 import { DocumentService } from "../services/documentService";
 import type { DocumentSecurityFeatures } from "../types/documents";
 import { useDataStore } from "../stores/dataStore";
 import { useUIStore } from "../stores/uiStore";
+import { useStudentsQuery } from "../hooks/useEntityQueries";
 
 interface TranscriptsProps {
   students?: Student[];
@@ -87,8 +87,13 @@ const DEFAULT_TRANSCRIPT_TEMPLATE_LAYOUT: TranscriptTemplateLayout = {
 };
 
 export const Transcripts: React.FC<TranscriptsProps> = (props) => {
-  // Source data from store with prop overrides for backward compat
-  const storeStudents = useDataStore((s) => s.students);
+  // Source data from TanStack Query
+  const { data: studentsRes, isLoading: isLoadingStudents } = useStudentsQuery({
+    page: 1,
+    perPage: 1000,
+  });
+
+  const storeStudents = studentsRes?.data || [];
   const storeCourses = useDataStore((s) => s.courses);
   const storeLogo = useUIStore((s) => s.logo);
   const students = props.students ?? storeStudents ?? [];

@@ -242,14 +242,16 @@ export const StudentQueries = {
     campusId?: string;
     status?: string;
     search?: string;
+    programme?: string;
   } = {}) {
-    const { page = 1, perPage = 50, campusId, status, search } = filters;
+    const { page = 1, perPage = 50, campusId, status, search, programme } = filters;
     
     let filterStr = '';
     const conditions: string[] = [];
     
     if (campusId) conditions.push(`campus_id="${campusId}"`);
     if (status) conditions.push(`status="${status}"`);
+    if (programme) conditions.push(`programme="${programme}"`);
     if (search) {
       conditions.push(`(full_name~"${search}" || student_code~"${search}" || reg_no~"${search}")`);
     }
@@ -350,7 +352,78 @@ export const AcademicRecordQueries = {
       .paginate(page, perPage)
       .execute();
   },
-  
+};
+
+/**
+ * Optimized staff queries
+ */
+export const StaffQueries = {
+  async getWithDetails(filters: {
+    page?: number;
+    perPage?: number;
+    campusId?: string;
+    department?: string;
+    search?: string;
+    category?: string;
+  } = {}) {
+    const { page = 1, perPage = 50, campusId, department, search, category } = filters;
+    
+    const conditions: string[] = [];
+    if (campusId) conditions.push(`campus_id="${campusId}"`);
+    if (department && department !== 'All Departments') conditions.push(`department="${department}"`);
+    if (category && category !== 'All') conditions.push(`category="${category}"`);
+    if (search) {
+      conditions.push(`(first_name~"${search}" || last_name~"${search}" || staff_number~"${search}" || email~"${search}")`);
+    }
+    
+    const filterStr = conditions.length > 0 ? conditions.join(' && ') : '';
+    
+    return query('staff')
+      .expand('campus_id')
+      .filter(filterStr)
+      .sort('last_name,first_name')
+      .paginate(page, perPage)
+      .execute();
+  },
+};
+
+/**
+ * Optimized course queries
+ */
+export const CourseQueries = {
+  async getWithDetails(filters: {
+    page?: number;
+    perPage?: number;
+    campusId?: string;
+    moduleId?: string;
+    search?: string;
+    status?: string;
+  } = {}) {
+    const { page = 1, perPage = 50, campusId, moduleId, search, status } = filters;
+    
+    const conditions: string[] = [];
+    if (campusId) conditions.push(`campus_id="${campusId}"`);
+    if (moduleId) conditions.push(`module_id="${moduleId}"`);
+    if (status) conditions.push(`status="${status}"`);
+    if (search) {
+      conditions.push(`(name~"${search}" || code~"${search}")`);
+    }
+    
+    const filterStr = conditions.length > 0 ? conditions.join(' && ') : '';
+    
+    return query('courses')
+      .expand(['campus_id', 'module_id'])
+      .filter(filterStr)
+      .sort('code')
+      .paginate(page, perPage)
+      .execute();
+  },
+};
+
+/**
+ * Optimized catalog queries
+ */
+export const CatalogQueries = {
   /**
    * Get student transcript (all academic records)
    */
@@ -360,32 +433,6 @@ export const AcademicRecordQueries = {
       .filter(`student_id="${studentId}"`)
       .sort('-academic_year,-semester')
       .paginate(1, 500)
-      .execute();
-  },
-};
-
-/**
- * Optimized course queries
- */
-export const CourseQueries = {
-  /**
-   * Get courses with module details
-   */
-  async getWithModules(filters: {
-    page?: number;
-    perPage?: number;
-    moduleId?: string;
-  } = {}) {
-    const { page = 1, perPage = 50, moduleId } = filters;
-    
-    const filterStr = moduleId ? `module_id="${moduleId}"` : '';
-    
-    return query('courses')
-      .expand('module_id')
-      .filter(filterStr)
-      .sort('code')
-      .paginate(page, perPage)
-      .cached(600000) // Cache for 10 minutes (courses change infrequently)
       .execute();
   },
 };
@@ -413,6 +460,102 @@ export const ReferenceDataQueries = {
       .sort('sort_order')
       .paginate(1, 100)
       .cached(1800000) // Cache for 30 minutes
+      .execute();
+  },
+};
+
+/**
+ * Optimized finance queries
+ */
+export const FinanceQueries = {
+  async getWithDetails(filters: {
+    page?: number;
+    perPage?: number;
+    studentId?: string;
+    status?: string;
+    search?: string;
+  } = {}) {
+    const { page = 1, perPage = 50, studentId, status, search } = filters;
+
+    const conditions: string[] = [];
+    if (studentId) conditions.push(`student_id = "${studentId}"`);
+    if (status) conditions.push(`status = "${status}"`);
+    if (search) {
+      conditions.push(`(name~"${search}" || ref~"${search}" || desc~"${search}")`);
+    }
+
+    const filterStr = conditions.length > 0 ? conditions.join(" && ") : "";
+
+    return query("transactions")
+      .expand("student_id")
+      .filter(filterStr)
+      .sort("-date")
+      .paginate(page, perPage)
+      .execute();
+  },
+};
+
+/**
+ * Optimized library queries
+ */
+export const LibraryQueries = {
+  async getWithDetails(filters: {
+    page?: number;
+    perPage?: number;
+    category?: string;
+    type?: string;
+    status?: string;
+    search?: string;
+  } = {}) {
+    const { page = 1, perPage = 50, category, type, status, search } = filters;
+
+    const conditions: string[] = [];
+    if (category) conditions.push(`category="${category}"`);
+    if (type) conditions.push(`type="${type}"`);
+    if (status) conditions.push(`status="${status}"`);
+    if (search) {
+      conditions.push(`(title~"${search}" || author~"${search}" || isbn~"${search}")`);
+    }
+
+    const filterStr = conditions.length > 0 ? conditions.join(" && ") : "";
+
+    return query("library_items")
+      .filter(filterStr)
+      .sort("-created")
+      .paginate(page, perPage)
+      .execute();
+  },
+};
+
+/**
+ * Optimized hostel queries
+ */
+export const HostelQueries = {
+  async getHostels() {
+    return query("hostels").sort("-created").paginate(1, 100).cached(300000).execute();
+  },
+
+  async getAssignments(filters: {
+    page?: number;
+    perPage?: number;
+    hostelId?: string;
+    studentId?: string;
+    status?: string;
+  } = {}) {
+    const { page = 1, perPage = 50, hostelId, studentId, status } = filters;
+
+    const conditions: string[] = [];
+    if (hostelId) conditions.push(`hostelId="${hostelId}"`);
+    if (studentId) conditions.push(`studentId="${studentId}"`);
+    if (status) conditions.push(`status="${status}"`);
+
+    const filterStr = conditions.length > 0 ? conditions.join(" && ") : "";
+
+    return query("room_assignments")
+      .expand("hostelId")
+      .filter(filterStr)
+      .sort("-created")
+      .paginate(page, perPage)
       .execute();
   },
 };
