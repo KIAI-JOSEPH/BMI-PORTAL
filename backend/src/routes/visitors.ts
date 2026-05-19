@@ -65,6 +65,9 @@ visitorRouter.patch('/:id', requireRole('admin', 'staff'), zValidator('json', vi
 visitorRouter.delete('/:id', requireRole('admin', 'staff'), async (c) => {
   try {
     const id = c.req.param('id');
+    if (!id) {
+      return c.json<ApiResponse<never>>({ success: false, error: 'ID parameter is required' }, 400);
+    }
     const pb = getPocketBase();
     await pb.collection('visitors').delete(id);
     return c.json<ApiResponse<null>>({ success: true, data: null });

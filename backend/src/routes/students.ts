@@ -205,7 +205,7 @@ studentsRouter.openapi(listStudentsRoute, async (c) => {
         perPage: result.perPage,
         total: result.totalItems,
       },
-    });
+    }) as any;
   } catch (error: unknown) {
     logger.error("Failed to fetch students:", error);
     return c.json(
@@ -214,7 +214,7 @@ studentsRouter.openapi(listStudentsRoute, async (c) => {
         error: "Failed to fetch students",
       },
       500,
-    );
+    ) as any;
   }
 });
 
@@ -227,7 +227,7 @@ studentsRouter.openapi(getStudentRoute, async (c) => {
     return c.json({
       success: true,
       data: student,
-    });
+    }) as any;
   } catch (error: unknown) {
     logger.error("Failed to fetch student:", error);
     return c.json(
@@ -239,7 +239,7 @@ studentsRouter.openapi(getStudentRoute, async (c) => {
             : "Failed to fetch student",
       },
       (isPbError(error) && error.status === 404 ? 404 : 500) as any,
-    );
+    ) as any;
   }
 });
 
@@ -265,7 +265,7 @@ studentsRouter.openapi(createStudentRoute, async (c) => {
         message: "Student created successfully",
       },
       201,
-    );
+    ) as any;
   } catch (error: unknown) {
     logger.error("Failed to create student:", error);
     return c.json(
@@ -445,7 +445,7 @@ studentsRouter.openapi(updateStudentRoute, async (c) => {
       success: true,
       data: student as any,
       message: "Student updated successfully",
-    });
+    }) as any;
   } catch (error: unknown) {
     logger.error("Failed to update student:", error);
     return c.json(
@@ -457,7 +457,7 @@ studentsRouter.openapi(updateStudentRoute, async (c) => {
             : "Failed to update student",
       },
       (isPbError(error) && error.status === 404 ? 404 : 500) as any,
-    );
+    ) as any;
   }
 });
 
@@ -476,7 +476,7 @@ studentsRouter.openapi(deleteStudentRoute, async (c) => {
       success: true,
       data: null,
       message: "Student deleted successfully",
-    });
+    }) as any;
   } catch (error: unknown) {
     logger.error("Failed to delete student:", error);
     return c.json(
@@ -488,7 +488,7 @@ studentsRouter.openapi(deleteStudentRoute, async (c) => {
             : "Failed to delete student",
       },
       (isPbError(error) && error.status === 404 ? 404 : 500) as any,
-    );
+    ) as any;
   }
 });
 
@@ -513,7 +513,7 @@ studentsRouter.openapi(getStatsRoute, async (c) => {
     return c.json({
       success: true,
       data: stats,
-    });
+    }) as any;
   } catch (error: unknown) {
     logger.error("Failed to fetch student stats:", error);
     return c.json(
@@ -522,7 +522,7 @@ studentsRouter.openapi(getStatsRoute, async (c) => {
         error: "Failed to fetch statistics",
       },
       500,
-    );
+    ) as any;
   }
 });
 
@@ -540,7 +540,7 @@ studentsRouter.openapi(listByCampusRoute, async (c) => {
         perPage: result.perPage,
         total: result.totalItems,
       },
-    });
+    }) as any;
   } catch (error: unknown) {
     logger.error("Failed to fetch students by campus:", error);
     return c.json(
@@ -549,7 +549,7 @@ studentsRouter.openapi(listByCampusRoute, async (c) => {
         error: "Failed to fetch students",
       },
       500,
-    );
+    ) as any;
   }
 });
 

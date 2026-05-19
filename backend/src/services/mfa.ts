@@ -3,7 +3,6 @@ const require = createRequire(import.meta.url);
 const { authenticator } = require("otplib");
 import QRCode from "qrcode";
 import { logger } from "../utils/logger.js";
-import { CONFIG } from "../config/index.js";
 
 /**
  * MFA Service
