@@ -1,5 +1,4 @@
-
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import { 
   Package, 
   Truck, 
@@ -15,28 +14,29 @@ import {
   Edit, 
   ChevronRight,
   Filter,
-  ShieldAlert
+  ShieldAlert,
+  MapPin
 } from 'lucide-react';
+import { useApiDataStore } from '../stores/apiDataStore';
 
 interface InventoryItem {
   id: string;
   name: string;
   category: string;
-  qty: number;
-  unit: string;
-  status: 'Optimal' | 'Low Stock' | 'Critical' | 'Maintenance';
+  quantity: number;
+  condition: 'New' | 'Good' | 'Fair' | 'Poor';
+  location: string;
+  lastUpdated: string;
 }
 
 const Inventory: React.FC = () => {
-  const [items, setItems] = useState<InventoryItem[]>(() => {
-    const saved = localStorage.getItem('bmi_data_inventory');
-    return saved ? JSON.parse(saved) : [
-      { id: 'AST-001', name: 'Dell Latitude Laptops', category: 'ICT', qty: 45, unit: 'pcs', status: 'Optimal' },
-      { id: 'AST-002', name: 'A4 Printing Paper', category: 'Office', qty: 12, unit: 'reams', status: 'Low Stock' },
-      { id: 'AST-003', name: 'Chemistry Beakers', category: 'Science Lab', qty: 120, unit: 'units', status: 'Optimal' },
-      { id: 'AST-004', name: 'Standard Exam Desks', category: 'Furniture', qty: 450, unit: 'units', status: 'Optimal' },
-    ];
-  });
+  const {
+    inventoryItems: items,
+    fetchInventory,
+    createInventoryItem,
+    updateInventoryItem,
+    deleteInventoryItem,
+  } = useApiDataStore();
 
   const [searchTerm, setSearchTerm] = useState('');
   const [categoryFilter, setCategoryFilter] = useState('All');
@@ -46,21 +46,22 @@ const Inventory: React.FC = () => {
     name: '',
     category: 'ICT',
     qty: '',
-    unit: 'units',
-    status: 'Optimal' as InventoryItem['status']
+    condition: 'New' as InventoryItem['condition'],
+    location: '',
   });
 
   const categories = ['All', 'ICT', 'Science Lab', 'Furniture', 'Office', 'Theology Artifacts', 'General'];
 
-  const saveToLocal = (newItems: InventoryItem[]) => {
-    setItems(newItems);
-    localStorage.setItem('bmi_data_inventory', JSON.stringify(newItems));
-  };
+  useEffect(() => {
+    fetchInventory();
+  }, []);
 
   const filteredItems = useMemo(() => {
-    return items.filter(item => {
-      const matchesSearch = item.name.toLowerCase().includes(searchTerm.toLowerCase()) || 
-                            item.id.toLowerCase().includes(searchTerm.toLowerCase());
+    return (items || []).filter(item => {
+      const matchesSearch = 
+        (item.name || '').toLowerCase().includes(searchTerm.toLowerCase()) || 
+        (item.id || '').toLowerCase().includes(searchTerm.toLowerCase()) ||
+        (item.location || '').toLowerCase().includes(searchTerm.toLowerCase());
       const matchesCategory = categoryFilter === 'All' || item.category === categoryFilter;
       return matchesSearch && matchesCategory;
     });
@@ -68,9 +69,9 @@ const Inventory: React.FC = () => {
 
   const stats = useMemo(() => ({
     totalAssets: items.length,
-    lowStock: items.filter(i => i.status === 'Low Stock' || i.status === 'Critical').length,
-    critical: items.filter(i => i.status === 'Critical').length,
-    valuation: items.reduce((acc, curr) => acc + (curr.qty * 10), 0) // Mock valuation logic
+    newCondition: items.filter(i => i.condition === 'New').length,
+    poorCondition: items.filter(i => i.condition === 'Poor').length,
+    valuation: items.reduce((acc, curr) => acc + ((curr.quantity || 0) * 10), 0)
   }), [items]);
 
   const handleOpenModal = (item?: InventoryItem) => {
@@ -79,46 +80,56 @@ const Inventory: React.FC = () => {
       setFormData({
         name: item.name,
         category: item.category,
-        qty: item.qty.toString(),
-        unit: item.unit,
-        status: item.status
+        qty: item.quantity.toString(),
+        condition: item.condition,
+        location: item.location || '',
       });
     } else {
       setEditingItem(null);
-      setFormData({ name: '', category: 'ICT', qty: '', unit: 'units', status: 'Optimal' });
+      setFormData({ name: '', category: 'ICT', qty: '', condition: 'New', location: '' });
     }
     setIsModalOpen(true);
   };
 
-  const handleSave = (e: React.FormEvent) => {
+  const handleSave = async (e: React.FormEvent) => {
     e.preventDefault();
+    const qtyNum = parseInt(formData.qty) || 0;
+    
     if (editingItem) {
-      const updated = items.map(i => i.id === editingItem.id ? { 
-        ...i, 
-        name: formData.name, 
-        category: formData.category, 
-        qty: parseInt(formData.qty) || 0,
-        unit: formData.unit,
-        status: formData.status
-      } : i);
-      saveToLocal(updated);
-    } else {
-      const newItem: InventoryItem = {
-        id: `AST-${Math.floor(Math.random() * 9000) + 1000}`,
+      const success = await updateInventoryItem(editingItem.id, {
         name: formData.name,
         category: formData.category,
-        qty: parseInt(formData.qty) || 0,
-        unit: formData.unit,
-        status: formData.status
-      };
-      saveToLocal([newItem, ...items]);
+        quantity: qtyNum,
+        condition: formData.condition,
+        location: formData.location,
+      });
+      if (success) {
+        setIsModalOpen(false);
+      } else {
+        alert('Failed to update inventory record. Please try again.');
+      }
+    } else {
+      const success = await createInventoryItem({
+        name: formData.name,
+        category: formData.category,
+        quantity: qtyNum,
+        condition: formData.condition,
+        location: formData.location,
+      });
+      if (success) {
+        setIsModalOpen(false);
+      } else {
+        alert('Failed to register inventory item. Please try again.');
+      }
     }
-    setIsModalOpen(false);
   };
 
-  const deleteItem = (id: string) => {
+  const handleDelete = async (id: string) => {
     if (window.confirm('Permanent Decommission: Are you sure you want to purge this asset from the institutional ledger?')) {
-      saveToLocal(items.filter(i => i.id !== id));
+      const success = await deleteInventoryItem(id);
+      if (!success) {
+        alert('Failed to delete asset. Please try again.');
+      }
     }
   };
 
@@ -174,25 +185,25 @@ const Inventory: React.FC = () => {
                 <Layers size={24} className="text-purple-300 opacity-50" />
              </div>
           </div>
-          <div className="bg-white dark:bg-gray-800 p-6 rounded-none shadow-sm border border-gray-100 dark:border-gray-700 border-l-4 border-l-amber-500">
-             <h4 className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-1">Supply Variance Alerts</h4>
+          <div className="bg-white dark:bg-gray-800 p-6 rounded-none shadow-sm border border-gray-100 dark:border-gray-700 border-l-4 border-l-emerald-500">
+             <h4 className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-1">New Condition Assets</h4>
              <div className="flex items-end justify-between">
-                <p className="text-3xl font-black text-amber-500">{stats.lowStock}</p>
-                <AlertTriangle size={24} className="text-amber-300 opacity-50" />
+                <p className="text-3xl font-black text-emerald-600">{stats.newCondition}</p>
+                <CheckCircle2 size={24} className="text-emerald-300 opacity-50" />
+             </div>
+          </div>
+          <div className="bg-white dark:bg-gray-800 p-6 rounded-none shadow-sm border border-gray-100 dark:border-gray-700 border-l-4 border-l-red-500">
+             <h4 className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-1">Poor Condition Assets</h4>
+             <div className="flex items-end justify-between">
+                <p className="text-3xl font-black text-red-500">{stats.poorCondition}</p>
+                <AlertTriangle size={24} className="text-red-300 opacity-50" />
              </div>
           </div>
           <div className="bg-white dark:bg-gray-800 p-6 rounded-none shadow-sm border border-gray-100 dark:border-gray-700 border-l-4 border-l-blue-500">
-             <h4 className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-1">Procurement Latency</h4>
-             <div className="flex items-end justify-between">
-                <p className="text-3xl font-black text-blue-500">3 Nodes</p>
-                <Truck size={24} className="text-blue-300 opacity-50" />
-             </div>
-          </div>
-          <div className="bg-white dark:bg-gray-800 p-6 rounded-none shadow-sm border border-gray-100 dark:border-gray-700 border-l-4 border-l-emerald-500">
              <h4 className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-1">Estimated Net Capital</h4>
              <div className="flex items-end justify-between">
-                <p className="text-3xl font-black text-emerald-600">${(stats.valuation * 12).toLocaleString()}</p>
-                <BarChart size={24} className="text-emerald-300 opacity-50" />
+                <p className="text-3xl font-black text-blue-600">${(stats.valuation * 12).toLocaleString()}</p>
+                <BarChart size={24} className="text-blue-300 opacity-50" />
              </div>
           </div>
         </div>
@@ -202,7 +213,7 @@ const Inventory: React.FC = () => {
               <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400" size={18} />
               <input 
                 type="text" 
-                placeholder="Filter Inventory by Item Name, Category or Asset ID..." 
+                placeholder="Filter Inventory by Item Name, Category or Location..." 
                 className="w-full pl-12 pr-4 py-3 bg-gray-50 dark:bg-gray-700 border border-gray-200 dark:border-gray-600 rounded-none outline-none font-bold text-sm dark:text-white focus:ring-1 focus:ring-[#4B0082]"
                 value={searchTerm}
                 onChange={(e) => setSearchTerm(e.target.value)}
@@ -225,8 +236,9 @@ const Inventory: React.FC = () => {
                      <th className="px-6 py-5">Asset Ref</th>
                      <th className="px-6 py-5">Item Specification</th>
                      <th className="px-6 py-5">Institutional Category</th>
-                     <th className="px-6 py-5 text-center">In-Stack Quantity</th>
-                     <th className="px-6 py-5 text-center">Condition Status</th>
+                     <th className="px-6 py-5 text-center">Quantity</th>
+                     <th className="px-6 py-5">Location</th>
+                     <th className="px-6 py-5 text-center">Condition</th>
                      <th className="px-6 py-5 text-right">Commit Actions</th>
                   </tr>
                </thead>
@@ -236,26 +248,30 @@ const Inventory: React.FC = () => {
                        <td className="px-6 py-5 font-mono text-xs font-bold text-[#4B0082] dark:text-purple-300">{item.id}</td>
                        <td className="px-6 py-5 font-black text-gray-900 dark:text-white uppercase tracking-tight leading-none text-sm">{item.name}</td>
                        <td className="px-6 py-5 text-[10px] font-black uppercase text-gray-500 dark:text-gray-400">{item.category}</td>
-                       <td className="px-6 py-5 text-center font-bold text-gray-700 dark:text-gray-300">{item.qty} <span className="text-[9px] text-gray-400 uppercase">{item.unit}</span></td>
+                       <td className="px-6 py-5 text-center font-bold text-gray-700 dark:text-gray-300">{item.quantity}</td>
+                       <td className="px-6 py-5 text-xs text-gray-500 font-bold uppercase tracking-widest">
+                          <span className="flex items-center gap-1.5"><MapPin size={12}/>{item.location || 'N/A'}</span>
+                       </td>
                        <td className="px-6 py-5 text-center">
                           <span className={`px-3 py-1 rounded-none text-[9px] font-black uppercase tracking-widest border ${
-                            item.status === 'Optimal' ? 'bg-emerald-50 text-emerald-700 border-emerald-200' : 
-                            item.status === 'Low Stock' ? 'bg-amber-50 text-amber-700 border-amber-200' : 
+                            item.condition === 'New' ? 'bg-emerald-50 text-emerald-700 border-emerald-200' : 
+                            item.condition === 'Good' ? 'bg-blue-50 text-blue-700 border-blue-200' : 
+                            item.condition === 'Fair' ? 'bg-amber-50 text-amber-700 border-amber-200' : 
                             'bg-red-50 text-red-700 border-red-200 animate-pulse'
                           }`}>
-                            {item.status}
+                            {item.condition}
                           </span>
                        </td>
                        <td className="px-6 py-5 text-right">
                           <div className="flex justify-end gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
                              <button onClick={() => handleOpenModal(item)} className="p-2 text-gray-400 hover:text-[#4B0082] transition-colors"><Edit size={16}/></button>
-                             <button onClick={() => deleteItem(item.id)} className="p-2 text-gray-400 hover:text-red-500 transition-colors"><Trash2 size={16}/></button>
+                             <button onClick={() => handleDelete(item.id)} className="p-2 text-gray-400 hover:text-red-500 transition-colors"><Trash2 size={16}/></button>
                           </div>
                        </td>
                     </tr>
                   ))}
                   {filteredItems.length === 0 && (
-                    <tr><td colSpan={6} className="py-24 text-center text-gray-400 font-black uppercase tracking-[0.4em] text-sm italic">Zero (0) Asset Records Identified in Query</td></tr>
+                    <tr><td colSpan={7} className="py-24 text-center text-gray-400 font-black uppercase tracking-[0.4em] text-sm italic">Zero (0) Asset Records Identified in Query</td></tr>
                   )}
                </tbody>
             </table>
@@ -275,7 +291,7 @@ const Inventory: React.FC = () => {
 
                 <form onSubmit={handleSave} className="p-10 space-y-8 bg-[#FAFAFA] dark:bg-gray-950">
                    <div className="space-y-2">
-                      <label className="text-[10px] font-black uppercase text-gray-500 tracking-[0.2em]">Item Formal Title</label>
+                      <label className="text-[10px] font-black uppercase text-gray-500 tracking-[0.2em]">Item Specification Name</label>
                       <input 
                         required
                         type="text" 
@@ -298,16 +314,16 @@ const Inventory: React.FC = () => {
                          </select>
                       </div>
                       <div className="space-y-2">
-                         <label className="text-[10px] font-black uppercase text-gray-500 tracking-[0.2em]">Current Registry Status</label>
+                         <label className="text-[10px] font-black uppercase text-gray-500 tracking-[0.2em]">Current Condition Status</label>
                          <select 
-                           value={formData.status}
-                           onChange={e => setFormData({...formData, status: e.target.value as any})}
+                           value={formData.condition}
+                           onChange={e => setFormData({...formData, condition: e.target.value as any})}
                            className="w-full px-5 py-4 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-none text-xs font-black uppercase cursor-pointer outline-none focus:border-[#4B0082]"
                          >
-                            <option value="Optimal">Optimal Supply</option>
-                            <option value="Low Stock">Supply Variance (Low)</option>
-                            <option value="Critical">Critical Shortage</option>
-                            <option value="Maintenance">Maintenance Lockdown</option>
+                            <option value="New">New / Sealed</option>
+                            <option value="Good">Good / Operational</option>
+                            <option value="Fair">Fair / Worn</option>
+                            <option value="Poor">Poor / Needs Maintenance</option>
                          </select>
                       </div>
                    </div>
@@ -325,14 +341,15 @@ const Inventory: React.FC = () => {
                          />
                       </div>
                       <div className="space-y-2">
-                         <label className="text-[10px] font-black uppercase text-gray-500 tracking-[0.2em]">Metric Unit</label>
-                         <select 
-                           value={formData.unit}
-                           onChange={e => setFormData({...formData, unit: e.target.value})}
-                           className="w-full px-5 py-4 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-none text-xs font-black uppercase cursor-pointer outline-none focus:border-[#4B0082]"
-                         >
-                            {['units', 'pcs', 'reams', 'liters', 'sets', 'kg'].map(unit => <option key={unit} value={unit}>{unit}</option>)}
-                         </select>
+                         <label className="text-[10px] font-black uppercase text-gray-500 tracking-[0.2em]">Storage Location</label>
+                         <input 
+                           required
+                           type="text" 
+                           placeholder="e.g. Main Library / Lab B"
+                           value={formData.location}
+                           onChange={e => setFormData({...formData, location: e.target.value})}
+                           className="w-full px-5 py-4 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-none outline-none font-bold text-sm uppercase tracking-tight focus:border-[#4B0082]"
+                         />
                       </div>
                    </div>
 

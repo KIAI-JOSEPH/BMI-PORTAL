@@ -1,4 +1,3 @@
-
 import React, { useState, useMemo, useEffect } from 'react';
 import { 
   ShieldCheck, 
@@ -21,28 +20,26 @@ import {
   Building2,
   Users
 } from 'lucide-react';
+import { useApiDataStore } from '../stores/apiDataStore';
 
 interface Visitor {
   id: string;
   name: string;
   purpose: string;
   host: string;
-  department: string;
   checkIn: string;
   checkOut?: string;
-  status: 'On-Site' | 'Exited' | 'Flagged';
-  phone: string;
+  status: 'Active' | 'Checked Out';
 }
 
 const Visitors: React.FC = () => {
-  const [visitors, setVisitors] = useState<Visitor[]>(() => {
-    const saved = localStorage.getItem('bmi_data_visitors');
-    return saved ? JSON.parse(saved) : [
-      { id: 'VIS-001', name: 'John Doe', purpose: 'Vendor - Food Supplies', host: 'Finance Office', department: 'Administration', checkIn: '08:45 AM', checkOut: '10:15 AM', status: 'Exited', phone: '+254 700 111 222' },
-      { id: 'VIS-002', name: 'Sarah Wilson', purpose: 'Parent Meeting', host: 'Prof. Peter Kamau', department: 'Education', checkIn: '11:00 AM', status: 'On-Site', phone: '+254 722 333 444' },
-      { id: 'VIS-003', name: 'James Kimani', purpose: 'Interview', host: 'HR Node', department: 'Administration', checkIn: '02:00 PM', status: 'On-Site', phone: '+254 711 555 666' },
-    ];
-  });
+  const {
+    visitors,
+    fetchVisitors,
+    createVisitor,
+    updateVisitor,
+    deleteVisitor,
+  } = useApiDataStore();
 
   const [searchTerm, setSearchTerm] = useState('');
   const [statusFilter, setStatusFilter] = useState('All Status');
@@ -51,55 +48,61 @@ const Visitors: React.FC = () => {
     name: '',
     purpose: '',
     host: '',
-    department: 'Administration',
-    phone: ''
   });
 
   useEffect(() => {
-    localStorage.setItem('bmi_data_visitors', JSON.stringify(visitors));
-  }, [visitors]);
+    fetchVisitors();
+  }, []);
 
   const filteredVisitors = useMemo(() => {
-    return visitors.filter(v => {
-      const matchesSearch = `${v.name} ${v.purpose} ${v.host} ${v.id}`.toLowerCase().includes(searchTerm.toLowerCase());
-      const matchesStatus = statusFilter === 'All Status' || v.status === statusFilter;
-      return matchesSearch && matchesStatus;
-    }).sort((a, b) => (a.status === 'On-Site' ? -1 : 1));
+    return (visitors || [])
+      .filter(v => {
+        const matchesSearch = `${v.name} ${v.purpose} ${v.host} ${v.id}`.toLowerCase().includes(searchTerm.toLowerCase());
+        const matchesStatus = statusFilter === 'All Status' || v.status === statusFilter;
+        return matchesSearch && matchesStatus;
+      })
+      .sort((a, b) => (a.status === 'Active' ? -1 : 1));
   }, [visitors, searchTerm, statusFilter]);
 
   const stats = {
-    active: visitors.filter(v => v.status === 'On-Site').length,
+    active: visitors.filter(v => v.status === 'Active').length,
     totalToday: visitors.length,
-    flagged: visitors.filter(v => v.status === 'Flagged').length
+    checkedOut: visitors.filter(v => v.status === 'Checked Out').length
   };
 
-  const handleCheckOut = (id: string) => {
+  const handleCheckOut = async (id: string) => {
     const time = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
-    setVisitors(prev => prev.map(v => v.id === id ? { ...v, status: 'Exited', checkOut: time } : v));
-  };
-
-  const handleRegister = (e: React.FormEvent) => {
-    e.preventDefault();
-    const time = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
-    const newVis: Visitor = {
-      id: `VIS-${Math.floor(Math.random() * 9000) + 1000}`,
-      ...formData,
-      checkIn: time,
-      status: 'On-Site'
-    };
-    setVisitors([newVis, ...visitors]);
-    setIsModalOpen(false);
-    setFormData({ name: '', purpose: '', host: '', department: 'Administration', phone: '' });
-  };
-
-  const deleteVisitor = (id: string) => {
-    if (window.confirm('Purge visitor record from security ledger?')) {
-      setVisitors(visitors.filter(v => v.id !== id));
+    const success = await updateVisitor(id, { status: 'Checked Out', checkOut: time });
+    if (!success) {
+      alert('Failed to check out visitor. Please try again.');
     }
   };
 
-  const toggleFlag = (id: string) => {
-    setVisitors(prev => prev.map(v => v.id === id ? { ...v, status: v.status === 'Flagged' ? 'Exited' : 'Flagged' } : v));
+  const handleRegister = async (e: React.FormEvent) => {
+    e.preventDefault();
+    const time = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+    
+    const success = await createVisitor({
+      ...formData,
+      checkIn: time,
+      status: 'Active'
+    });
+
+    if (success) {
+      setIsModalOpen(false);
+      setFormData({ name: '', purpose: '', host: '' });
+    } else {
+      alert('Failed to register visitor. Please try again.');
+    }
+  };
+
+  const handleDeleteVisitor = async (id: string) => {
+    if (window.confirm('Purge visitor record from security ledger?')) {
+      const success = await deleteVisitor(id);
+      if (!success) {
+        alert('Failed to purge visitor record. Please try again.');
+      }
+    }
   };
 
   return (
@@ -129,7 +132,7 @@ const Visitors: React.FC = () => {
             <Users size={14} />
             <span className="text-[9px] font-black uppercase tracking-widest">Entry Status</span>
          </div>
-         {['All Status', 'On-Site', 'Exited', 'Flagged'].map((status) => (
+         {['All Status', 'Active', 'Checked Out'].map((status) => (
             <button
               key={status}
               onClick={() => setStatusFilter(status)}
@@ -139,7 +142,7 @@ const Visitors: React.FC = () => {
                   : 'bg-white dark:bg-gray-800 text-gray-500 dark:text-gray-400 border border-gray-200 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-700 hover:text-[#4B0082]'
               }`}
             >
-              {status}
+              {status === 'Active' ? 'On-Site (Active)' : status === 'Checked Out' ? 'Checked Out (Exited)' : status}
             </button>
          ))}
       </div>
@@ -150,8 +153,8 @@ const Visitors: React.FC = () => {
           <div className="bg-white dark:bg-gray-800 p-8 rounded-none shadow-sm border border-gray-100 dark:border-gray-700 border-l-4 border-l-emerald-500 relative overflow-hidden group">
              <div className="flex justify-between items-start">
                 <div>
-                  <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Active On-Site</p>
-                  <p className="text-4xl font-black text-emerald-600 mt-1">{stats.active}</p>
+                   <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Active On-Site</p>
+                   <p className="text-4xl font-black text-emerald-600 mt-1">{stats.active}</p>
                 </div>
                 <div className="p-3 bg-emerald-50 dark:bg-emerald-900/20 text-emerald-600"><UserCheck size={24} /></div>
              </div>
@@ -160,19 +163,19 @@ const Visitors: React.FC = () => {
           <div className="bg-white dark:bg-gray-800 p-8 rounded-none shadow-sm border border-gray-100 dark:border-gray-700 border-l-4 border-l-[#4B0082] relative overflow-hidden group">
              <div className="flex justify-between items-start">
                 <div>
-                  <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Total Daily Intake</p>
-                  <p className="text-4xl font-black text-[#4B0082] dark:text-white mt-1">{stats.totalToday}</p>
+                   <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Total Daily Intake</p>
+                   <p className="text-4xl font-black text-[#4B0082] dark:text-white mt-1">{stats.totalToday}</p>
                 </div>
                 <div className="p-3 bg-purple-50 dark:bg-gray-700 rounded-none text-[#4B0082]"><LogIn size={24} /></div>
              </div>
           </div>
-          <div className="bg-white dark:bg-gray-800 p-8 rounded-none shadow-sm border border-gray-100 dark:border-gray-700 border-l-4 border-l-red-500 relative overflow-hidden group">
+          <div className="bg-white dark:bg-gray-800 p-8 rounded-none shadow-sm border border-gray-100 dark:border-gray-700 border-l-4 border-l-gray-500 relative overflow-hidden group">
              <div className="flex justify-between items-start">
                 <div>
-                  <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Flagged Alerts</p>
-                  <p className="text-4xl font-black text-red-600 mt-1">{stats.flagged}</p>
+                   <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Checked Out</p>
+                   <p className="text-4xl font-black text-gray-600 dark:text-gray-300 mt-1">{stats.checkedOut}</p>
                 </div>
-                <div className="p-3 bg-red-50 dark:bg-red-900/20 text-red-500 rounded-none"><ShieldAlert size={24} className={stats.flagged > 0 ? 'animate-pulse' : ''} /></div>
+                <div className="p-3 bg-gray-50 dark:bg-gray-900 text-gray-500 rounded-none"><LogOut size={24} /></div>
              </div>
           </div>
         </div>
@@ -204,7 +207,7 @@ const Visitors: React.FC = () => {
                    <tr className="bg-gray-50 dark:bg-gray-700/50 text-[10px] font-black text-gray-400 uppercase tracking-widest border-b border-gray-100 dark:border-gray-700">
                       <th className="px-6 py-5">Node ID</th>
                       <th className="px-6 py-5">Visitor Identity</th>
-                      <th className="px-6 py-5">Host & Department</th>
+                      <th className="px-6 py-5">Host Official</th>
                       <th className="px-6 py-5">Purpose of Visit</th>
                       <th className="px-6 py-5 text-center">Protocol Time</th>
                       <th className="px-6 py-5 text-center">Access Status</th>
@@ -213,52 +216,48 @@ const Visitors: React.FC = () => {
                 </thead>
                 <tbody className="divide-y divide-gray-50 dark:divide-gray-800">
                    {filteredVisitors.map((vis) => (
-                     <tr key={vis.id} className="hover:bg-purple-50/20 dark:hover:bg-gray-700/20 transition-all group">
-                        <td className="px-6 py-5 font-mono text-xs font-bold text-[#4B0082] dark:text-purple-300">{vis.id}</td>
-                        <td className="px-6 py-5">
-                           <p className="text-sm font-black text-gray-900 dark:text-white uppercase tracking-tight leading-none">{vis.name}</p>
-                           <p className="text-[9px] font-bold text-gray-400 uppercase tracking-widest mt-1.5">{vis.phone}</p>
-                        </td>
-                        <td className="px-6 py-5">
-                           <p className="text-xs font-bold text-gray-700 dark:text-gray-300 uppercase tracking-tight">{vis.host}</p>
-                           <p className="text-[9px] font-black text-gray-400 uppercase tracking-widest">{vis.department}</p>
-                        </td>
-                        <td className="px-6 py-5">
-                           <span className="text-xs font-medium text-gray-500 dark:text-gray-400 italic">"{vis.purpose}"</span>
-                        </td>
-                        <td className="px-6 py-5 text-center">
-                           <div className="flex flex-col items-center">
-                              <span className="text-[9px] font-black text-emerald-600 uppercase tracking-widest">In: {vis.checkIn}</span>
-                              {vis.checkOut && <span className="text-[9px] font-black text-red-600 uppercase tracking-widest">Out: {vis.checkOut}</span>}
-                           </div>
-                        </td>
-                        <td className="px-6 py-5 text-center">
-                           <span className={`px-3 py-1 rounded-none text-[9px] font-black uppercase tracking-widest border ${
-                              vis.status === 'On-Site' ? 'bg-emerald-50 text-emerald-700 border-emerald-200 shadow-[0_0_10px_rgba(16,185,129,0.2)]' : 
-                              vis.status === 'Flagged' ? 'bg-red-50 text-red-700 border-red-200 animate-pulse' :
-                              'bg-gray-50 text-gray-500 border-gray-200 opacity-60'
-                            }`}>
-                              {vis.status}
-                            </span>
-                        </td>
-                        <td className="px-6 py-5 text-right">
-                           <div className="flex justify-end gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
-                              {vis.status === 'On-Site' && (
-                                <button 
-                                  onClick={() => handleCheckOut(vis.id)}
-                                  className="p-2 text-emerald-600 hover:bg-emerald-50 rounded" title="Check Out"
-                                >
-                                  <LogOut size={16}/>
-                                </button>
-                              )}
-                              <button onClick={() => toggleFlag(vis.id)} className={`p-2 ${vis.status === 'Flagged' ? 'text-gray-400' : 'text-amber-500 hover:bg-amber-50'} rounded`} title="Flag Record"><ShieldAlert size={16}/></button>
-                              <button onClick={() => deleteVisitor(vis.id)} className="p-2 text-gray-300 hover:text-red-500" title="Purge Record"><Trash2 size={16}/></button>
-                           </div>
-                        </td>
-                     </tr>
+                      <tr key={vis.id} className="hover:bg-purple-50/20 dark:hover:bg-gray-700/20 transition-all group">
+                         <td className="px-6 py-5 font-mono text-xs font-bold text-[#4B0082] dark:text-purple-300">{vis.id}</td>
+                         <td className="px-6 py-5">
+                            <p className="text-sm font-black text-gray-900 dark:text-white uppercase tracking-tight leading-none">{vis.name}</p>
+                         </td>
+                         <td className="px-6 py-5">
+                            <p className="text-xs font-bold text-gray-700 dark:text-gray-300 uppercase tracking-tight">{vis.host}</p>
+                         </td>
+                         <td className="px-6 py-5">
+                            <span className="text-xs font-medium text-gray-500 dark:text-gray-400 italic">"{vis.purpose}"</span>
+                         </td>
+                         <td className="px-6 py-5 text-center">
+                            <div className="flex flex-col items-center">
+                               <span className="text-[9px] font-black text-emerald-600 uppercase tracking-widest">In: {vis.checkIn}</span>
+                               {vis.checkOut && <span className="text-[9px] font-black text-red-600 uppercase tracking-widest">Out: {vis.checkOut}</span>}
+                            </div>
+                         </td>
+                         <td className="px-6 py-5 text-center">
+                            <span className={`px-3 py-1 rounded-none text-[9px] font-black uppercase tracking-widest border ${
+                               vis.status === 'Active' ? 'bg-emerald-50 text-emerald-700 border-emerald-200 shadow-[0_0_10px_rgba(16,185,129,0.2)]' : 
+                               'bg-gray-50 text-gray-500 border-gray-200 opacity-60'
+                             }`}>
+                               {vis.status === 'Active' ? 'ON-SITE' : 'CHECKED OUT'}
+                             </span>
+                         </td>
+                         <td className="px-6 py-5 text-right">
+                            <div className="flex justify-end gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
+                               {vis.status === 'Active' && (
+                                 <button 
+                                   onClick={() => handleCheckOut(vis.id)}
+                                   className="p-2 text-emerald-600 hover:bg-emerald-50 rounded" title="Check Out"
+                                 >
+                                   <LogOut size={16}/>
+                                 </button>
+                               )}
+                               <button onClick={() => handleDeleteVisitor(vis.id)} className="p-2 text-gray-300 hover:text-red-500" title="Purge Record"><Trash2 size={16}/></button>
+                            </div>
+                         </td>
+                      </tr>
                    ))}
                    {filteredVisitors.length === 0 && (
-                     <tr><td colSpan={7} className="py-24 text-center text-gray-400 font-black uppercase tracking-[0.4em] text-sm italic">Zero (0) Security Records Identified in Ledger Search</td></tr>
+                      <tr><td colSpan={7} className="py-24 text-center text-gray-400 font-black uppercase tracking-[0.4em] text-sm italic">Zero (0) Security Records Identified in Ledger Search</td></tr>
                    )}
                 </tbody>
              </table>
@@ -277,7 +276,6 @@ const Visitors: React.FC = () => {
                 </div>
 
                 <form onSubmit={handleRegister} className="p-10 space-y-8 bg-[#FAFAFA] dark:bg-gray-950">
-                   {/* ... Form Inputs ... */}
                    <div className="space-y-2">
                       <label className="text-[10px] font-black uppercase text-gray-500 tracking-[0.2em]">Visitor Full Name</label>
                       <input 
@@ -288,29 +286,6 @@ const Visitors: React.FC = () => {
                         onChange={e => setFormData({...formData, name: e.target.value})}
                         className="w-full px-5 py-4 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-none outline-none font-bold text-sm uppercase tracking-tight focus:border-[#4B0082]"
                       />
-                   </div>
-                   <div className="grid grid-cols-2 gap-8">
-                      <div className="space-y-2">
-                         <label className="text-[10px] font-black uppercase text-gray-500 tracking-[0.2em]">Contact Phone</label>
-                         <input 
-                           required
-                           type="text" 
-                           placeholder="+254..."
-                           value={formData.phone}
-                           onChange={e => setFormData({...formData, phone: e.target.value})}
-                           className="w-full px-5 py-4 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-none outline-none font-bold text-sm focus:border-[#4B0082]"
-                         />
-                      </div>
-                      <div className="space-y-2">
-                         <label className="text-[10px] font-black uppercase text-gray-500 tracking-[0.2em]">Institutional Department</label>
-                         <select 
-                           value={formData.department}
-                           onChange={e => setFormData({...formData, department: e.target.value})}
-                           className="w-full px-5 py-4 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-none text-xs font-black uppercase cursor-pointer outline-none focus:border-[#4B0082]"
-                         >
-                            {['Administration', 'Theology', 'ICT', 'Business', 'Education', 'Health Center', 'Library'].map(d => <option key={d} value={d}>{d}</option>)}
-                         </select>
-                      </div>
                    </div>
                    <div className="space-y-2">
                       <label className="text-[10px] font-black uppercase text-gray-500 tracking-[0.2em]">Host Entity / Official to Visit</label>

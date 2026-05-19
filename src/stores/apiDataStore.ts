@@ -100,14 +100,23 @@ interface ApiDataState {
   // Convenience methods per module
   fetchHostels: () => Promise<void>;
   createHostel: (data: Partial<Hostel>) => Promise<Hostel | null>;
+  fetchRoomAssignments: () => Promise<void>;
+  createRoomAssignment: (data: Partial<RoomAssignment>) => Promise<RoomAssignment | null>;
+  deleteRoomAssignment: (id: string) => Promise<boolean>;
   fetchMedicalVisits: () => Promise<void>;
   createMedicalVisit: (data: Partial<MedicalVisit>) => Promise<MedicalVisit | null>;
+  deleteMedicalVisit: (id: string) => Promise<boolean>;
   fetchInventory: () => Promise<void>;
   createInventoryItem: (data: Partial<InventoryItem>) => Promise<InventoryItem | null>;
+  updateInventoryItem: (id: string, data: Partial<InventoryItem>) => Promise<InventoryItem | null>;
+  deleteInventoryItem: (id: string) => Promise<boolean>;
   fetchVisitors: () => Promise<void>;
   createVisitor: (data: Partial<Visitor>) => Promise<Visitor | null>;
+  updateVisitor: (id: string, data: Partial<Visitor>) => Promise<Visitor | null>;
+  deleteVisitor: (id: string) => Promise<boolean>;
   fetchAttendance: () => Promise<void>;
   createAttendanceRecord: (data: Partial<AttendanceRecord>) => Promise<AttendanceRecord | null>;
+  updateAttendanceRecord: (id: string, data: Partial<AttendanceRecord>) => Promise<AttendanceRecord | null>;
 }
 
 const parseJsonSafe = async (response: Response) => {
@@ -198,7 +207,7 @@ export const useApiDataStore = create<ApiDataState>((set, get) => ({
         set((s) => ({
           ...s,
           [key]: (s[key as keyof ApiDataState] as any[] || []).map((item: any) =>
-            item.id === id ? result.data : item
+              item.id === id ? result.data : item
           ),
         }));
         return result.data as T;
@@ -237,12 +246,29 @@ export const useApiDataStore = create<ApiDataState>((set, get) => ({
     return await get().createItem<Hostel>('hostels', '/hostels', data);
   },
 
+  fetchRoomAssignments: async () => {
+    await get().fetchCollection<RoomAssignment>('roomAssignments', '/hostels/assignments');
+  },
+
+  createRoomAssignment: async (data) => {
+    return await get().createItem<RoomAssignment>('roomAssignments', '/hostels/assignments', data);
+  },
+
+  deleteRoomAssignment: async (id) => {
+    // Falls back to generic deleteItem
+    return await get().deleteItem('roomAssignments', '/hostels/assignments', id);
+  },
+
   fetchMedicalVisits: async () => {
     await get().fetchCollection<MedicalVisit>('medicalVisits', '/medical');
   },
 
   createMedicalVisit: async (data) => {
     return await get().createItem<MedicalVisit>('medicalVisits', '/medical', data);
+  },
+
+  deleteMedicalVisit: async (id) => {
+    return await get().deleteItem('medicalVisits', '/medical', id);
   },
 
   fetchInventory: async () => {
@@ -253,6 +279,14 @@ export const useApiDataStore = create<ApiDataState>((set, get) => ({
     return await get().createItem<InventoryItem>('inventoryItems', '/inventory', data);
   },
 
+  updateInventoryItem: async (id, data) => {
+    return await get().updateItem<InventoryItem>('inventoryItems', '/inventory', id, data);
+  },
+
+  deleteInventoryItem: async (id) => {
+    return await get().deleteItem('inventoryItems', '/inventory', id);
+  },
+
   fetchVisitors: async () => {
     await get().fetchCollection<Visitor>('visitors', '/visitors');
   },
@@ -261,11 +295,23 @@ export const useApiDataStore = create<ApiDataState>((set, get) => ({
     return await get().createItem<Visitor>('visitors', '/visitors', data);
   },
 
+  updateVisitor: async (id, data) => {
+    return await get().updateItem<Visitor>('visitors', '/visitors', id, data);
+  },
+
+  deleteVisitor: async (id) => {
+    return await get().deleteItem('visitors', '/visitors', id);
+  },
+
   fetchAttendance: async () => {
     await get().fetchCollection<AttendanceRecord>('attendanceRecords', '/attendance');
   },
 
   createAttendanceRecord: async (data) => {
     return await get().createItem<AttendanceRecord>('attendanceRecords', '/attendance', data);
+  },
+
+  updateAttendanceRecord: async (id, data) => {
+    return await get().updateItem<AttendanceRecord>('attendanceRecords', '/attendance', id, data);
   },
 }));

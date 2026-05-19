@@ -262,6 +262,46 @@ const createAssignmentRoute = createRoute({
   },
 });
 
+const deleteAssignmentRoute = createRoute({
+  method: "delete",
+  path: "/assignments/{id}",
+  tags: ["Hostels"],
+  summary: "Delete a room assignment",
+  description: "Delete an existing room assignment record",
+  request: {
+    params: z.object({
+      id: z.string().openapi({ example: "assignment1" }),
+    }),
+  },
+  responses: {
+    200: {
+      content: {
+        "application/json": {
+          schema: ApiResponseSchema(z.null()),
+        },
+      },
+      description: "Room assignment deleted successfully",
+    },
+    404: {
+      content: {
+        "application/json": {
+          schema: ErrorResponseSchema,
+        },
+      },
+      description: "Room assignment not found",
+    },
+    500: {
+      content: {
+        "application/json": {
+          schema: ErrorResponseSchema,
+        },
+      },
+      description: "Server error",
+    },
+  },
+});
+
+
 // Implement routes
 hostelRouter.openapi(listHostelsRoute, async (c) => {
   try {
@@ -352,6 +392,26 @@ hostelRouter.openapi(
       logger.error("Create room assignment error:", error);
       return c.json(
         { success: false, error: "Failed to create room assignment" },
+        500,
+      );
+    }
+  },
+);
+
+hostelRouter.openapi(
+  deleteAssignmentRoute,
+  requireRole("admin", "registrar"),
+  async (c) => {
+    try {
+      const { id } = c.req.valid("param");
+      const pb = getPocketBase();
+      await pb.collection("room_assignments").delete(id);
+      CacheManager.invalidate("room_assignments");
+      return c.json({ success: true, data: null });
+    } catch (error) {
+      logger.error("Delete room assignment error:", error);
+      return c.json(
+        { success: false, error: "Failed to delete room assignment" },
         500,
       );
     }

@@ -61,4 +61,17 @@ visitorRouter.patch('/:id', requireRole('admin', 'staff'), zValidator('json', vi
   }
 });
 
+// DELETE /api/v1/visitors/:id
+visitorRouter.delete('/:id', requireRole('admin', 'staff'), async (c) => {
+  try {
+    const id = c.req.param('id');
+    const pb = getPocketBase();
+    await pb.collection('visitors').delete(id);
+    return c.json<ApiResponse<null>>({ success: true, data: null });
+  } catch (error) {
+    logger.error('Delete visitor error:', error);
+    return c.json<ApiResponse<never>>({ success: false, error: 'Failed to delete visitor' }, 500);
+  }
+});
+
 export default visitorRouter;

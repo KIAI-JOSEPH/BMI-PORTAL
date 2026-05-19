@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from "react";
+import React, { useState, useMemo, useEffect } from "react";
 import {
   CheckCircle2,
   XCircle,
@@ -15,8 +15,8 @@ import {
   Timer,
 } from "lucide-react";
 import { Student } from "../types";
-import { useDataStore } from "../stores/dataStore";
 import { useStudentsQuery } from "../hooks/useEntityQueries";
+import { useApiDataStore } from "../stores/apiDataStore";
 
 interface AttendanceState {
   [studentId: string]: "present" | "absent" | "late";
@@ -28,6 +28,14 @@ const Attendance: React.FC = () => {
     perPage: 1000,
   });
   const students = studentsRes?.data || [];
+  
+  const {
+    attendanceRecords,
+    fetchAttendance,
+    createAttendanceRecord,
+    updateAttendanceRecord,
+  } = useApiDataStore();
+
   const [selectedCourse, setSelectedCourse] = useState("School of Theology");
   const [searchTerm, setSearchTerm] = useState("");
   const [attendance, setAttendance] = useState<AttendanceState>({});
@@ -50,6 +58,10 @@ const Attendance: React.FC = () => {
     { name: "Education Dept.", faculty: "Education" },
   ];
 
+  useEffect(() => {
+    fetchAttendance();
+  }, []);
+
   const currentFaculty = useMemo(() => {
     return (
       courses.find((c) => c.name === selectedCourse)?.faculty || "Theology"
@@ -63,9 +75,35 @@ const Attendance: React.FC = () => {
         `${s.first_name} ${s.last_name} ${s.id} ${s.department ?? ""}`
           .toLowerCase()
           .includes(searchTerm.toLowerCase());
-      return matchesSearch;
+      return matchesFaculty && matchesSearch;
     });
   }, [students, currentFaculty, searchTerm]);
+
+  const existingRecord = useMemo(() => {
+    return (attendanceRecords || []).find(
+      (r) => r.courseId === selectedCourse && r.date === sessionDate
+    );
+  }, [attendanceRecords, selectedCourse, sessionDate]);
+
+  useEffect(() => {
+    if (existingRecord) {
+      const state: AttendanceState = {};
+      existingRecord.records.forEach((r) => {
+        // Find matching student code or id in filtered list
+        const s = students.find(stud => stud.student_code === r.studentId || stud.id === r.studentId);
+        if (s) {
+          state[s.id] = r.status.toLowerCase() as any;
+        }
+      });
+      setAttendance(state);
+      if (existingRecord.updated) {
+        setLastMarkedAt(new Date(existingRecord.updated).toLocaleString());
+      }
+    } else {
+      setAttendance({});
+      setLastMarkedAt(null);
+    }
+  }, [existingRecord, selectedCourse, sessionDate, students]);
 
   const handleMark = (id: string, status: "present" | "absent" | "late") => {
     setAttendance((prev) => ({
@@ -74,10 +112,38 @@ const Attendance: React.FC = () => {
     }));
   };
 
-  const handleSubmit = () => {
+  const handleSubmit = async () => {
     setIsSubmitting(true);
-    setTimeout(() => {
-      setIsSubmitting(false);
+    
+    const recordsPayload = filteredStudents.map((s) => {
+      const rawStatus = attendance[s.id] || "absent";
+      const status = (rawStatus.charAt(0).toUpperCase() + rawStatus.slice(1)) as any;
+      return {
+        studentId: s.student_code || s.id,
+        studentName: `${s.first_name} ${s.last_name}`,
+        status,
+      };
+    });
+
+    let success = false;
+    if (existingRecord) {
+      const res = await updateAttendanceRecord(existingRecord.id, {
+        courseId: selectedCourse,
+        date: sessionDate,
+        records: recordsPayload,
+      });
+      success = !!res;
+    } else {
+      const res = await createAttendanceRecord({
+        courseId: selectedCourse,
+        date: sessionDate,
+        records: recordsPayload,
+      });
+      success = !!res;
+    }
+
+    setIsSubmitting(false);
+    if (success) {
       setShowSuccess(true);
       const now = new Date();
       setLastMarkedAt(
@@ -88,10 +154,13 @@ const Attendance: React.FC = () => {
           hour: "2-digit",
           minute: "2-digit",
           second: "2-digit",
-        }),
+        })
       );
       setTimeout(() => setShowSuccess(false), 3000);
-    }, 1200);
+      fetchAttendance(); // refresh the records
+    } else {
+      alert("Failed to commit attendance registry. Please try again.");
+    }
   };
 
   const stats = useMemo(() => {
@@ -159,7 +228,7 @@ const Attendance: React.FC = () => {
             ) : (
               <Save size={12} className="text-[#FFD700]" />
             )}
-            Commit Registry
+            {existingRecord ? "Update Registry" : "Commit Registry"}
           </button>
         </div>
       </div>
@@ -177,7 +246,6 @@ const Attendance: React.FC = () => {
             key={course.name}
             onClick={() => {
               setSelectedCourse(course.name);
-              setAttendance({});
             }}
             className={`px-5 py-1.5 rounded-full text-[10px] font-black uppercase tracking-widest transition-all whitespace-nowrap ${
               selectedCourse === course.name
@@ -273,7 +341,7 @@ const Attendance: React.FC = () => {
                     >
                       <div className="flex items-center gap-4">
                         <div
-                          className={`w-10 h-10 rounded-none ${student.avatar_color} flex items-center justify-center font-bold text-white shadow-sm overflow-hidden`}
+                          className={`w-10 h-10 rounded-none bg-purple-600 flex items-center justify-center font-bold text-white shadow-sm overflow-hidden`}
                         >
                           {student.photo ? (
                             <img
@@ -290,7 +358,7 @@ const Attendance: React.FC = () => {
                             {student.first_name} {student.last_name}
                           </p>
                           <p className="text-[10px] text-gray-500 font-mono tracking-widest uppercase">
-                            {student.id} • {student.department}
+                            {student.student_code || student.id} • {student.department}
                           </p>
                         </div>
                       </div>
@@ -347,7 +415,7 @@ const Attendance: React.FC = () => {
         <div className="fixed bottom-12 left-1/2 transform -translate-x-1/2 z-[120] animate-fade-in">
           <div className="bg-gray-900 text-[#FFD700] px-10 py-5 rounded-none shadow-2xl flex items-center gap-4 border-2 border-[#FFD700] backdrop-blur-xl">
             <Check size={24} className="animate-pulse" />
-            <span className="font-black text-sm uppercase tracking-[0.2em] italic">
+            <span className="font-black text-sm uppercase tracking-[0.25em] italic">
               Attendance Registry Successfully Committed
             </span>
           </div>

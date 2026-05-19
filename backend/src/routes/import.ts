@@ -167,7 +167,11 @@ importRouter.post("/v2", async (c) => {
         "courses",
         "course_code",
         row.course_code,
-        row,
+        {
+          ...row,
+          code: row.code || row.course_code,
+          credit_hours: Number(row.credits || row.credit_hours || 3)
+        },
         "courses",
         row.course_code,
       );
@@ -214,15 +218,30 @@ importRouter.post("/v2", async (c) => {
     // 7. Students
     for (const row of data.students || []) {
       const progId = maps.programs.get(row.program_code);
-      if (progId)
+      if (progId) {
+        let statusVal = "Active";
+        if (row.status) {
+          const capitalized = row.status.charAt(0).toUpperCase() + row.status.slice(1).toLowerCase();
+          if (["Active", "Inactive", "Graduated", "Suspended"].includes(capitalized)) {
+            statusVal = capitalized;
+          }
+        }
         await findOrCreate(
           "students",
           "student_number",
           row.student_number,
-          { ...row, program_code: progId },
+          {
+            ...row,
+            program_code: progId,
+            student_code: row.student_code || row.student_number,
+            admission_no: row.admission_no || row.student_number,
+            full_name: row.full_name || `${row.first_name || ""} ${row.last_name || ""}`.trim(),
+            status: statusVal
+          },
           "students",
           row.student_number,
         );
+      }
     }
 
     // 8. Enrollments

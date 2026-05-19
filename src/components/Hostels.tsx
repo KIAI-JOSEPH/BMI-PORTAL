@@ -24,65 +24,18 @@ import {
 } from "lucide-react";
 import { Hostel, RoomAssignment, Student } from "../types";
 import { useDataStore } from "../stores/dataStore";
+import { useApiDataStore } from "../stores/apiDataStore";
 
 const Hostels: React.FC = () => {
   const students = useDataStore((s) => s.students);
-  const [halls, setHalls] = useState<Hostel[]>(() => {
-    const saved = localStorage.getItem("bmi_data_hostels");
-    return saved
-      ? JSON.parse(saved)
-      : [
-          {
-            id: "HAL-001",
-            name: "Bethlehem Hall",
-            type: "Male",
-            capacity: 250,
-            location: "South Campus",
-            status: "Near Capacity",
-          },
-          {
-            id: "HAL-002",
-            name: "Eden Residence",
-            type: "Female",
-            capacity: 300,
-            location: "North Campus",
-            status: "Available",
-          },
-          {
-            id: "HAL-003",
-            name: "Zion Wing",
-            type: "Male",
-            capacity: 100,
-            location: "East Campus",
-            status: "Full",
-          },
-          {
-            id: "HAL-004",
-            name: "Grace Hall",
-            type: "Female",
-            capacity: 200,
-            location: "West Campus",
-            status: "Available",
-          },
-        ];
-  });
-
-  const [assignments, setAssignments] = useState<RoomAssignment[]>(() => {
-    const saved = localStorage.getItem("bmi_data_hostel_assignments");
-    return saved
-      ? JSON.parse(saved)
-      : [
-          {
-            id: "ASN-001",
-            studentId: "BMI-2022-001",
-            studentName: "Aaron Keitany",
-            hostelId: "HAL-001",
-            roomNumber: "B-102",
-            checkInDate: "2023-08-27",
-            status: "Active",
-          },
-        ];
-  });
+  const {
+    hostels: halls,
+    roomAssignments: assignments,
+    fetchHostels,
+    fetchRoomAssignments,
+    createRoomAssignment,
+    deleteRoomAssignment,
+  } = useApiDataStore();
 
   const [activeTab, setActiveTab] = useState<"halls" | "registry">("halls");
   const [searchTerm, setSearchTerm] = useState("");
@@ -96,14 +49,9 @@ const Hostels: React.FC = () => {
   });
 
   useEffect(() => {
-    localStorage.setItem("bmi_data_hostels", JSON.stringify(halls));
-  }, [halls]);
-  useEffect(() => {
-    localStorage.setItem(
-      "bmi_data_hostel_assignments",
-      JSON.stringify(assignments),
-    );
-  }, [assignments]);
+    fetchHostels();
+    fetchRoomAssignments();
+  }, []);
 
   const filteredHalls = useMemo(() => {
     return halls.filter((h) =>
@@ -114,9 +62,9 @@ const Hostels: React.FC = () => {
   const filteredAssignments = useMemo(() => {
     return assignments.filter(
       (a) =>
-        a.studentName.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        a.studentId.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        a.roomNumber.toLowerCase().includes(searchTerm.toLowerCase()),
+        (a.studentName || "").toLowerCase().includes(searchTerm.toLowerCase()) ||
+        (a.studentId || "").toLowerCase().includes(searchTerm.toLowerCase()) ||
+        (a.roomNumber || "").toLowerCase().includes(searchTerm.toLowerCase()),
     );
   }, [assignments, searchTerm]);
 
@@ -129,42 +77,45 @@ const Hostels: React.FC = () => {
   // Filter halls based on selected student gender
   const allocationAvailableHalls = useMemo(() => {
     if (!newAssignment.studentId) return halls;
-    const student = students.find((s) => s.id === newAssignment.studentId);
+    const student = students.find((s) => s.id === newAssignment.studentId || s.student_code === newAssignment.studentId);
     if (!student) return halls;
     return halls.filter((h) => h.type === student.gender);
   }, [newAssignment.studentId, students, halls]);
 
-  const handleAllocate = (e: React.FormEvent) => {
+  const handleAllocate = async (e: React.FormEvent) => {
     e.preventDefault();
-    const student = students.find((s) => s.id === newAssignment.studentId);
+    const student = students.find((s) => s.id === newAssignment.studentId || s.student_code === newAssignment.studentId);
     if (!student) return;
 
-    const assignment: RoomAssignment = {
-      id: `ASN-${Math.floor(Math.random() * 10000)
-        .toString()
-        .padStart(4, "0")}`,
-      studentId: student.id,
+    const success = await createRoomAssignment({
+      studentId: student.student_code || student.id,
       studentName: `${student.first_name} ${student.last_name}`,
       hostelId: newAssignment.hostelId || selectedHall?.id || "",
       roomNumber: newAssignment.roomNumber,
       checkInDate: newAssignment.date,
       status: "Active",
-    };
-
-    setAssignments((prev) => [assignment, ...prev]);
-    setIsAllocationModalOpen(false);
-    setNewAssignment({
-      studentId: "",
-      hostelId: "",
-      roomNumber: "",
-      date: new Date().toISOString().split("T")[0],
     });
-    setSelectedHall(null);
+
+    if (success) {
+      setIsAllocationModalOpen(false);
+      setNewAssignment({
+        studentId: "",
+        hostelId: "",
+        roomNumber: "",
+        date: new Date().toISOString().split("T")[0],
+      });
+      setSelectedHall(null);
+    } else {
+      alert("Failed to allocate housing room. Please try again.");
+    }
   };
 
-  const deleteAssignment = (id: string) => {
+  const deleteAssignment = async (id: string) => {
     if (window.confirm("Revoke this housing allocation?")) {
-      setAssignments((prev) => prev.filter((a) => a.id !== id));
+      const success = await deleteRoomAssignment(id);
+      if (!success) {
+        alert("Failed to revoke housing assignment. Please try again.");
+      }
     }
   };
 

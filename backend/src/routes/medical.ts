@@ -70,4 +70,17 @@ medicalRouter.patch('/:id', requireRole('admin', 'staff'), zValidator('json', me
   }
 });
 
+// DELETE /api/v1/medical/:id — Delete a medical visit
+medicalRouter.delete('/:id', requireRole('admin', 'staff'), async (c) => {
+  try {
+    const id = c.req.param('id');
+    const pb = getPocketBase();
+    await pb.collection('medical_visits').delete(id);
+    return c.json<ApiResponse<any>>({ success: true, data: null });
+  } catch (error) {
+    logger.error('Delete medical visit error:', error);
+    return c.json<ApiResponse<never>>({ success: false, error: 'Failed to delete medical visit' }, 500);
+  }
+});
+
 export default medicalRouter;

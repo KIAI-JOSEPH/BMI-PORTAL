@@ -20,40 +20,16 @@ import {
 } from "lucide-react";
 import { MedicalVisit, Student } from "../types";
 import { useDataStore } from "../stores/dataStore";
+import { useApiDataStore } from "../stores/apiDataStore";
 
 export const Medical: React.FC = () => {
   const students = useDataStore((s) => s.students);
-  const [records, setRecords] = useState<MedicalVisit[]>(() => {
-    const saved = localStorage.getItem("bmi_medical_records");
-    return saved
-      ? JSON.parse(saved)
-      : [
-          {
-            id: "MED-101",
-            studentId: "BMI-2022-001",
-            studentName: "Aaron Keitany",
-            condition: "General Checkup",
-            bloodType: "O+",
-            date: "2024-05-20",
-            attendingStaff: "Sr. Mary",
-            status: "Normal",
-            vitals: { temp: "36.6", bp: "120/80", pulse: "72" },
-            notes: "Routine checkup, no complaints.",
-          },
-          {
-            id: "MED-102",
-            studentId: "BMI-2023-012",
-            studentName: "Beatrice Wanjiku",
-            condition: "Acute Migraine",
-            bloodType: "A-",
-            date: "2024-05-18",
-            attendingStaff: "Dr. John",
-            status: "Urgent",
-            vitals: { temp: "37.2", bp: "140/90", pulse: "88" },
-            notes: "Severe headache for 2 days. Administered analgesics.",
-          },
-        ];
-  });
+  const {
+    medicalVisits: records,
+    fetchMedicalVisits,
+    createMedicalVisit,
+    deleteMedicalVisit,
+  } = useApiDataStore();
 
   const [searchTerm, setSearchTerm] = useState("");
   const [statusFilter, setStatusFilter] = useState("All");
@@ -70,16 +46,16 @@ export const Medical: React.FC = () => {
   });
 
   useEffect(() => {
-    localStorage.setItem("bmi_medical_records", JSON.stringify(records));
-  }, [records]);
+    fetchMedicalVisits();
+  }, []);
 
   const filteredRecords = useMemo(() => {
-    return records
+    return (records || [])
       .filter((rec) => {
         const matchesSearch =
-          rec.studentName.toLowerCase().includes(searchTerm.toLowerCase()) ||
-          rec.studentId.toLowerCase().includes(searchTerm.toLowerCase()) ||
-          rec.condition.toLowerCase().includes(searchTerm.toLowerCase());
+          (rec.studentName || "").toLowerCase().includes(searchTerm.toLowerCase()) ||
+          (rec.studentId || "").toLowerCase().includes(searchTerm.toLowerCase()) ||
+          (rec.condition || "").toLowerCase().includes(searchTerm.toLowerCase());
         const matchesStatus =
           statusFilter === "All" || rec.status === statusFilter;
         return matchesSearch && matchesStatus;
@@ -93,16 +69,13 @@ export const Medical: React.FC = () => {
     activeStaff: 4,
   };
 
-  const handleAddVisit = (e: React.FormEvent) => {
+  const handleAddVisit = async (e: React.FormEvent) => {
     e.preventDefault();
-    const student = students.find((s) => s.id === newVisit.studentId);
+    const student = students.find((s) => s.id === newVisit.studentId || s.student_code === newVisit.studentId);
     if (!student) return;
 
-    const visit: MedicalVisit = {
-      id: `MED-${Math.floor(Math.random() * 1000)
-        .toString()
-        .padStart(3, "0")}`,
-      studentId: student.id,
+    const success = await createMedicalVisit({
+      studentId: student.student_code || student.id,
       studentName: `${student.first_name} ${student.last_name}`,
       condition: newVisit.condition || "General Observation",
       bloodType: newVisit.bloodType || "O+",
@@ -115,29 +88,35 @@ export const Medical: React.FC = () => {
         pulse: newVisit.vitals?.pulse || "70",
       },
       notes: newVisit.notes || "",
-    };
-
-    setRecords([visit, ...records]);
-    setIsModalOpen(false);
-    setNewVisit({
-      studentId: "",
-      condition: "",
-      bloodType: "O+",
-      status: "Normal",
-      attendingStaff: "Sr. Mary",
-      vitals: { temp: "", bp: "", pulse: "" },
-      notes: "",
     });
+
+    if (success) {
+      setIsModalOpen(false);
+      setNewVisit({
+        studentId: "",
+        condition: "",
+        bloodType: "O+",
+        status: "Normal",
+        attendingStaff: "Sr. Mary",
+        vitals: { temp: "", bp: "", pulse: "" },
+        notes: "",
+      });
+    } else {
+      alert("Failed to record medical visit. Please try again.");
+    }
   };
 
-  const deleteRecord = (id: string, e: React.MouseEvent) => {
+  const deleteRecord = async (id: string, e: React.MouseEvent) => {
     e.stopPropagation();
     if (
       window.confirm(
         "Decommission this medical record? This is a permanent action.",
       )
     ) {
-      setRecords(records.filter((r) => r.id !== id));
+      const success = await deleteMedicalVisit(id);
+      if (!success) {
+        alert("Failed to delete medical visit record. Please try again.");
+      }
     }
   };
 
