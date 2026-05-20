@@ -589,7 +589,7 @@ export const Transcripts: React.FC<TranscriptsProps> = (props) => {
       .filter((r) => r.score < 40)
       .map((r) => r.courseCode);
 
-    const programName = (selectedStudent.programme || selectedStudent.programCode || selectedStudent.program_code || "DIPLOMA IN CHRISTIAN MINISTRY AND THEOLOGY").toUpperCase();
+    const programName = (selectedStudent.programme || selectedStudent.program_code || "DIPLOMA IN CHRISTIAN MINISTRY AND THEOLOGY").toUpperCase();
     const isDegree =
       programName.includes("DEGREE") || programName.includes("BACHELOR");
     const isMasters = programName.includes("MASTER");

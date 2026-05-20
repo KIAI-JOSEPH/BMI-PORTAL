@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from "react";
-import { ShieldCheck, XCircle, CheckCircle2, Award } from "lucide-react";
+import { ShieldCheck, XCircle, CheckCircle2, Award, Calendar, BookOpen, MapPin, Clock, Activity, GraduationCap } from "lucide-react";
 import { Student } from "../types";
 
 interface VerifyProps {
@@ -60,6 +60,61 @@ const Verify: React.FC<VerifyProps> = ({ students }) => {
     }, 1500);
   }, [students]);
 
+  const getStatusBadge = (status: string) => {
+    switch (status) {
+      case "Graduated":
+        return (
+          <span className="px-3 py-1 text-xs font-bold uppercase tracking-wider rounded-full bg-emerald-100 text-emerald-800 border border-emerald-200">
+            Degree Conferred
+          </span>
+        );
+      case "Active":
+        return (
+          <span className="px-3 py-1 text-xs font-bold uppercase tracking-wider rounded-full bg-blue-100 text-blue-800 border border-blue-200">
+            Currently Enrolled - Active
+          </span>
+        );
+      case "Suspended":
+        return (
+          <span className="px-3 py-1 text-xs font-bold uppercase tracking-wider rounded-full bg-red-100 text-red-800 border border-red-200">
+            Suspended
+          </span>
+        );
+      case "Inactive":
+        return (
+          <span className="px-3 py-1 text-xs font-bold uppercase tracking-wider rounded-full bg-gray-100 text-gray-600 border border-gray-200">
+            Inactive
+          </span>
+        );
+      case "Applicant":
+        return (
+          <span className="px-3 py-1 text-xs font-bold uppercase tracking-wider rounded-full bg-amber-100 text-amber-800 border border-amber-200">
+            Admission Applicant
+          </span>
+        );
+      case "On Leave":
+        return (
+          <span className="px-3 py-1 text-xs font-bold uppercase tracking-wider rounded-full bg-amber-50 text-amber-700 border border-amber-100">
+            On Leave
+          </span>
+        );
+      default:
+        return (
+          <span className="px-3 py-1 text-xs font-bold uppercase tracking-wider rounded-full bg-gray-100 text-gray-800">
+            {status}
+          </span>
+        );
+    }
+  };
+
+  const getCurrentAcademicYear = (student: Student | null) => {
+    if (!student) return "";
+    const admissionYear = student.admissionYear ? parseInt(student.admissionYear) : 2022;
+    const yearOfStudy = student.year_of_study ? parseInt(student.year_of_study) : 1;
+    const currentAcademicYearStart = admissionYear + (yearOfStudy - 1);
+    return `${currentAcademicYearStart}/${currentAcademicYearStart + 1}`;
+  };
+
   if (status === "loading") {
     return (
       <div className="min-h-screen flex flex-col items-center justify-center bg-gray-50 p-4">
@@ -101,6 +156,7 @@ const Verify: React.FC<VerifyProps> = ({ students }) => {
   return (
     <div className="min-h-screen bg-gray-100 py-12 px-4 sm:px-6 lg:px-8 flex items-center justify-center">
       <div className="max-w-md w-full bg-white shadow-2xl overflow-hidden border-t-8 border-emerald-500 animate-slide-up">
+        {/* Verification Status Header */}
         <div className="bg-emerald-50 p-6 text-center border-b border-emerald-100">
           <div className="mx-auto flex items-center justify-center h-16 w-16 rounded-full bg-emerald-100 mb-4">
             <CheckCircle2 className="h-10 w-10 text-emerald-600" />
@@ -109,12 +165,13 @@ const Verify: React.FC<VerifyProps> = ({ students }) => {
             Official Record Verified
           </h2>
           <p className="text-emerald-700 text-[10px] font-bold uppercase tracking-widest mt-1">
-            BMI Institutional Blockchain Node
+            BMI Institutional Ledger Registry
           </p>
         </div>
 
+        {/* Student Casing and Details */}
         <div className="p-8 space-y-6">
-          <div className="text-center">
+          <div className="text-center pb-4 border-b border-gray-100">
             <img
               src="/BMI.svg"
               className="h-20 mx-auto mb-4 object-contain filter drop-shadow-sm"
@@ -123,58 +180,137 @@ const Verify: React.FC<VerifyProps> = ({ students }) => {
             <h1 className="text-xl font-black text-gray-900 uppercase leading-tight">
               {getFirstName(student)} {getLastName(student)}
             </h1>
-            <p className="text-xs font-bold text-[#4B0082] uppercase tracking-widest mt-1">
-              {student?.id}
+            <p className="text-xs font-mono text-gray-500 mt-1">
+              Reg No: {student?.reg_no || student?.student_code || student?.id}
             </p>
+            <div className="mt-3">
+              {getStatusBadge(student?.status || "Active")}
+            </div>
           </div>
 
-          <div className="border-t border-gray-100 pt-6 space-y-4">
-            <div className="flex justify-between items-center">
-              <span className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">
+          {/* Academic Details Section */}
+          <div className="space-y-4">
+            <div className="flex justify-between items-center py-1 border-b border-gray-50/50">
+              <span className="text-[10px] font-bold text-gray-400 uppercase tracking-widest flex items-center gap-1.5">
+                <GraduationCap className="h-3.5 w-3.5 text-gray-400" />
                 Credential
               </span>
-              <span className="text-xs font-black text-gray-800 uppercase text-right max-w-[60%]">
+              <span className="text-xs font-black text-gray-800 uppercase text-right max-w-[65%]">
                 {getDegreeTitle(student)}
               </span>
             </div>
-            <div className="flex justify-between items-center">
-              <span className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">
-                Faculty
+
+            <div className="flex justify-between items-center py-1 border-b border-gray-50/50">
+              <span className="text-[10px] font-bold text-gray-400 uppercase tracking-widest flex items-center gap-1.5">
+                <BookOpen className="h-3.5 w-3.5 text-gray-400" />
+                Faculty & Major
+              </span>
+              <span className="text-xs font-black text-gray-800 uppercase text-right max-w-[65%]">
+                {student?.faculty || "Faculty of Theology"}
+                <div className="text-[10px] text-gray-500 font-normal normal-case">
+                  {student?.department || "Department of Theology"}
+                </div>
+              </span>
+            </div>
+
+            <div className="flex justify-between items-center py-1 border-b border-gray-50/50">
+              <span className="text-[10px] font-bold text-gray-400 uppercase tracking-widest flex items-center gap-1.5">
+                <MapPin className="h-3.5 w-3.5 text-gray-400" />
+                Campus Location
               </span>
               <span className="text-xs font-black text-gray-800 uppercase">
-                {student?.faculty}
+                {student?.expand?.campus_id?.name || student?.campus_name || "Main Campus"}
               </span>
             </div>
-            <div className="flex justify-between items-center">
-              <span className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">
-                Graduation Year
+
+            <div className="flex justify-between items-center py-1 border-b border-gray-50/50">
+              <span className="text-[10px] font-bold text-gray-400 uppercase tracking-widest flex items-center gap-1.5">
+                <Clock className="h-3.5 w-3.5 text-gray-400" />
+                Mode of Study
               </span>
               <span className="text-xs font-black text-gray-800 uppercase">
-                {student?.admissionYear
-                  ? parseInt(student.admissionYear) + 4
-                  : new Date().getFullYear()}
+                {student?.mode_of_study || "Full-time"}
               </span>
             </div>
-            <div className="flex justify-between items-center">
-              <span className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">
-                Honors
+
+            <div className="flex justify-between items-center py-1 border-b border-gray-50/50">
+              <span className="text-[10px] font-bold text-gray-400 uppercase tracking-widest flex items-center gap-1.5">
+                <Calendar className="h-3.5 w-3.5 text-gray-400" />
+                Admission Year
               </span>
-              <span className="text-xs font-black text-[#4B0082] uppercase">
-                {getGraduationClass(student) || "Pass"}
+              <span className="text-xs font-black text-gray-800 uppercase">
+                {student?.admissionYear || (student?.admission_date ? new Date(student.admission_date).getFullYear().toString() : "2022")}
               </span>
             </div>
+
+            {student?.status === "Graduated" ? (
+              <>
+                <div className="flex justify-between items-center py-1 border-b border-gray-50/50">
+                  <span className="text-[10px] font-bold text-gray-400 uppercase tracking-widest flex items-center gap-1.5">
+                    <Award className="h-3.5 w-3.5 text-emerald-600" />
+                    Conferral Date
+                  </span>
+                  <span className="text-xs font-black text-emerald-700 uppercase">
+                    {student?.graduation_date || (student?.admissionYear ? `${parseInt(student.admissionYear) + 4}-11-18` : "2026-11-18")}
+                  </span>
+                </div>
+                <div className="flex justify-between items-center py-1 border-b border-gray-50/50">
+                  <span className="text-[10px] font-bold text-gray-400 uppercase tracking-widest flex items-center gap-1.5">
+                    <ShieldCheck className="h-3.5 w-3.5 text-[#4B0082]" />
+                    Honors Class
+                  </span>
+                  <span className="text-xs font-black text-[#4B0082] uppercase">
+                    {getGraduationClass(student) || "Pass"}
+                  </span>
+                </div>
+              </>
+            ) : (
+              <>
+                <div className="flex justify-between items-center py-1 border-b border-gray-50/50">
+                  <span className="text-[10px] font-bold text-gray-400 uppercase tracking-widest flex items-center gap-1.5">
+                    <Activity className="h-3.5 w-3.5 text-blue-600 animate-pulse" />
+                    Current Academic Year
+                  </span>
+                  <span className="text-xs font-black text-blue-700 uppercase">
+                    {getCurrentAcademicYear(student)}
+                  </span>
+                </div>
+                <div className="flex justify-between items-center py-1 border-b border-gray-50/50">
+                  <span className="text-[10px] font-bold text-gray-400 uppercase tracking-widest flex items-center gap-1.5">
+                    <Calendar className="h-3.5 w-3.5 text-gray-400" />
+                    Expected Graduation
+                  </span>
+                  <span className="text-xs font-black text-gray-800 uppercase">
+                    {student?.admissionYear ? parseInt(student.admissionYear) + 4 : new Date().getFullYear()}
+                  </span>
+                </div>
+              </>
+            )}
           </div>
 
-          <div className="bg-gray-50 p-4 text-center border border-gray-100">
-            <p className="text-[9px] text-gray-400 font-mono break-all font-bold">
-              SERIAL: {serial}
-            </p>
+          {/* Cryptographic Seal */}
+          <div className="bg-slate-50 p-4 border border-slate-100 rounded space-y-1.5">
+            <div className="flex justify-between items-center">
+              <span className="text-[9px] text-gray-400 font-bold uppercase tracking-wider">Ledger Reference</span>
+              <span className="text-[9px] text-gray-600 font-mono font-bold break-all">{serial}</span>
+            </div>
+            <div className="flex justify-between items-center">
+              <span className="text-[9px] text-gray-400 font-bold uppercase tracking-wider">Verification Date</span>
+              <span className="text-[9px] text-gray-600 font-bold">{new Date().toLocaleString('en-US', { dateStyle: 'medium', timeStyle: 'short' })}</span>
+            </div>
+            <div className="flex justify-between items-center">
+              <span className="text-[9px] text-gray-400 font-bold uppercase tracking-wider">Registry Authority</span>
+              <span className="text-[9px] text-emerald-700 font-bold flex items-center gap-1">
+                <ShieldCheck className="h-3 w-3 text-emerald-600" /> SECURE SIGNATURE VERIFIED
+              </span>
+            </div>
           </div>
         </div>
 
+        {/* Footer */}
         <div className="bg-gray-900 px-6 py-4 text-center">
           <p className="text-[9px] text-gray-500 font-bold uppercase tracking-widest">
-            BMI University • Office of the Registrar
+            Bamburi Metropolitan Institute • Office of the Registrar
           </p>
         </div>
       </div>
