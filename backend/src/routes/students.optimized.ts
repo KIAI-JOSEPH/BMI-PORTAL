@@ -221,7 +221,8 @@ studentsRouter.delete("/:id", requireRole("admin"), async (c) => {
 
     // Invalidate cache
     CacheManager.invalidate("students");
-    CacheManager.invalidate("academic_records");
+    CacheManager.invalidate("grades");
+    CacheManager.invalidate("enrollments");
 
     return c.json<ApiResponse<null>>({
       success: true,

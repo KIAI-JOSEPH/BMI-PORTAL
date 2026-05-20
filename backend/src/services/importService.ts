@@ -27,6 +27,17 @@ function calculateGrade(percentage: number) {
 export async function importRelationalData(data: any) {
   const pb = getPocketBase();
 
+  // Load campuses map
+  const campusMap = new Map<string, string>();
+  try {
+    const campusesList = await pb.collection("campuses").getFullList();
+    campusesList.forEach(c => {
+      campusMap.set(c.name.toLowerCase().trim(), c.id);
+    });
+  } catch (e) {
+    logger.warn("Failed to load campuses for import mapping: " + errorMessage(e));
+  }
+
   // We will build maps of Codes -> PB IDs
   const maps = {
     faculties: new Map<string, string>(),
@@ -37,6 +48,8 @@ export async function importRelationalData(data: any) {
     students: new Map<string, string>(),
     enrollments: new Map<string, string>(),
   };
+
+  const programNames = new Map<string, string>();
 
   const results = {
     faculties: 0,
@@ -65,7 +78,12 @@ export async function importRelationalData(data: any) {
       const existing = await pb
         .collection(collection)
         .getFirstListItem(`${filterField}="${safeValue}"`);
+      
+      // Update existing record
+      await pb.collection(collection).update(existing.id, createData);
+      
       if (mapKey && mapCode) maps[mapKey].set(mapCode, existing.id);
+      results[collection as keyof typeof results]++;
       return existing;
     } catch (e) {
       // Not found, create
@@ -115,8 +133,8 @@ export async function importRelationalData(data: any) {
   // 3. Programs
   for (const row of data.programs || []) {
     const deptId = maps.departments.get(row.dept_code);
-    if (deptId)
-      await findOrCreate(
+    if (deptId) {
+      const record = await findOrCreate(
         "programs",
         "program_code",
         row.program_code,
@@ -124,14 +142,18 @@ export async function importRelationalData(data: any) {
         "programs",
         row.program_code,
       );
+      if (record) {
+        programNames.set(record.id, row.name);
+      }
+    }
   }
 
   // 4. Courses
   for (const row of data.courses || []) {
     await findOrCreate(
       "courses",
-      "course_code",
-      row.course_code,
+      "code",
+      row.course_code || row.code,
       {
         ...row,
         code: row.code || row.course_code,
@@ -148,11 +170,13 @@ export async function importRelationalData(data: any) {
     const crsId = maps.courses.get(row.course_code);
     if (progId && crsId) {
       try {
-        await pb
+        const ex = await pb
           .collection("program_courses")
           .getFirstListItem(
             `program_code="${progId}" && course_code="${crsId}"`,
           );
+        await pb.collection("program_courses").update(ex.id, { ...row, program_code: progId, course_code: crsId });
+        results.program_courses++;
       } catch (e) {
         try {
           await pb
@@ -191,6 +215,18 @@ export async function importRelationalData(data: any) {
           statusVal = capitalized;
         }
       }
+      
+      let campusId = "";
+      if (row.campus) {
+        const key = String(row.campus).toLowerCase().trim();
+        let normKey = key;
+        if (key === "karatina a") normKey = "karatina 1";
+        if (key === "karatina b") normKey = "karatina 2";
+        campusId = campusMap.get(normKey) || "";
+      }
+
+      const programName = programNames.get(progId) || "";
+
       await findOrCreate(
         "students",
         "student_number",
@@ -198,10 +234,12 @@ export async function importRelationalData(data: any) {
         {
           ...row,
           program_code: progId,
+          programme: programName,
           student_code: row.student_code || row.student_number,
           admission_no: row.admission_no || row.student_number,
           full_name: row.full_name || `${row.first_name || ""} ${row.last_name || ""}`.trim(),
-          status: statusVal
+          status: statusVal,
+          campus_id: campusId || undefined
         },
         "students",
         row.student_number,
@@ -220,10 +258,16 @@ export async function importRelationalData(data: any) {
           .getFirstListItem(
             `student_number="${studentId}" && course_code="${courseId}" && academic_year="${row.academic_year}" && semester="${row.semester}"`,
           );
+        await pb.collection("enrollments").update(ex.id, {
+          ...row,
+          student_number: studentId,
+          course_code: courseId,
+        });
         maps.enrollments.set(
           `${row.student_number}_${row.course_code}`,
           ex.id,
         );
+        results.enrollments++;
       } catch (e) {
         try {
           const created = await pb
@@ -251,9 +295,15 @@ export async function importRelationalData(data: any) {
     if (enrollmentId) {
       const { grade_letter, gpa } = calculateGrade(Number(row.percentage));
       try {
-        await pb
+        const ex = await pb
           .collection("grades")
           .getFirstListItem(`enrollment_id="${enrollmentId}"`);
+        await pb.collection("grades").update(ex.id, {
+          percentage: Number(row.percentage),
+          grade_letter,
+          gpa,
+        });
+        results.grades++;
       } catch (e) {
         try {
           await pb.collection("grades").create({

@@ -29,6 +29,43 @@ import { useDataStore } from "../stores/dataStore";
 import { useUIStore } from "../stores/uiStore";
 import { useStudentsQuery } from "../hooks/useEntityQueries";
 
+function formatAdmissionDate(dateStr: string) {
+  if (!dateStr) return "";
+  try {
+    const cleanDateStr = dateStr.includes(" ") ? dateStr.split(" ")[0] : dateStr;
+    const date = new Date(cleanDateStr);
+    if (isNaN(date.getTime())) return dateStr;
+    const day = date.getDate();
+    const months = ["JAN", "FEB", "MAR", "APR", "MAY", "JUN", "JUL", "AUG", "SEP", "OCT", "NOV", "DEC"];
+    const month = months[date.getMonth()];
+    const year = date.getFullYear();
+    
+    let suffix = "TH";
+    if (day === 1 || day === 21 || day === 31) suffix = "ST";
+    else if (day === 2 || day === 22) suffix = "ND";
+    else if (day === 3 || day === 23) suffix = "RD";
+    
+    return `${day}${suffix} ${month} ${year}`;
+  } catch {
+    return dateStr;
+  }
+}
+
+function formatSimpleDate(dateStr: string) {
+  if (!dateStr) return "";
+  try {
+    const cleanDateStr = dateStr.includes(" ") ? dateStr.split(" ")[0] : dateStr;
+    const date = new Date(cleanDateStr);
+    if (isNaN(date.getTime())) return dateStr;
+    const day = String(date.getDate()).padStart(2, '0');
+    const month = String(date.getMonth() + 1).padStart(2, '0');
+    const year = date.getFullYear();
+    return `${day}/${month}/${year}`;
+  } catch {
+    return dateStr;
+  }
+}
+
 interface TranscriptsProps {
   students?: Student[];
   courses?: Course[];
@@ -552,7 +589,7 @@ export const Transcripts: React.FC<TranscriptsProps> = (props) => {
       .filter((r) => r.score < 40)
       .map((r) => r.courseCode);
 
-    const programName = "DIPLOMA IN CHRISTIAN MINISTRY AND THEOLOGY";
+    const programName = (selectedStudent.programme || selectedStudent.programCode || selectedStudent.program_code || "DIPLOMA IN CHRISTIAN MINISTRY AND THEOLOGY").toUpperCase();
     const isDegree =
       programName.includes("DEGREE") || programName.includes("BACHELOR");
     const isMasters = programName.includes("MASTER");
@@ -1340,7 +1377,7 @@ export const Transcripts: React.FC<TranscriptsProps> = (props) => {
                                 font: "Arial",
                               }),
                               new TextRun({
-                                text: "4 (FOUR)",
+                                text: selectedStudent.year_of_study || "4 (FOUR)",
                                 size: 18,
                                 bold: true,
                                 font: "Arial",
@@ -1369,7 +1406,9 @@ export const Transcripts: React.FC<TranscriptsProps> = (props) => {
                               }),
                               new TextRun({
                                 text: (
-                                  selectedStudent.program_code ?? ""
+                                  selectedStudent.programme ||
+                                  selectedStudent.program_code ||
+                                  ""
                                 ).toUpperCase(),
                                 size: 18,
                                 bold: true,
@@ -1403,7 +1442,7 @@ export const Transcripts: React.FC<TranscriptsProps> = (props) => {
                               }),
                               new TextRun({
                                 text: (
-                                  selectedStudent.program_code ?? ""
+                                  selectedStudent.faculty || "THEOLOGY"
                                 ).toUpperCase(),
                                 size: 18,
                                 bold: true,
@@ -1432,7 +1471,7 @@ export const Transcripts: React.FC<TranscriptsProps> = (props) => {
                                 font: "Arial",
                               }),
                               new TextRun({
-                                text: selectedStudent.id,
+                                text: selectedStudent.student_number || selectedStudent.student_code || selectedStudent.id,
                                 size: 18,
                                 bold: true,
                                 font: "Courier New",
@@ -1465,7 +1504,7 @@ export const Transcripts: React.FC<TranscriptsProps> = (props) => {
                                 font: "Arial",
                               }),
                               new TextRun({
-                                text: "27/08/2022",
+                                text: formatSimpleDate(selectedStudent.admission_date) || "27/08/2022",
                                 size: 18,
                                 bold: true,
                                 font: "Arial",
@@ -1493,7 +1532,7 @@ export const Transcripts: React.FC<TranscriptsProps> = (props) => {
                                 font: "Arial",
                               }),
                               new TextRun({
-                                text: "21/12/2026",
+                                text: selectedStudent.graduation_date ? formatSimpleDate(selectedStudent.graduation_date) : "21/12/2026",
                                 size: 18,
                                 bold: true,
                                 font: "Arial",
@@ -2128,28 +2167,28 @@ export const Transcripts: React.FC<TranscriptsProps> = (props) => {
   <!-- Student Details Grid (2 columns) -->
   <!-- Left Column -->
   <text x="60" y="320" font-family="Arial, sans-serif" font-size="9" fill="#6B7280">Year of study:</text>
-  <text x="150" y="320" font-family="Arial, sans-serif" font-size="10" font-weight="bold" fill="#000000">4 (FOUR)</text>
+  <text x="150" y="320" font-family="Arial, sans-serif" font-size="10" font-weight="bold" fill="#000000">${selectedStudent.year_of_study || "4 (FOUR)"}</text>
   <line x1="60" y1="325" x2="350" y2="325" stroke="#E5E7EB" stroke-width="0.5"/>
 
   <text x="60" y="345" font-family="Arial, sans-serif" font-size="9" fill="#6B7280">FACULTY OF:</text>
-  <text x="150" y="345" font-family="Arial, sans-serif" font-size="10" font-weight="bold" fill="#000000">${(selectedStudent.program_code ?? "").toUpperCase()}</text>
+  <text x="150" y="345" font-family="Arial, sans-serif" font-size="10" font-weight="bold" fill="#000000">${(selectedStudent.faculty || "THEOLOGY").toUpperCase()}</text>
   <line x1="60" y1="350" x2="350" y2="350" stroke="#E5E7EB" stroke-width="0.5"/>
 
   <text x="60" y="370" font-family="Arial, sans-serif" font-size="9" fill="#6B7280">Admission:</text>
-  <text x="150" y="370" font-family="Arial, sans-serif" font-size="10" font-weight="bold" fill="#000000">${selectedStudent.admission_date}</text>
+  <text x="150" y="370" font-family="Arial, sans-serif" font-size="10" font-weight="bold" fill="#000000">${formatSimpleDate(selectedStudent.admission_date) || selectedStudent.admission_date || ""}</text>
   <line x1="60" y1="375" x2="350" y2="375" stroke="#E5E7EB" stroke-width="0.5"/>
 
   <!-- Right Column -->
   <text x="400" y="320" font-family="Arial, sans-serif" font-size="9" fill="#6B7280">Program:</text>
-  <text x="470" y="320" font-family="Arial, sans-serif" font-size="10" font-weight="bold" fill="#000000">${(selectedStudent.program_code ?? "").substring(0, 30).toUpperCase()}</text>
+  <text x="470" y="320" font-family="Arial, sans-serif" font-size="10" font-weight="bold" fill="#000000">${(selectedStudent.programme || selectedStudent.program_code || "").substring(0, 45).toUpperCase()}</text>
   <line x1="400" y1="325" x2="730" y2="325" stroke="#E5E7EB" stroke-width="0.5"/>
 
   <text x="400" y="345" font-family="Arial, sans-serif" font-size="9" fill="#6B7280">Student ID:</text>
-  <text x="470" y="345" font-family="Courier New, monospace" font-size="10" font-weight="bold" fill="#DC2626">${selectedStudent.id}</text>
+  <text x="470" y="345" font-family="Courier New, monospace" font-size="10" font-weight="bold" fill="#DC2626">${selectedStudent.student_number || selectedStudent.student_code || selectedStudent.id}</text>
   <line x1="400" y1="350" x2="730" y2="350" stroke="#E5E7EB" stroke-width="0.5"/>
 
   <text x="400" y="370" font-family="Arial, sans-serif" font-size="9" fill="#6B7280">Graduation:</text>
-  <text x="470" y="370" font-family="Arial, sans-serif" font-size="10" font-weight="bold" fill="#000000">${parseInt(selectedStudent.admission_date) + 4}</text>
+  <text x="470" y="370" font-family="Arial, sans-serif" font-size="10" font-weight="bold" fill="#000000">${selectedStudent.graduation_date ? formatSimpleDate(selectedStudent.graduation_date) : "21/12/2026"}</text>
   <line x1="400" y1="375" x2="730" y2="375" stroke="#E5E7EB" stroke-width="0.5"/>
 
   <!-- Academic Performance Section -->
@@ -3149,7 +3188,7 @@ export const Transcripts: React.FC<TranscriptsProps> = (props) => {
                         PROGRAM:
                       </span>
                       <span className="uppercase text-gray-950 font-montserrat font-bold tracking-wide">
-                        DIPLOMA IN CHRISTIAN MINISTRY AND THEOLOGY
+                        {selectedStudent.programme || "DIPLOMA IN CHRISTIAN MINISTRY AND THEOLOGY"}
                       </span>
                     </div>
                     <div className="flex justify-between border-b border-gray-100 pb-0.5">
@@ -3157,7 +3196,7 @@ export const Transcripts: React.FC<TranscriptsProps> = (props) => {
                         ADMISSION DATE:
                       </span>
                       <span className="uppercase text-gray-950 font-montserrat font-bold tracking-wide">
-                        4TH FEB 2024
+                        {selectedStudent.admission_date ? formatAdmissionDate(selectedStudent.admission_date) : "4TH FEB 2024"}
                       </span>
                     </div>
                   </div>
@@ -3168,7 +3207,7 @@ export const Transcripts: React.FC<TranscriptsProps> = (props) => {
                         AWARD TYPE:
                       </span>
                       <span className="uppercase text-gray-950 font-montserrat font-bold tracking-wide">
-                        DIPLOMA
+                        {selectedStudent.degree_level || selectedStudent.award_type || "DIPLOMA"}
                       </span>
                     </div>
                     <div className="flex justify-between border-b border-gray-100 pb-0.5">
@@ -3185,7 +3224,7 @@ export const Transcripts: React.FC<TranscriptsProps> = (props) => {
                         MODE OF STUDY:
                       </span>
                       <span className="uppercase text-gray-950 font-montserrat font-bold tracking-wide">
-                        FULL-TIME
+                        {selectedStudent.mode_of_study || "FULL-TIME"}
                       </span>
                     </div>
                     <div className="flex justify-between border-b border-gray-100 pb-0.5">
@@ -3193,7 +3232,7 @@ export const Transcripts: React.FC<TranscriptsProps> = (props) => {
                         GRADUATION DATE:
                       </span>
                       <span className="uppercase text-gray-950 font-montserrat font-bold tracking-wide">
-                        1ST MAY 2026
+                        {selectedStudent.graduation_date ? formatAdmissionDate(selectedStudent.graduation_date) : "1ST MAY 2026"}
                       </span>
                     </div>
                   </div>

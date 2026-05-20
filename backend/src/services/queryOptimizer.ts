@@ -261,17 +261,23 @@ export const StudentQueries = {
     }
     
     const result = await query('students')
-      .expand(['campus_id', 'academic_records_via_student_id'])
+      .expand(['campus_id', 'program_code.dept_code.faculty_code', 'academic_records_via_student_id'])
       .filter(filterStr)
       .sort('-created')
       .paginate(page, perPage)
       .execute();
 
-    // Normalise names: split full_name into first_name / last_name when absent
+    // Normalise names and resolve programme dynamically
     result.items = result.items.map((s: any) => {
       if (s.full_name && !s.first_name) {
         const parts = s.full_name.trim().split(/\s+/);
-        return { ...s, first_name: parts[0] || '', last_name: parts.slice(1).join(' ') || '' };
+        s = { ...s, first_name: parts[0] || '', last_name: parts.slice(1).join(' ') || '' };
+      }
+      if (s.expand?.program_code) {
+        s.programme = s.expand.program_code.name || s.expand.program_code.program_code || s.programme || '';
+        s.degree_level = s.expand.program_code.degree_level || s.degree_level || '';
+        s.department = s.expand.program_code.expand?.dept_code?.name || s.department || '';
+        s.faculty = s.expand.program_code.expand?.dept_code?.expand?.faculty_code?.name || s.faculty || '';
       }
       return s;
     });
@@ -285,7 +291,7 @@ export const StudentQueries = {
   async getWithAcademicHistory(studentId: string) {
     return withPocketBase(async (pb) => {
       let student = await pb.collection('students').getOne(studentId, {
-        expand: 'campus_id',
+        expand: 'campus_id,program_code.dept_code.faculty_code',
       });
       // Ensure first_name/last_name are always populated from full_name
       // (our import stores full_name; split here so every caller gets consistent data)
@@ -293,11 +299,17 @@ export const StudentQueries = {
         const parts = student.full_name.trim().split(/\s+/);
         student = { ...student, first_name: parts[0] || '', last_name: parts.slice(1).join(' ') || '' };
       }
+      if (student.expand?.program_code) {
+        student.programme = student.expand.program_code.name || student.expand.program_code.program_code || student.programme || '';
+        student.degree_level = student.expand.program_code.degree_level || student.degree_level || '';
+        student.department = student.expand.program_code.expand?.dept_code?.name || student.department || '';
+        student.faculty = student.expand.program_code.expand?.dept_code?.expand?.faculty_code?.name || student.faculty || '';
+      }
       
-      const academicRecords = await pb.collection('academic_records').getList(1, 100, {
-        filter: `student_id="${studentId}"`,
-        expand: 'course_id,course_id.module_id',
-        sort: '-academic_year,-semester',
+      const academicRecords = await pb.collection('grades').getList(1, 100, {
+        filter: `enrollment_id.student_number="${studentId}"`,
+        expand: 'enrollment_id.course_code,enrollment_id.course_code.module_id',
+        sort: '-enrollment_id.academic_year,-enrollment_id.semester',
       });
       
       return {
@@ -311,12 +323,25 @@ export const StudentQueries = {
    * Get students by campus (cached)
    */
   async getByCampus(campusId: string) {
-    return query('students')
-      .expand('campus_id')
+    const result = await query('students')
+      .expand(['campus_id', 'program_code'])
       .filter(`campus_id="${campusId}"`)
       .sort('full_name')
       .cached(600000) // Cache for 10 minutes
       .execute();
+
+    result.items = result.items.map((s: any) => {
+      if (s.full_name && !s.first_name) {
+        const parts = s.full_name.trim().split(/\s+/);
+        s = { ...s, first_name: parts[0] || '', last_name: parts.slice(1).join(' ') || '' };
+      }
+      if (s.expand?.program_code) {
+        s.programme = s.expand.program_code.name || s.expand.program_code.program_code;
+      }
+      return s;
+    });
+
+    return result;
   },
 };
 
@@ -338,17 +363,17 @@ export const AcademicRecordQueries = {
     const { page = 1, perPage = 50, studentId, courseId, academicYear, semester } = filters;
     
     const conditions: string[] = [];
-    if (studentId) conditions.push(`student_id="${studentId}"`);
-    if (courseId) conditions.push(`course_id="${courseId}"`);
-    if (academicYear) conditions.push(`academic_year="${academicYear}"`);
-    if (semester) conditions.push(`semester="${semester}"`);
+    if (studentId) conditions.push(`enrollment_id.student_number="${studentId}"`);
+    if (courseId) conditions.push(`enrollment_id.course_code="${courseId}"`);
+    if (academicYear) conditions.push(`enrollment_id.academic_year="${academicYear}"`);
+    if (semester) conditions.push(`enrollment_id.semester="${semester}"`);
     
     const filterStr = conditions.length > 0 ? conditions.join(' && ') : '';
     
-    return query('academic_records')
-      .expand(['student_id', 'course_id', 'course_id.module_id'])
+    return query('grades')
+      .expand(['enrollment_id.student_number', 'enrollment_id.course_code', 'enrollment_id.course_code.module_id'])
       .filter(filterStr)
-      .sort('-academic_year,-semester')
+      .sort('-enrollment_id.academic_year,-enrollment_id.semester')
       .paginate(page, perPage)
       .execute();
   },
@@ -428,10 +453,10 @@ export const CatalogQueries = {
    * Get student transcript (all academic records)
    */
   async getTranscript(studentId: string) {
-    return query('academic_records')
-      .expand(['course_id', 'course_id.module_id'])
-      .filter(`student_id="${studentId}"`)
-      .sort('-academic_year,-semester')
+    return query('grades')
+      .expand(['enrollment_id.course_code', 'enrollment_id.course_code.module_id'])
+      .filter(`enrollment_id.student_number="${studentId}"`)
+      .sort('-enrollment_id.academic_year,-enrollment_id.semester')
       .paginate(1, 500)
       .execute();
   },

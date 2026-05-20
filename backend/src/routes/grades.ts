@@ -84,11 +84,8 @@ function mapExpandedGradeToFrontendShape(
   },
 ) {
   const enroll = expanded.expand?.enrollment_id as ExpandedRecord | undefined;
-  const student = (expanded.expand?.student_id ??
-    enroll?.expand?.student_number) as ExpandedRecord | undefined;
-  const course = (expanded.expand?.course_id ?? enroll?.expand?.course_code) as
-    | ExpandedRecord
-    | undefined;
+  const student = enroll?.expand?.student_number as ExpandedRecord | undefined;
+  const course = enroll?.expand?.course_code as ExpandedRecord | undefined;
   const module = course?.expand?.module_id as ExpandedRecord | undefined;
   const campus = student?.expand?.campus_id as ExpandedRecord | undefined;
 
@@ -148,8 +145,8 @@ function mapExpandedGradeToFrontendShape(
     creditHours,
     category: course?.category || "",
     module: module?.name || "",
-    academicYear: expanded.academic_year || "2025",
-    semester: expanded.semester || module?.semester || "",
+    academicYear: enroll?.academic_year || expanded.academic_year || "2025",
+    semester: enroll?.semester || expanded.semester || module?.semester || "",
     numericGrade: percentage,
     percentage,
     total_score: percentage,
@@ -205,7 +202,7 @@ const GradeSchema = z
     gradePoints: z.number().optional().openapi({ example: 4.0 }),
     isRetake: z.boolean().optional().default(false).openapi({ example: false }),
     academicYear: z.string().openapi({ example: "2024" }),
-    semester: z.enum(["Fall", "Spring", "Summer"]).openapi({ example: "Fall" }),
+    semester: z.string().openapi({ example: "Fall" }),
     status: z.string().optional().default("Pending Review").openapi({ example: "Verified" }),
     createdAt: z.string().openapi({ example: "2024-05-19T03:15:05Z" }),
     updatedAt: z.string().openapi({ example: "2024-05-19T03:15:05Z" }),
@@ -382,17 +379,17 @@ gradeRouter.openapi(listGradesRoute, async (c) => {
     const pb = getPocketBase();
     const filters: string[] = [];
 
-    if (studentId) filters.push(`student_id = "${sanitizeFilter(studentId)}"`);
-    if (courseCode) filters.push(`course_id.code = "${sanitizeFilter(courseCode)}"`);
-    if (academicYear) filters.push(`academic_year = "${sanitizeFilter(academicYear)}"`);
-    if (semester) filters.push(`semester = "${sanitizeFilter(semester)}"`);
+    if (studentId) filters.push(`enrollment_id.student_number = "${sanitizeFilter(studentId)}"`);
+    if (courseCode) filters.push(`enrollment_id.course_code.code = "${sanitizeFilter(courseCode)}"`);
+    if (academicYear) filters.push(`enrollment_id.academic_year = "${sanitizeFilter(academicYear)}"`);
+    if (semester) filters.push(`enrollment_id.semester = "${sanitizeFilter(semester)}"`);
 
     const filterString = filters.join(" && ");
 
-    // We fetch from academic_records for legacy/bulk compatibility
-    const result = await pb.collection("academic_records").getList(page, perPage, {
+    // Fetch from the normalized V2 'grades' collection
+    const result = await pb.collection("grades").getList(page, perPage, {
       filter: filterString,
-      expand: "student_id,course_id,course_id.module_id,student_id.campus_id",
+      expand: "enrollment_id.student_number.campus_id,enrollment_id.course_code.module_id",
       sort: "-created",
     });
 
@@ -453,21 +450,28 @@ gradeRouter.openapi(createGradeRoute, async (c) => {
 
     const calc = calculateGradeResult(percentage);
 
-    // 3. Persistence
-    const record = await pb.collection("academic_records").create({
-      student_id: studentUuid,
-      course_id: courseUuid,
-      academic_year: data.academicYear,
-      semester: data.semester,
-      total_score: percentage,
-      grade: data.letterGrade || calc.letterGrade,
-      grade_point: data.gradePoints || calc.gradePoints,
-      remarks: percentage >= 50 ? "Pass" : "Fail",
-      // ... components and other fields would go to a related 'grade_details' collection in a full implementation
+    // 3. Persistence - First handle enrollment, then grade
+    let enrollment;
+    try {
+      enrollment = await pb.collection("enrollments").getFirstListItem(`student_number="${studentUuid}" && course_code="${courseUuid}"`);
+    } catch {
+      enrollment = await pb.collection("enrollments").create({
+        student_number: studentUuid,
+        course_code: courseUuid,
+        academic_year: data.academicYear || "2024",
+        semester: data.semester || "Fall"
+      });
+    }
+
+    const record = await pb.collection("grades").create({
+      enrollment_id: enrollment.id,
+      percentage: percentage,
+      grade_letter: data.letterGrade || calc.letterGrade,
+      gpa: data.gradePoints || calc.gradePoints,
     });
 
-    const expanded = await pb.collection("academic_records").getOne(record.id, {
-      expand: "student_id,course_id,course_id.module_id,student_id.campus_id",
+    const expanded = await pb.collection("grades").getOne(record.id, {
+      expand: "enrollment_id.student_number.campus_id,enrollment_id.course_code.module_id",
     });
 
     return c.json(
@@ -500,13 +504,13 @@ gradeRouter.openapi(getStudentTranscriptRoute, async (c) => {
     const pb = getPocketBase();
 
     const student = await pb.collection("students").getOne(studentId, {
-      expand: "campus_id",
+      expand: "campus_id,program_code.dept_code.faculty_code",
     });
 
-    const gradesResult = await pb.collection("academic_records").getFullList({
-      filter: `student_id = "${sanitizeFilter(studentId)}"`,
-      expand: "course_id,course_id.module_id",
-      sort: "academic_year,semester",
+    const gradesResult = await pb.collection("grades").getFullList({
+      filter: `enrollment_id.student_number = "${sanitizeFilter(studentId)}"`,
+      expand: "enrollment_id.student_number.campus_id,enrollment_id.course_code.module_id",
+      sort: "created",
     });
 
     const grades = gradesResult.map((r) => mapExpandedGradeToFrontendShape(r, {}));
@@ -515,10 +519,19 @@ gradeRouter.openapi(getStudentTranscriptRoute, async (c) => {
     const weightedPoints = grades.reduce((sum, g) => sum + (g.gradePoints || 0) * (g.credits || 0), 0);
     const cumulativeGpa = totalCredits > 0 ? weightedPoints / totalCredits : 0;
 
-    return c.json({
-      success: true,
-      data: {
-        student: pbRecord(student),
+        const studentData = pbRecord(student);
+        // Ensure dynamic program name is used instead of static N/A or raw ID
+        if (studentData.expand?.program_code) {
+          studentData.programme = studentData.expand.program_code.name || studentData.expand.program_code.program_code || studentData.programme || "";
+          studentData.degree_level = studentData.expand.program_code.degree_level || studentData.degree_level || "";
+          studentData.department = studentData.expand.program_code.expand?.dept_code?.name || studentData.department || "";
+          studentData.faculty = studentData.expand.program_code.expand?.dept_code?.expand?.faculty_code?.name || studentData.faculty || "";
+        }
+
+        return c.json({
+          success: true,
+          data: {
+            student: studentData,
         grades,
         summary: {
           totalCredits,
@@ -674,8 +687,8 @@ gradeRouter.openapi(getGradeRoute, async (c) => {
     const { id } = c.req.valid("param");
     const pb = getPocketBase();
 
-    const record = await pb.collection("academic_records").getOne(id, {
-      expand: "student_id,course_id,course_id.module_id,student_id.campus_id",
+    const record = await pb.collection("grades").getOne(id, {
+      expand: "enrollment_id.student_number.campus_id,enrollment_id.course_code.module_id",
     });
 
     return c.json({
@@ -710,10 +723,10 @@ gradeRouter.openapi(updateGradeRoute, async (c) => {
       updateData.gpa = calc.gradePoints;
     }
 
-    await pb.collection("academic_records").update(id, updateData);
+    await pb.collection("grades").update(id, updateData);
 
-    const expanded = await pb.collection("academic_records").getOne(id, {
-      expand: "student_id,course_id,course_id.module_id,student_id.campus_id",
+    const expanded = await pb.collection("grades").getOne(id, {
+      expand: "enrollment_id.student_number.campus_id,enrollment_id.course_code.module_id",
     });
 
     return c.json({
@@ -741,7 +754,7 @@ gradeRouter.openapi(deleteGradeRoute, async (c) => {
     const { id } = c.req.valid("param");
     const pb = getPocketBase();
 
-    await pb.collection("academic_records").delete(id);
+    await pb.collection("grades").delete(id);
 
     return c.json({
       success: true,

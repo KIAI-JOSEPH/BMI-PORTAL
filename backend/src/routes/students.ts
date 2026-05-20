@@ -10,10 +10,10 @@ import { logger } from "../utils/logger.js";
 import { StudentQueries, CacheManager } from "../services/queryOptimizer.js";
 import { withPocketBase } from "../services/pocketbasePool.js";
 import { isPbError } from "../utils/helpers.js";
-import type { Student } from "../types/index.js";
+import type { AppEnv } from "../types/hono.js";
 import { ApiResponseSchema, ErrorResponseSchema } from "../openapi/common.js";
 
-const studentsRouter = new OpenAPIHono();
+const studentsRouter = new OpenAPIHono<AppEnv>();
 
 // Apply middleware
 studentsRouter.use("*", authMiddleware);
@@ -470,7 +470,8 @@ studentsRouter.openapi(deleteStudentRoute, async (c) => {
     });
 
     CacheManager.invalidate("students");
-    CacheManager.invalidate("academic_records");
+    CacheManager.invalidate("grades");
+    CacheManager.invalidate("enrollments");
 
     return c.json({
       success: true,

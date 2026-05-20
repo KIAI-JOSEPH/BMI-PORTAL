@@ -386,38 +386,38 @@ function formatUptime(seconds: number): string {
 
 /**
  * GET /api/v1/dashboard/academic-stats
- * Grade distribution and campus breakdown from academic_records.
+ * Grade distribution and campus breakdown from grades.
  */
 dashboardRouter.get("/academic-stats", async (c) => {
   try {
     const pb = getPocketBase();
 
     const [total, passing, failing, records, campusList] = await Promise.all([
-      pb.collection("academic_records").getList(1, 1),
+      pb.collection("grades").getList(1, 1),
       pb
-        .collection("academic_records")
-        .getList(1, 1, { filter: "total_score >= 50" }),
+        .collection("grades")
+        .getList(1, 1, { filter: "percentage >= 50" }),
       pb
-        .collection("academic_records")
-        .getList(1, 1, { filter: "total_score < 50" }),
+        .collection("grades")
+        .getList(1, 1, { filter: "percentage < 50" }),
       pb
-        .collection("academic_records")
-        .getList(1, 1000, { fields: "grade,total_score" }),
+        .collection("grades")
+        .getList(1, 1000, { fields: "grade_letter,percentage" }),
       pb.collection("campuses").getFullList({ fields: "id,name" }),
     ]);
 
     // Grade distribution
     interface AcademicRecord {
-      grade?: string;
-      total_score?: number;
+      grade_letter?: string;
+      percentage?: number;
     }
     const gradeDist: Record<string, number> = {};
     let scoreSum = 0;
     for (const r of records.items) {
       const rec = pbRecord<AcademicRecord>(r);
-      const g = rec.grade || "F";
+      const g = rec.grade_letter || "F";
       gradeDist[g] = (gradeDist[g] || 0) + 1;
-      scoreSum += rec.total_score || 0;
+      scoreSum += rec.percentage || 0;
     }
     const avgScore =
       records.items.length > 0
