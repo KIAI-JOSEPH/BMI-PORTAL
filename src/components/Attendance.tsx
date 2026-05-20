@@ -70,9 +70,15 @@ const Attendance: React.FC = () => {
 
   const filteredStudents = useMemo(() => {
     return students.filter((s) => {
-      const matchesFaculty = s.faculty === currentFaculty;
+      const studentFaculty = (s.faculty || "").toLowerCase();
+      const targetFaculty = currentFaculty.toLowerCase();
+      const matchesFaculty =
+        studentFaculty === targetFaculty ||
+        studentFaculty.includes(targetFaculty) ||
+        targetFaculty.includes(studentFaculty);
+
       const matchesSearch =
-        `${s.first_name} ${s.last_name} ${s.id} ${s.department ?? ""}`
+        `${s.first_name || ""} ${s.last_name || ""} ${s.student_code || ""} ${s.id} ${s.department ?? ""}`
           .toLowerCase()
           .includes(searchTerm.toLowerCase());
       return matchesFaculty && matchesSearch;
