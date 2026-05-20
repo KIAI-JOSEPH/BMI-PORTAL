@@ -10,6 +10,7 @@ import { logger } from "../utils/logger.js";
 import { StudentQueries, CacheManager } from "../services/queryOptimizer.js";
 import { withPocketBase } from "../services/pocketbasePool.js";
 import { isPbError } from "../utils/helpers.js";
+import { sheetsSyncQueue } from "../services/sheetsSyncQueue.js";
 import type { AppEnv } from "../types/hono.js";
 import { ApiResponseSchema, ErrorResponseSchema } from "../openapi/common.js";
 
@@ -61,14 +62,19 @@ const StudentSchema = z
     programme: z.string().min(1).openapi({ example: "Diploma in Christian Ministry and Theology" }),
     admission_date: z.string().openapi({ example: "2024-05-19" }),
     status: z
-      .enum(["Active", "Inactive", "Graduated", "Suspended"])
+      .enum(["Active", "Inactive", "Applicant", "On Leave", "Graduated", "Suspended"])
       .default("Active")
       .openapi({ example: "Active" }),
     campus_id: z.string().optional().openapi({ example: "CAMP001" }),
   })
   .openapi("Student");
 
-const StudentInputSchema = StudentSchema.omit({ id: true });
+const StudentInputSchema = StudentSchema.omit({ id: true }).extend({
+  student_code: z.string().optional(),
+  full_name: z.string().optional(),
+  programme: z.string().optional(),
+  program_code: z.string().optional(),
+});
 
 // Route definitions
 const listStudentsRoute = createRoute({
@@ -248,8 +254,70 @@ studentsRouter.openapi(createStudentRoute, async (c) => {
     const data = c.req.valid("json");
 
     const student = await withPocketBase(async (pb) => {
+      // 1. Resolve student_code
+      let student_code = data.student_code;
+      if (!student_code) {
+        const year = new Date().getFullYear();
+        try {
+          const lastStudents = await pb.collection("students").getList(1, 1, {
+            filter: `student_code ~ "${year}-"`,
+            sort: "-student_code",
+          });
+          if (lastStudents.items.length > 0) {
+            const lastCode = lastStudents.items[0].student_code;
+            const parts = lastCode.split("-");
+            const seq = parseInt(parts[1], 10);
+            if (!isNaN(seq)) {
+              student_code = `${year}-${String(seq + 1).padStart(4, "0")}`;
+            } else {
+              student_code = `${year}-0001`;
+            }
+          } else {
+            student_code = `${year}-0001`;
+          }
+        } catch (error) {
+          logger.error("Failed to query last student code, using fallback generation:", error);
+          const randomPart = String(Math.floor(Math.random() * 9000) + 1000);
+          student_code = `${year}-${randomPart}`;
+        }
+      }
+
+      // 2. Resolve reg_no
+      let reg_no = data.reg_no;
+      if (!reg_no) {
+        const year = new Date().getFullYear();
+        const seqPart = student_code.split("-")[1] || "0001";
+        reg_no = `THS/${year}/225-${seqPart}`;
+      }
+
+      // 3. Resolve full_name
+      let full_name = data.full_name;
+      if (!full_name) {
+        full_name = `${data.first_name || ""} ${data.last_name || ""}`.trim();
+      }
+
+      // 4. Resolve programme text
+      let programme = data.programme;
+      if (!programme && data.program_code) {
+        try {
+          const prog = await pb.collection("programs").getOne(data.program_code);
+          if (prog) {
+            programme = prog.name;
+          }
+        } catch (error) {
+          logger.error("Failed to query program name:", error);
+        }
+      }
+      if (!programme) {
+        programme = "Diploma in Christian Ministry and Theology";
+      }
+
       return pb.collection("students").create({
         ...data,
+        student_code,
+        reg_no,
+        full_name,
+        programme,
         avatar_color: `bg-${["purple", "blue", "green", "yellow", "red", "pink"][Math.floor(Math.random() * 6)]}-600`,
         photo_zoom: 1,
         photo_position: { x: 0, y: 0 },
@@ -257,6 +325,7 @@ studentsRouter.openapi(createStudentRoute, async (c) => {
     });
 
     CacheManager.invalidate("students");
+    sheetsSyncQueue.enqueueStudentSync("create", student.id);
 
     return c.json(
       {
@@ -440,6 +509,7 @@ studentsRouter.openapi(updateStudentRoute, async (c) => {
     });
 
     CacheManager.invalidate("students");
+    sheetsSyncQueue.enqueueStudentSync("update", student.id);
 
     return c.json({
       success: true,
@@ -470,6 +540,7 @@ studentsRouter.openapi(deleteStudentRoute, async (c) => {
     });
 
     CacheManager.invalidate("students");
+    sheetsSyncQueue.enqueueStudentSync("delete", id);
     CacheManager.invalidate("grades");
     CacheManager.invalidate("enrollments");
 

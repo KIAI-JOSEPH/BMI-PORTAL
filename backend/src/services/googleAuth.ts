@@ -83,14 +83,14 @@ export function getGoogleAuth(): JWT {
     return new JWT({
       email: "mock@google-auth-fallback.iam.gserviceaccount.com",
       key: "-----BEGIN PRIVATE KEY-----\nMOCK\n-----END PRIVATE KEY-----",
-      scopes: ["https://www.googleapis.com/auth/spreadsheets.readonly"],
+      scopes: ["https://www.googleapis.com/auth/spreadsheets"],
     });
   }
 
   cachedAuth = new JWT({
     email: clientEmail,
     key: privateKey,
-    scopes: ["https://www.googleapis.com/auth/spreadsheets.readonly"],
+    scopes: ["https://www.googleapis.com/auth/spreadsheets"],
   });
 
   return cachedAuth;
@@ -188,4 +188,67 @@ function getMockSheetValues(range: string): string[][] {
   }
 
   return [];
+}
+
+/**
+ * Updates values in a specific sheet range in Google Sheets.
+ */
+export async function updateGoogleSheetRange(
+  spreadsheetId: string,
+  range: string,
+  values: any[][]
+): Promise<void> {
+  const auth = getGoogleAuth();
+  
+  if (auth.email === "mock@google-auth-fallback.iam.gserviceaccount.com") {
+    logger.info(`[Mock Mode] Updating range "${range}" in Spreadsheet "${spreadsheetId}" with values:`, values);
+    return;
+  }
+
+  try {
+    const sheets = google.sheets({ version: "v4", auth });
+    await sheets.spreadsheets.values.update({
+      spreadsheetId,
+      range,
+      valueInputOption: "RAW",
+      requestBody: {
+        values,
+      },
+    });
+  } catch (error: any) {
+    logger.error(`Google Sheets API update error on range "${range}":`, error.message);
+    throw new Error(`Google Sheets API Error: ${error.message}`);
+  }
+}
+
+/**
+ * Appends values to a specific sheet in Google Sheets.
+ */
+export async function appendGoogleSheetRow(
+  spreadsheetId: string,
+  range: string,
+  values: any[][]
+): Promise<void> {
+  const auth = getGoogleAuth();
+  
+  if (auth.email === "mock@google-auth-fallback.iam.gserviceaccount.com") {
+    logger.info(`[Mock Mode] Appending to range "${range}" in Spreadsheet "${spreadsheetId}" with values:`, values);
+    return;
+  }
+
+  try {
+    const sheets = google.sheets({ version: "v4", auth });
+    await sheets.spreadsheets.values.append({
+      spreadsheetId,
+      range,
+      valueInputOption: "RAW",
+      insertDataOption: "INSERT_ROWS",
+      requestBody: {
+        values,
+      },
+    });
+  } catch (error: any) {
+    logger.error(`Google Sheets API append error on range "${range}":`, error.message);
+    throw new Error(`Google Sheets API Error: ${error.message}`);
+  }
 }

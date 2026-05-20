@@ -154,7 +154,22 @@ const StudentRegistrationModal: React.FC<StudentRegistrationModalProps> = ({ isO
         onSuccess(result.data);
         onClose();
       } else {
-        setError(result.error || 'Failed to save student. Please try again.');
+        let errMsg = 'Failed to save student. Please try again.';
+        if (result.error) {
+          if (typeof result.error === 'string') {
+            errMsg = result.error;
+          } else if (typeof result.error === 'object') {
+            const errObj = result.error as any;
+            if (errObj.issues && Array.isArray(errObj.issues)) {
+              errMsg = errObj.issues.map((i: any) => `${i.path.join('.')}: ${i.message}`).join(', ');
+            } else if (errObj.message) {
+              errMsg = errObj.message;
+            } else {
+              errMsg = JSON.stringify(result.error);
+            }
+          }
+        }
+        setError(errMsg);
       }
     } catch (err) {
       setError(err instanceof Error ? err.message : 'An unexpected error occurred');

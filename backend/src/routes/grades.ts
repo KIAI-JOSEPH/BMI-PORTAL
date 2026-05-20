@@ -8,6 +8,7 @@ import { getPocketBase } from "../services/pocketbase.js";
 import { logger } from "../utils/logger.js";
 import { authMiddleware, requireRole, getUser } from "../middleware/auth.js";
 import type { AppEnv } from "../types/hono.js";
+import { sheetsSyncQueue } from "../services/sheetsSyncQueue.js";
 
 import { calculateGradeResult } from "../utils/grading.js";
 import {
@@ -470,6 +471,8 @@ gradeRouter.openapi(createGradeRoute, async (c) => {
       gpa: data.gradePoints || calc.gradePoints,
     });
 
+    sheetsSyncQueue.enqueueGradeSync(record.id);
+
     const expanded = await pb.collection("grades").getOne(record.id, {
       expand: "enrollment_id.student_number.campus_id,enrollment_id.course_code.module_id",
     });
@@ -728,6 +731,8 @@ gradeRouter.openapi(updateGradeRoute, async (c) => {
     const expanded = await pb.collection("grades").getOne(id, {
       expand: "enrollment_id.student_number.campus_id,enrollment_id.course_code.module_id",
     });
+
+    sheetsSyncQueue.enqueueGradeSync(id);
 
     return c.json({
       success: true,

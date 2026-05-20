@@ -213,9 +213,17 @@ export async function refreshAccessToken(): Promise<string | null> {
       3000
     );
 
-    const data = await response.json();
+    let data: any = {};
+    const text = await response.text();
+    if (text) {
+      try {
+        data = JSON.parse(text);
+      } catch (e) {
+        console.warn('Failed to parse refresh token response JSON:', e);
+      }
+    }
 
-    if (data.success && data.data?.token) {
+    if (data && data.success && data.data?.token) {
       _memoryToken = data.data.token;
       return data.data.token;
     }

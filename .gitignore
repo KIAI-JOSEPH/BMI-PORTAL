@@ -39,6 +39,10 @@ coverage/
 backend/.env
 backend/.env.*
 !backend/.env.example
+google-credentials.json
+backend/google-credentials.json
+credentials.json
+backend/credentials.json
 
 # Runtime data and databases
 bin/
