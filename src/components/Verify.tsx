@@ -174,9 +174,26 @@ const Verify: React.FC<VerifyProps> = ({ students }) => {
           <div className="text-center pb-4 border-b border-gray-100">
             <img
               src="/BMI.svg"
-              className="h-20 mx-auto mb-4 object-contain filter drop-shadow-sm"
+              className="h-16 mx-auto mb-4 object-contain filter drop-shadow-sm"
               alt="Logo"
             />
+            {student?.photo ? (
+              <div className="mx-auto mb-4 w-24 h-24 rounded-full overflow-hidden border-4 border-emerald-100 shadow-md">
+                <img
+                  src={student.photo}
+                  className="w-full h-full object-cover"
+                  style={{
+                    transform: student.photo_zoom ? `scale(${student.photo_zoom})` : undefined,
+                    transformOrigin: student.photo_position ? `${student.photo_position.x}% ${student.photo_position.y}%` : undefined
+                  }}
+                  alt="Student Portrait"
+                />
+              </div>
+            ) : (
+              <div className="mx-auto mb-4 w-24 h-24 rounded-full bg-slate-100 border-4 border-emerald-50 shadow-md flex items-center justify-center text-slate-400 font-bold uppercase tracking-wider text-2xl">
+                {getFirstName(student).charAt(0)}{getLastName(student).charAt(0)}
+              </div>
+            )}
             <h1 className="text-xl font-black text-gray-900 uppercase leading-tight">
               {getFirstName(student)} {getLastName(student)}
             </h1>
