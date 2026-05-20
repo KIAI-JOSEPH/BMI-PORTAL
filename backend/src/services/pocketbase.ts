@@ -4,8 +4,102 @@ import { CONFIG } from "../config/index.js";
 import { logger } from "../utils/logger.js";
 import { fetchWithTimeout } from "../utils/helpers.js";
 
+import { normalizeText } from "../utils/dataNormalizer.js";
+
 // Singleton PocketBase instance
 let pb: PocketBase | null = null;
+let wrappedPb: PocketBase | null = null;
+
+function normalizePayload(collectionName: string, data: any): any {
+  if (!data) return data;
+
+  // Handle FormData
+  if (typeof FormData !== "undefined" && data instanceof FormData) {
+    for (const key of data.keys()) {
+      const val = data.get(key);
+      if (typeof val === "string") {
+        if (key === "first_name" || key === "last_name" || key === "full_name") {
+          data.set(key, normalizeText(val, "name"));
+        } else if (key === "name") {
+          const isPersonCollection = ["students", "staff", "users"].includes(collectionName);
+          data.set(key, normalizeText(val, isPersonCollection ? "name" : "title"));
+        } else if (
+          ["title", "programme", "department", "faculty", "location", "category"].includes(key)
+        ) {
+          data.set(key, normalizeText(val, "title"));
+        }
+      }
+    }
+    return data;
+  }
+
+  // Handle plain objects
+  if (typeof data !== "object") return data;
+
+  const normalized = { ...data };
+  for (const key of Object.keys(normalized)) {
+    const val = normalized[key];
+    if (typeof val !== "string") continue;
+
+    if (key === "first_name" || key === "last_name" || key === "full_name") {
+      normalized[key] = normalizeText(val, "name");
+    } else if (key === "name") {
+      const isPersonCollection = ["students", "staff", "users"].includes(collectionName);
+      normalized[key] = normalizeText(val, isPersonCollection ? "name" : "title");
+    } else if (
+      ["title", "programme", "department", "faculty", "location", "category"].includes(key)
+    ) {
+      normalized[key] = normalizeText(val, "title");
+    }
+  }
+  return normalized;
+}
+
+function wrapCollectionService(collectionName: string, service: any) {
+  return new Proxy(service, {
+    get(target, prop, receiver) {
+      const originalValue = Reflect.get(target, prop, receiver);
+
+      if (prop === "create") {
+        return async function (data: any, ...args: any[]) {
+          const cleanData = normalizePayload(collectionName, data);
+          return originalValue.call(target, cleanData, ...args);
+        };
+      }
+
+      if (prop === "update") {
+        return async function (id: string, data: any, ...args: any[]) {
+          const cleanData = normalizePayload(collectionName, data);
+          return originalValue.call(target, id, cleanData, ...args);
+        };
+      }
+
+      if (typeof originalValue === "function") {
+        return originalValue.bind(target);
+      }
+
+      return originalValue;
+    },
+  });
+}
+
+function wrapPocketBase(client: PocketBase): PocketBase {
+  return new Proxy(client, {
+    get(target, prop, receiver) {
+      if (prop === "collection") {
+        return function (name: string) {
+          const service = target.collection(name);
+          return wrapCollectionService(name, service);
+        };
+      }
+      const value = Reflect.get(target, prop, receiver);
+      if (typeof value === "function") {
+        return value.bind(target);
+      }
+      return value;
+    },
+  });
+}
 
 /**
  * Get PocketBase instance
@@ -15,8 +109,9 @@ export function getPocketBase(): PocketBase {
     pb = new PocketBase(CONFIG.POCKETBASE_URL);
     pb.autoCancellation(false);
     logger.info(`PocketBase initialized at ${CONFIG.POCKETBASE_URL}`);
+    wrappedPb = wrapPocketBase(pb);
   }
-  return pb;
+  return wrappedPb!;
 }
 
 /**

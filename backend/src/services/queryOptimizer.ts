@@ -5,6 +5,7 @@
 
 import { withPocketBase } from './pocketbasePool.js';
 import { logger } from '../utils/logger.js';
+import { normalizeText } from '../utils/dataNormalizer.js';
 
 /**
  * In-memory cache for reference data
@@ -269,15 +270,24 @@ export const StudentQueries = {
 
     // Normalise names and resolve programme dynamically
     result.items = result.items.map((s: any) => {
+      if (s.full_name) {
+        s.full_name = normalizeText(s.full_name, 'name');
+      }
       if (s.full_name && !s.first_name) {
         const parts = s.full_name.trim().split(/\s+/);
         s = { ...s, first_name: parts[0] || '', last_name: parts.slice(1).join(' ') || '' };
       }
+      if (s.first_name) {
+        s.first_name = normalizeText(s.first_name, 'name');
+      }
+      if (s.last_name) {
+        s.last_name = normalizeText(s.last_name, 'name');
+      }
       if (s.expand?.program_code) {
-        s.programme = s.expand.program_code.name || s.expand.program_code.program_code || s.programme || '';
+        s.programme = normalizeText(s.expand.program_code.name || s.expand.program_code.program_code || s.programme || '', 'title');
         s.degree_level = s.expand.program_code.degree_level || s.degree_level || '';
-        s.department = s.expand.program_code.expand?.dept_code?.name || s.department || '';
-        s.faculty = s.expand.program_code.expand?.dept_code?.expand?.faculty_code?.name || s.faculty || '';
+        s.department = normalizeText(s.expand.program_code.expand?.dept_code?.name || s.department || '', 'title');
+        s.faculty = normalizeText(s.expand.program_code.expand?.dept_code?.expand?.faculty_code?.name || s.faculty || '', 'title');
       }
       return s;
     });
@@ -295,15 +305,24 @@ export const StudentQueries = {
       });
       // Ensure first_name/last_name are always populated from full_name
       // (our import stores full_name; split here so every caller gets consistent data)
+      if (student.full_name) {
+        student.full_name = normalizeText(student.full_name, 'name');
+      }
       if (student.full_name && !student.first_name) {
         const parts = student.full_name.trim().split(/\s+/);
         student = { ...student, first_name: parts[0] || '', last_name: parts.slice(1).join(' ') || '' };
       }
+      if (student.first_name) {
+        student.first_name = normalizeText(student.first_name, 'name');
+      }
+      if (student.last_name) {
+        student.last_name = normalizeText(student.last_name, 'name');
+      }
       if (student.expand?.program_code) {
-        student.programme = student.expand.program_code.name || student.expand.program_code.program_code || student.programme || '';
+        student.programme = normalizeText(student.expand.program_code.name || student.expand.program_code.program_code || student.programme || '', 'title');
         student.degree_level = student.expand.program_code.degree_level || student.degree_level || '';
-        student.department = student.expand.program_code.expand?.dept_code?.name || student.department || '';
-        student.faculty = student.expand.program_code.expand?.dept_code?.expand?.faculty_code?.name || student.faculty || '';
+        student.department = normalizeText(student.expand.program_code.expand?.dept_code?.name || student.department || '', 'title');
+        student.faculty = normalizeText(student.expand.program_code.expand?.dept_code?.expand?.faculty_code?.name || student.faculty || '', 'title');
       }
       
       const academicRecords = await pb.collection('grades').getList(1, 100, {
@@ -331,12 +350,21 @@ export const StudentQueries = {
       .execute();
 
     result.items = result.items.map((s: any) => {
+      if (s.full_name) {
+        s.full_name = normalizeText(s.full_name, 'name');
+      }
       if (s.full_name && !s.first_name) {
         const parts = s.full_name.trim().split(/\s+/);
         s = { ...s, first_name: parts[0] || '', last_name: parts.slice(1).join(' ') || '' };
       }
+      if (s.first_name) {
+        s.first_name = normalizeText(s.first_name, 'name');
+      }
+      if (s.last_name) {
+        s.last_name = normalizeText(s.last_name, 'name');
+      }
       if (s.expand?.program_code) {
-        s.programme = s.expand.program_code.name || s.expand.program_code.program_code;
+        s.programme = normalizeText(s.expand.program_code.name || s.expand.program_code.program_code, 'title');
       }
       return s;
     });
