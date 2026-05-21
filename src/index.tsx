@@ -83,7 +83,7 @@ const initializeInstitutionalStyles = () => {
       }
 
       /* Strip interactive overlays */
-      .absolute, .fixed, .opacity-0, .hover\:opacity-100 {
+      .absolute, .fixed, .opacity-0, .hover\\:opacity-100 {
         position: static !important;
         opacity: 1 !important;
         visibility: visible !important;
