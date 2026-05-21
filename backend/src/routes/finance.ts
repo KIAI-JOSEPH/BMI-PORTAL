@@ -7,8 +7,6 @@ import { logger } from "../utils/logger.js";
 import { FinanceQueries, CacheManager } from "../services/queryOptimizer.js";
 import {
   parsePagination,
-  sanitizeFilter,
-  buildFilter,
   pbRecord,
 } from "../utils/helpers.js";
 import { ApiResponseSchema, ErrorResponseSchema } from "../openapi/common.js";
@@ -311,7 +309,7 @@ financeRouter.openapi(
           perPage: result.perPage,
           total: result.totalItems,
         },
-      });
+      }, 200);
     } catch (error) {
       logger.error("Get transactions error:", error);
       return c.json(
@@ -345,7 +343,7 @@ financeRouter.openapi(
       return c.json({
         success: true,
         data: transaction as unknown as Transaction,
-      });
+      }, 200);
     } catch (error) {
       logger.error("Get transaction error:", error);
       return c.json(
@@ -417,7 +415,7 @@ financeRouter.openapi(
         success: true,
         data: updated as unknown as Transaction,
         message: "Transaction updated successfully",
-      });
+      }, 200);
     } catch (error) {
       logger.error("Update transaction error:", error);
       return c.json(
@@ -447,7 +445,7 @@ financeRouter.openapi(
         success: true,
         data: null,
         message: "Transaction deleted successfully",
-      });
+      }, 200);
     } catch (error) {
       logger.error("Delete transaction error:", error);
       return c.json(

@@ -68,6 +68,6 @@ export async function getA11yViolations(
   container: Element,
   options?: RunOptions
 ) {
-  const results = await axe.run(container, options);
+  const results = await axe.run(container, options || {});
   return results.violations;
 }

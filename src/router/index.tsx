@@ -39,6 +39,8 @@ const Reports = lazy(() => import("../components/Reports"));
 const Settings = lazy(() => import("../components/Settings"));
 const StudentPortal = lazy(() => import("../components/StudentPortal"));
 const FacultyPortal = lazy(() => import("../components/FacultyPortal"));
+const Programs = lazy(() => import("../components/Programs"));
+const ProgramDetail = lazy(() => import("../components/ProgramDetail"));
 
 // Page-level loading fallback
 function PageLoader() {
@@ -131,6 +133,8 @@ export function AppRoutes() {
           }
         />
         <Route path="/courses" element={<Courses />} />
+        <Route path="/programs" element={<Programs />} />
+        <Route path="/programs/:id" element={<ProgramDetail />} />
         <Route
           path="/exams"
           element={

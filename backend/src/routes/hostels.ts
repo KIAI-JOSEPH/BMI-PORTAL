@@ -13,6 +13,38 @@ import type { AppEnv } from "../types/hono.js";
 const hostelRouter = new OpenAPIHono<AppEnv>();
 hostelRouter.use("*", authMiddleware);
 
+hostelRouter.use("/", async (c, next) => {
+  if (c.req.method === "POST") {
+    return requireRole("admin", "registrar", "staff")(c, next);
+  }
+  await next();
+});
+
+hostelRouter.use("/:id", async (c, next) => {
+  const method = c.req.method;
+  if (method === "PATCH") {
+    return requireRole("admin", "registrar", "staff")(c, next);
+  }
+  if (method === "DELETE") {
+    return requireRole("admin", "registrar")(c, next);
+  }
+  await next();
+});
+
+hostelRouter.use("/assignments", async (c, next) => {
+  if (c.req.method === "POST") {
+    return requireRole("admin", "registrar", "staff")(c, next);
+  }
+  await next();
+});
+
+hostelRouter.use("/assignments/:id", async (c, next) => {
+  if (c.req.method === "DELETE") {
+    return requireRole("admin", "registrar")(c, next);
+  }
+  await next();
+});
+
 // Validation schemas
 const HostelSchema = z
   .object({
@@ -306,7 +338,7 @@ const deleteAssignmentRoute = createRoute({
 hostelRouter.openapi(listHostelsRoute, async (c) => {
   try {
     const result = await HostelQueries.getHostels();
-    return c.json({ success: true, data: result.items as any });
+    return c.json({ success: true, data: result.items as any }, 200);
   } catch (error) {
     logger.error("List hostels error:", error);
     return c.json({ success: false, error: "Failed to fetch hostels" }, 500);
@@ -315,7 +347,6 @@ hostelRouter.openapi(listHostelsRoute, async (c) => {
 
 hostelRouter.openapi(
   createHostelRoute,
-  requireRole("admin", "registrar", "staff"),
   async (c) => {
     try {
       const data = c.req.valid("json");
@@ -332,7 +363,6 @@ hostelRouter.openapi(
 
 hostelRouter.openapi(
   updateHostelRoute,
-  requireRole("admin", "registrar", "staff"),
   async (c) => {
     try {
       const { id } = c.req.valid("param");
@@ -340,7 +370,7 @@ hostelRouter.openapi(
       const pb = getPocketBase();
       const record = await pb.collection("hostels").update(id, data);
       CacheManager.invalidate("hostels");
-      return c.json({ success: true, data: record as any });
+      return c.json({ success: true, data: record as any }, 200);
     } catch (error) {
       logger.error("Update hostel error:", error);
       return c.json({ success: false, error: "Failed to update hostel" }, 500);
@@ -350,14 +380,13 @@ hostelRouter.openapi(
 
 hostelRouter.openapi(
   deleteHostelRoute,
-  requireRole("admin", "registrar"),
   async (c) => {
     try {
       const { id } = c.req.valid("param");
       const pb = getPocketBase();
       await pb.collection("hostels").delete(id);
       CacheManager.invalidate("hostels");
-      return c.json({ success: true, data: null });
+      return c.json({ success: true, data: null }, 200);
     } catch (error) {
       logger.error("Delete hostel error:", error);
       return c.json({ success: false, error: "Failed to delete hostel" }, 500);
@@ -368,7 +397,7 @@ hostelRouter.openapi(
 hostelRouter.openapi(listAssignmentsRoute, async (c) => {
   try {
     const result = await HostelQueries.getAssignments();
-    return c.json({ success: true, data: result.items as any });
+    return c.json({ success: true, data: result.items as any }, 200);
   } catch (error) {
     logger.error("List room assignments error:", error);
     return c.json(
@@ -380,7 +409,6 @@ hostelRouter.openapi(listAssignmentsRoute, async (c) => {
 
 hostelRouter.openapi(
   createAssignmentRoute,
-  requireRole("admin", "registrar", "staff"),
   async (c) => {
     try {
       const data = c.req.valid("json");
@@ -400,14 +428,13 @@ hostelRouter.openapi(
 
 hostelRouter.openapi(
   deleteAssignmentRoute,
-  requireRole("admin", "registrar"),
   async (c) => {
     try {
       const { id } = c.req.valid("param");
       const pb = getPocketBase();
       await pb.collection("room_assignments").delete(id);
       CacheManager.invalidate("room_assignments");
-      return c.json({ success: true, data: null });
+      return c.json({ success: true, data: null }, 200);
     } catch (error) {
       logger.error("Delete room assignment error:", error);
       return c.json(

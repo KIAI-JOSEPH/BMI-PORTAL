@@ -25,6 +25,7 @@ import { Student, Course } from "../types";
 import ImportModal from "./ImportModal";
 import GradeEntryModal, { GradeFormData } from "./grading/GradeEntryModal";
 import { GradingScaleType } from "../grading/types";
+import { calculateWeightedGrade } from "../grading/calculators/WeightedGradeCalculator";
 
 import {
   createAcademicRecord,
@@ -110,16 +111,43 @@ const Exams: React.FC = () => {
         throw new Error("Student or course not found");
       }
 
+      // Reconstruct assessment components and calculate total score
+      const assessmentComponents = data.components.map((cs) => ({
+        id: cs.componentId,
+        type: cs.componentType,
+        name: cs.componentType,
+        weight: cs.weight,
+        maxScore: cs.maxScore,
+      }));
+      const calculation = calculateWeightedGrade(assessmentComponents, data.components);
+      const totalScore = calculation.finalGrade;
+
+      // Extract optional ca_score and exam_score if present in components
+      const examComponent = data.components.find(
+        (cs) => cs.componentType === "Final_Exam" || cs.componentType === "Midterm"
+      );
+      const examScore = examComponent ? examComponent.score : undefined;
+      const caComponents = data.components.filter(
+        (cs) => cs.componentType !== "Final_Exam"
+      );
+      const caScore = caComponents.length > 0 
+        ? caComponents.reduce((sum, cs) => sum + (cs.score / cs.maxScore) * cs.weight, 0)
+        : undefined;
+
       if (editingGrade && editingGrade.id.startsWith("DB-")) {
         const gradeId = editingGrade.id.replace("DB-", "");
         await updateAcademicRecord(gradeId, {
-          total_score: data.percentage,
+          total_score: totalScore,
+          ca_score: caScore !== undefined ? Math.round(caScore * 100) / 100 : undefined,
+          exam_score: examScore,
         });
       } else if (!editingGrade) {
         await createAcademicRecord({
           student_id: student.id,
           course_id: course.id,
-          total_score: data.percentage,
+          total_score: totalScore,
+          ca_score: caScore !== undefined ? Math.round(caScore * 100) / 100 : undefined,
+          exam_score: examScore,
           academic_year: data.academicYear || new Date().getFullYear().toString(),
         });
       }
@@ -307,14 +335,14 @@ const Exams: React.FC = () => {
       return {
         id: `DB-${grade.id}`,
         student: grade.studentName,
-        studentId: grade.studentId,
-        course: grade.courseName,
-        midterm: grade.midterm ?? grade.grade ?? 0,
-        final: grade.final ?? grade.grade ?? 0,
-        total: grade.total ?? grade.grade ?? 0,
-        grade: grade.letterGrade || "F",
-        gpa: grade.gpa || 0.0,
-        status: (grade.status || "Pending Review") as GradeRecord["status"],
+        studentId: grade.studentCode || grade.studentId,
+        course: grade.courseTitle,
+        midterm: grade.caScore ?? 0,
+        final: grade.examScore ?? 0,
+        total: grade.totalScore,
+        grade: grade.grade || "F",
+        gpa: grade.gradePoint || 0.0,
+        status: "Verified",
         level: "Degree" as GradeRecord["level"],
       };
     });

@@ -54,6 +54,8 @@ import attendanceRouter from "./routes/attendance.js";
 import studyCentersRouter from "./routes/study_centers.js";
 import transcriptsRouter from "./routes/transcripts.js";
 import documentsRouter from "./routes/documents.js";
+import programsRouter from "./routes/programs.js";
+import enrollmentsRouter from "./routes/enrollments.js";
 
 // Validate configuration
 validateConfig();
@@ -200,6 +202,8 @@ app.route("/api/v1/campuses", studyCentersRouter);
 app.route("/api/v1/study-centers", studyCentersRouter);
 app.route("/api/v1/transcripts", transcriptsRouter);
 app.route("/api/v1/documents", documentsRouter);
+app.route("/api/v1/programs", programsRouter);
+app.route("/api/v1/enrollments", enrollmentsRouter);
 
 // ── OpenAPI Documentation ────────────────────────────────────────────────────
 // Generate OpenAPI spec from routes

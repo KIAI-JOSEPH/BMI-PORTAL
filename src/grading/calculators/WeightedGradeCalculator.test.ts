@@ -3,20 +3,20 @@
  */
 import { describe, it, expect } from 'vitest';
 import { calculateWeightedGrade } from './WeightedGradeCalculator';
-import { AssessmentComponent, GradeStatus } from '../types';
+import { AssessmentComponent, GradeStatus, AssessmentType } from '../types';
 
 describe('WeightedGradeCalculator', () => {
   const mockComponents: AssessmentComponent[] = [
-    { id: '1', name: 'Assignment 1', weight: 20, type: 'ASSIGNMENT', minScore: 0, maxScore: 100, isMandatory: true },
-    { id: '2', name: 'Midterm', weight: 30, type: 'EXAM', minScore: 0, maxScore: 100, isMandatory: true },
-    { id: '3', name: 'Final Exam', weight: 50, type: 'EXAM', minScore: 0, maxScore: 100, isMandatory: true },
+    { id: '1', name: 'Assignment 1', weight: 20, type: AssessmentType.ASSIGNMENT, maxScore: 100 },
+    { id: '2', name: 'Midterm', weight: 30, type: AssessmentType.MIDTERM, maxScore: 100 },
+    { id: '3', name: 'Final Exam', weight: 50, type: AssessmentType.FINAL_EXAM, maxScore: 100 },
   ];
 
   it('calculates perfect score correctly', () => {
     const scores = [
-      { componentId: '1', componentType: 'ASSIGNMENT', score: 100, maxScore: 100, weight: 20 },
-      { componentId: '2', componentType: 'EXAM', score: 100, maxScore: 100, weight: 30 },
-      { componentId: '3', componentType: 'EXAM', score: 100, maxScore: 100, weight: 50 },
+      { componentId: '1', componentType: AssessmentType.ASSIGNMENT, score: 100, maxScore: 100, weight: 20 },
+      { componentId: '2', componentType: AssessmentType.MIDTERM, score: 100, maxScore: 100, weight: 30 },
+      { componentId: '3', componentType: AssessmentType.FINAL_EXAM, score: 100, maxScore: 100, weight: 50 },
     ];
 
     const result = calculateWeightedGrade(mockComponents, scores);
@@ -27,9 +27,9 @@ describe('WeightedGradeCalculator', () => {
 
   it('calculates partial scores correctly', () => {
     const scores = [
-      { componentId: '1', componentType: 'ASSIGNMENT', score: 80, maxScore: 100, weight: 20 }, // 16 pts
-      { componentId: '2', componentType: 'EXAM', score: 70, maxScore: 100, weight: 30 },       // 21 pts
-      { componentId: '3', componentType: 'EXAM', score: 60, maxScore: 100, weight: 50 },       // 30 pts
+      { componentId: '1', componentType: AssessmentType.ASSIGNMENT, score: 80, maxScore: 100, weight: 20 }, // 16 pts
+      { componentId: '2', componentType: AssessmentType.MIDTERM, score: 70, maxScore: 100, weight: 30 },       // 21 pts
+      { componentId: '3', componentType: AssessmentType.FINAL_EXAM, score: 60, maxScore: 100, weight: 50 },       // 30 pts
     ];
 
     const result = calculateWeightedGrade(mockComponents, scores);
@@ -38,7 +38,7 @@ describe('WeightedGradeCalculator', () => {
 
   it('handles incomplete grading as PROVISIONAL', () => {
     const scores = [
-      { componentId: '1', componentType: 'ASSIGNMENT', score: 80, maxScore: 100, weight: 20 },
+      { componentId: '1', componentType: AssessmentType.ASSIGNMENT, score: 80, maxScore: 100, weight: 20 },
     ];
 
     const result = calculateWeightedGrade(mockComponents, scores);
@@ -51,11 +51,11 @@ describe('WeightedGradeCalculator', () => {
   it('normalizes grade if total weight is not 100%', () => {
     // We need components whose weights sum to 20
     const limitedComponents: AssessmentComponent[] = [
-      { id: '1', name: 'Assignment 1', weight: 20, type: 'ASSIGNMENT', minScore: 0, maxScore: 100, isMandatory: true }
+      { id: '1', name: 'Assignment 1', weight: 20, type: AssessmentType.ASSIGNMENT, maxScore: 100 }
     ];
 
     const scores = [
-      { componentId: '1', componentType: 'ASSIGNMENT', score: 80, maxScore: 100, weight: 20 },
+      { componentId: '1', componentType: AssessmentType.ASSIGNMENT, score: 80, maxScore: 100, weight: 20 },
     ];
     
     // total weight is 20, but final grade should be 80% if we normalize
@@ -64,8 +64,3 @@ describe('WeightedGradeCalculator', () => {
     expect(result.finalGrade).toBe(80);
   });
 });
-
-// Helper needed since it's used in the calculator but not exported
-function roundToTwoDecimals(num: number): number {
-  return Math.round((num + Number.EPSILON) * 100) / 100;
-}

@@ -185,6 +185,22 @@ export async function seedAcademicReferenceDataIfEmpty(): Promise<void> {
       student_id: sampleStudent.id,
     });
 
+    // Seeding current academic term
+    await findOrCreate('academic_terms', 'code', '2026-SEM1', {
+      code: '2026-SEM1',
+      academic_year: '2026',
+      semester_number: 1,
+      term_type: 'semester',
+      start_date: '2026-01-05T00:00:00.000Z',
+      end_date: '2026-05-15T00:00:00.000Z',
+      registration_start: '2026-01-02T00:00:00.000Z',
+      registration_end: '2026-01-16T00:00:00.000Z',
+      exam_start: '2026-05-04T00:00:00.000Z',
+      exam_end: '2026-05-08T00:00:00.000Z',
+      status: 'active',
+      is_current: true,
+    });
+
     logger.info('Academic reference seed complete ✓');
   } catch (e) {
     logger.warn('Academic seed failed (non-fatal):', e);
