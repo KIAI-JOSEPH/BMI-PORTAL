@@ -60,7 +60,7 @@ class SheetsSyncQueue {
       let student: any;
       try {
         student = await pb.collection("students").getOne(studentId, {
-          expand: "program_code,campus_id",
+          expand: "program_code,study_center_id",
         });
       } catch (err: any) {
         if (action === 'delete') {
@@ -79,7 +79,7 @@ class SheetsSyncQueue {
       const programCode = student.expand?.program_code?.program_code || "";
       const admissionDate = student.admission_date ? student.admission_date.substring(0, 10) : "";
       const status = student.status || "Active";
-      const campus = student.expand?.campus_id?.name || "";
+      const campus = student.expand?.study_center_id?.name || "";
 
       const tabName = "07_STUDENTS";
       const range = `'${tabName}'!A1:J5000`;

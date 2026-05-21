@@ -212,7 +212,7 @@ export async function verifyCollections(): Promise<void> {
 
     // Define required collections
     const requiredCollections = [
-      "campuses",
+      "study_centers",
       "modules",
       "courses",
       "students",

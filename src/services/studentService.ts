@@ -56,7 +56,7 @@ function normalizeStudent(student: StudentLike): Student {
   const avatar_color = student.avatar_color ?? student.avatarColor ?? 'bg-purple-600';
   const photo_zoom = student.photo_zoom ?? student.photoZoom ?? 1;
   const photo_position = student.photo_position ?? student.photoPosition ?? { x: 0, y: 0 };
-  const campus_name = student.expand?.campus_id?.name || student.campus_name || '';
+  const campus_name = student.expand?.study_center_id?.name || student.campus_name || '';
 
   return {
     ...student,
@@ -106,7 +106,7 @@ export async function getStudents(filters?: StudentFilters): Promise<StudentsLis
     if (filters?.faculty) params.append('faculty', filters.faculty);
     if (filters?.status) params.append('status', filters.status);
     if (filters?.search) params.append('search', filters.search);
-    if (filters?.campusId) params.append('campus_id', filters.campusId);
+    if (filters?.campusId) params.append('study_center_id', filters.campusId);
     if (filters?.programme) params.append('programme', filters.programme);
 
     const queryString = params.toString();

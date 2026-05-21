@@ -15,14 +15,14 @@ import { getStaff } from "../services/staffService";
 import { getCourses } from "../services/courseService";
 import { getLibraryItems } from "../services/libraryService";
 import { getTransactions, createTransaction } from "../services/financeService";
-import { getAllCampuses } from "../services/campusService";
+import { getAllStudyCenters } from "../services/studyCenterService";
 import type {
   Student,
   StaffMember,
   Transaction,
   Course,
   LibraryItem,
-  Campus,
+  StudyCenter,
 } from "../types";
 
 interface DataState {
@@ -32,7 +32,7 @@ interface DataState {
   transactions: Transaction[];
   courses: Course[];
   library: LibraryItem[];
-  campuses: Campus[];
+  studyCenters: StudyCenter[];
 
   // Loading states
   isLoadingStudents: boolean;
@@ -40,7 +40,7 @@ interface DataState {
   isLoadingCourses: boolean;
   isLoadingTransactions: boolean;
   isLoadingLibrary: boolean;
-  isLoadingCampuses: boolean;
+  isLoadingStudyCenters: boolean;
 
   // Error states
   error: string | null;
@@ -54,7 +54,7 @@ interface DataState {
   fetchCourses: () => Promise<void>;
   fetchTransactions: () => Promise<void>;
   fetchLibrary: () => Promise<void>;
-  fetchCampuses: () => Promise<void>;
+  fetchStudyCenters: () => Promise<void>;
   fetchAllCoreData: () => Promise<void>;
 
   // Mutations with optimistic updates
@@ -65,7 +65,7 @@ interface DataState {
   setTransactions: (transactions: Transaction[]) => void;
   setCourses: (courses: Course[]) => void;
   setLibrary: (library: LibraryItem[]) => void;
-  setCampuses: (campuses: Campus[]) => void;
+  setStudyCenters: (studyCenters: StudyCenter[]) => void;
 
   // Clear all data (on logout)
   clearAll: () => void;
@@ -91,8 +91,8 @@ export const useDataStore = create<DataState>((set, get) => ({
   isLoadingCourses: false,
   isLoadingTransactions: false,
   isLoadingLibrary: false,
-  isLoadingCampuses: false,
-  campuses: [],
+  isLoadingStudyCenters: false,
+  studyCenters: [],
 
   error: null,
   lastFetchedAt: null,
@@ -171,13 +171,13 @@ export const useDataStore = create<DataState>((set, get) => ({
     }
   },
 
-  fetchCampuses: async () => {
-    set({ isLoadingCampuses: true });
+  fetchStudyCenters: async () => {
+    set({ isLoadingStudyCenters: true });
     try {
-      const data = await getAllCampuses();
-      set({ campuses: data, isLoadingCampuses: false });
+      const data = await getAllStudyCenters();
+      set({ studyCenters: data, isLoadingStudyCenters: false });
     } catch {
-      set({ isLoadingCampuses: false });
+      set({ isLoadingStudyCenters: false });
     }
   },
 
@@ -189,7 +189,7 @@ export const useDataStore = create<DataState>((set, get) => ({
         getCourses({ perPage: 100 }),
         getLibraryItems({ perPage: 100 }),
         getTransactions({ perPage: 100 }),
-        getAllCampuses(),
+        getAllStudyCenters(),
       ]);
       set({
         students: stuRes.success && stuRes.data ? stuRes.data : get().students,
@@ -197,7 +197,7 @@ export const useDataStore = create<DataState>((set, get) => ({
         courses: co.success && co.data ? co.data : get().courses,
         library: lib.success && lib.data ? lib.data : get().library,
         transactions: tx.success && tx.data ? tx.data : get().transactions,
-        campuses: Array.isArray(ca) ? ca : get().campuses,
+        studyCenters: Array.isArray(ca) ? ca : get().studyCenters,
         lastFetchedAt: Date.now(),
       });
     } catch (e) {
@@ -243,11 +243,11 @@ export const useDataStore = create<DataState>((set, get) => ({
       transactions: [],
       courses: [],
       library: [],
-      campuses: [],
+      studyCenters: [],
       error: null,
       lastFetchedAt: null,
     }),
-  setCampuses: (campuses) => set({ campuses }),
+  setStudyCenters: (studyCenters) => set({ studyCenters }),
 
   getStats: () => {
     const state = get();

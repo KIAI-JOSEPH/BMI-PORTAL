@@ -37,7 +37,7 @@ export async function getCourses(filters?: {
     if (filters?.page) params.append('page', filters.page.toString());
     if (filters?.perPage) params.append('perPage', filters.perPage.toString());
     if (filters?.search) params.append('search', filters.search);
-    if (filters?.campusId) params.append('campus_id', filters.campusId);
+    if (filters?.campusId) params.append('study_center_id', filters.campusId);
     if (filters?.status) params.append('status', filters.status);
     if (filters?.moduleId) params.append('module_id', filters.moduleId);
 

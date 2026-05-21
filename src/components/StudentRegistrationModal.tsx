@@ -3,8 +3,9 @@ import { X, UserPlus, Upload, User, CheckCircle2, Loader2 } from 'lucide-react';
 import { Student } from '../types';
 import { createStudent, updateStudent } from '../services/studentService';
 import { authFetch } from '../services/authService';
+import { getAllStudyCenters, StudyCenter } from "../services/studyCenterService";
 import { API_URL } from '../services/config';
-import { CampusSelector } from './CampusSelector';
+import { StudyCenterSelector } from './StudyCenterSelector';
 
 interface Program {
   id: string;
@@ -22,6 +23,7 @@ interface StudentRegistrationModalProps {
 
 const StudentRegistrationModal: React.FC<StudentRegistrationModalProps> = ({ isOpen, onClose, onSuccess, initialData }) => {
   const [programs, setPrograms] = useState<Program[]>([]);
+  const [campuses, setCampuses] = useState<StudyCenter[]>([]);
   const [loadingPrograms, setLoadingPrograms] = useState(false);
 
   const [formData, setFormData] = useState<Partial<Student>>({
@@ -35,7 +37,7 @@ const StudentRegistrationModal: React.FC<StudentRegistrationModalProps> = ({ isO
     admission_date: new Date().toISOString().split('T')[0],
     avatar_color: 'bg-purple-600',
     photo_zoom: 1,
-    campus_id: ''
+    study_center_id: ''
   });
   
   const [photoPreview, setPhotoPreview] = useState<string | undefined>(undefined);
@@ -46,24 +48,32 @@ const StudentRegistrationModal: React.FC<StudentRegistrationModalProps> = ({ isO
   useEffect(() => {
     if (!isOpen) return;
     let cancelled = false;
-    setLoadingPrograms(true);
-    authFetch(`${API_URL}/catalog/programs`, {}, 5000)
-      .then(res => res.json())
-      .then((data: { success: boolean; data?: Program[] }) => {
-        if (!cancelled && data.success && data.data) {
-          setPrograms(data.data);
-          // Auto-select first program if none selected
-          if (!formData.program_code && data.data.length > 0) {
-            setFormData(prev => ({ ...prev, program_code: data.data![0].id }));
+    
+    async function loadData() {
+      setLoadingPrograms(true);
+      try {
+        const [programsRes, centers] = await Promise.all([
+          authFetch(`${API_URL}/catalog/programs`, {}, 5000).then(r => r.json()),
+          getAllStudyCenters()
+        ]);
+        
+        if (!cancelled) {
+          if (programsRes.success && programsRes.data) {
+            setPrograms(programsRes.data);
+            if (!formData.program_code && programsRes.data.length > 0) {
+              setFormData(prev => ({ ...prev, program_code: programsRes.data![0].id }));
+            }
           }
+          setCampuses(centers);
         }
-      })
-      .catch(() => {
-        // If catalog fetch fails, leave empty — user can still type
-      })
-      .finally(() => {
+      } catch (err) {
+        // Handle error
+      } finally {
         if (!cancelled) setLoadingPrograms(false);
-      });
+      }
+    }
+
+    loadData();
     return () => { cancelled = true; };
   }, [isOpen]);
 
@@ -82,7 +92,8 @@ const StudentRegistrationModal: React.FC<StudentRegistrationModalProps> = ({ isO
         gender: 'Male',
         admission_date: new Date().toISOString().split('T')[0],
         avatar_color: 'bg-purple-600',
-        photo_zoom: 1
+        photo_zoom: 1,
+        study_center_id: ''
       });
       setPhotoPreview(undefined);
       setError(null);
@@ -315,9 +326,9 @@ const StudentRegistrationModal: React.FC<StudentRegistrationModalProps> = ({ isO
                     )}
                  </div>
                  <div className="space-y-1">
-                    <CampusSelector 
-                      value={formData.campus_id || ''} 
-                      onChange={(id) => handleChange('campus_id', id)}
+                    <StudyCenterSelector 
+                      value={formData.study_center_id || ''} 
+                      onChange={(id) => handleChange('study_center_id', id)}
                       required
                       className="w-full"
                       label="Assigned Campus *"

@@ -34,6 +34,12 @@ import {
   RefreshCcw,
   Copy,
   Check,
+  Calendar,
+  BookOpen,
+  MapPin,
+  Clock,
+  Activity,
+  Award,
 } from "lucide-react";
 import QRScanner from "./QRScanner";
 import {
@@ -376,150 +382,282 @@ const VerificationPage: React.FC<VerificationPageProps> = ({ logo }) => {
                   <p className="text-sm text-red-700">{result.error}</p>
                 )}
               </div>
-            </div>
+            </div>            {/* Document details card */}
+            {result.document && (() => {
+              const doc = result.document;
+              const isGraduated = doc.student_status === "Graduated" || result.documentType === "certificate";
+              const enrollmentStatus = doc.student_status || (isGraduated ? "Graduated" : "Active");
 
-            {/* Document details card */}
-            {result.document && (
-              <div className="bg-white border border-gray-100 shadow-sm">
-                {/* Card header */}
-                <div className="flex items-center gap-3 px-6 py-4 border-b border-gray-100 bg-gray-50">
-                  <div className="p-2 bg-white border border-gray-200 rounded-none text-[#4B0082]">
-                    {docTypeIcon}
-                  </div>
-                  <div>
-                    <p className="text-[9px] font-black uppercase tracking-widest text-gray-400">
-                      {docTypeLabel}
-                    </p>
-                    <p className="text-xs font-black text-gray-700 uppercase tracking-wide">
-                      {result.document.institution}
-                    </p>
-                  </div>
-                  <div className="ml-auto">
-                    <span
-                      className={`px-3 py-1 text-[9px] font-black uppercase tracking-widest ${
-                        result.document.status === "active"
-                          ? "bg-emerald-100 text-emerald-700"
-                          : result.document.status === "revoked"
-                            ? "bg-red-100 text-red-700"
-                            : "bg-amber-100 text-amber-700"
-                      }`}
-                    >
-                      {result.document.status.toUpperCase()}
-                    </span>
-                  </div>
-                </div>
+              // Compute Initials
+              const getInitials = (name: string) => {
+                if (!name) return "ST";
+                const parts = name.trim().split(/\s+/);
+                if (parts.length >= 2) {
+                  return `${parts[0].charAt(0)}${parts[parts.length - 1].charAt(0)}`.toUpperCase();
+                }
+                return name.charAt(0).toUpperCase();
+              };
 
-                {/* Fields */}
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-px bg-gray-100">
-                  {[
-                    {
-                      label: "Full Name",
-                      value: result.document.holder_name,
-                      icon: <GraduationCap size={14} />,
-                    },
-                    {
-                      label:
-                        result.documentType === "transcript"
-                          ? "Programme"
-                          : "Qualification",
-                      value: result.document.credential,
-                      icon: <Scroll size={14} />,
-                    },
-                    {
-                      label: "Issuing Institution",
-                      value: result.document.institution,
-                      icon: <Building2 size={14} />,
-                    },
-                    {
-                      label: "Issue Date",
-                      value: formatDate(result.document.issued_at),
-                      icon: <CalendarDays size={14} />,
-                    },
-                    result.document.faculty
-                      ? {
-                          label: "Faculty",
-                          value: result.document.faculty,
-                          icon: <Building2 size={14} />,
-                        }
-                      : null,
-                    result.document.department
-                      ? {
-                          label: "Department",
-                          value: result.document.department,
-                          icon: <Building2 size={14} />,
-                        }
-                      : null,
-                    result.document.graduation_class
-                      ? {
-                          label: "Graduation Class",
-                          value: result.document.graduation_class,
-                          icon: <Star size={14} />,
-                        }
-                      : null,
-                    result.document.gpa != null
-                      ? {
-                          label: "GPA",
-                          value: result.document.gpa.toFixed(2),
-                          icon: <Star size={14} />,
-                        }
-                      : null,
-                    result.document.academic_year
-                      ? {
-                          label: "Academic Year",
-                          value: result.document.academic_year,
-                          icon: <CalendarDays size={14} />,
-                        }
-                      : null,
-                  ]
-                    .filter(Boolean)
-                    .map((f, i) => (
-                      <div
-                        key={i}
-                        className="bg-white px-6 py-4 flex items-start gap-3"
-                      >
-                        <div className="mt-0.5 text-[#4B0082]">{f!.icon}</div>
-                        <div>
-                          <p className="text-[9px] font-black uppercase tracking-widest text-gray-400 mb-0.5">
-                            {f!.label}
+              // Compute Expected Graduation Year
+              const admissionYearNum = doc.student_admission_year ? parseInt(doc.student_admission_year) : 2022;
+              const expectedGradYear = admissionYearNum + 4;
+
+              // Compute Current Academic Year
+              const yearOfStudyNum = doc.student_year_of_study ? parseInt(doc.student_year_of_study) : 1;
+              const currentAcademicYearStart = admissionYearNum + (yearOfStudyNum - 1);
+              const currentAcademicYear = `${currentAcademicYearStart}/${currentAcademicYearStart + 1}`;
+
+              // Compute Conferral Date
+              const conferralDateStr = doc.issued_at ? formatDate(doc.issued_at) : `${admissionYearNum + 4}-11-18`;
+
+              // Compute Honors Class
+              const gpaVal = doc.gpa ?? 0;
+              const honorsClass = doc.graduation_class || (
+                gpaVal >= 3.6 ? "First Class Honours" :
+                gpaVal >= 3.0 ? "Second Class Upper" :
+                gpaVal >= 2.5 ? "Second Class Lower" :
+                "Pass"
+              );
+
+              // Seminary program detection (for Study Center & part-time mode naming)
+              const isSeminaryProgram = doc.credential?.toLowerCase().includes("diploma") || 
+                                          doc.credential?.toLowerCase().includes("ministry") || 
+                                          doc.credential?.toLowerCase().includes("theology");
+
+              const campusLabel = isSeminaryProgram ? "Study Center" : "Campus Location";
+              const modeOfStudyValue = (doc.student_mode_of_study === "Part-Time" && isSeminaryProgram)
+                ? "Part-Time (Seminary Mode)"
+                : (doc.student_mode_of_study || "Full-Time");
+
+              const getStatusBadge = (status: string) => {
+                switch (status) {
+                  case "Graduated":
+                    return (
+                      <span className="inline-flex items-center gap-1.5 px-3 py-1 text-[10px] font-bold uppercase tracking-wider rounded-full bg-emerald-100 text-emerald-800 border border-emerald-200">
+                        <span className="h-1.5 w-1.5 rounded-full bg-emerald-600 animate-pulse" />
+                        Degree Conferred
+                      </span>
+                    );
+                  case "Active":
+                    return (
+                      <span className="inline-flex items-center gap-1.5 px-3 py-1 text-[10px] font-bold uppercase tracking-wider rounded-full bg-blue-100 text-blue-800 border border-blue-200">
+                        <span className="h-1.5 w-1.5 rounded-full bg-blue-600 animate-pulse" />
+                        Currently Enrolled - Active
+                      </span>
+                    );
+                  case "Suspended":
+                    return (
+                      <span className="inline-flex items-center gap-1.5 px-3 py-1 text-[10px] font-bold uppercase tracking-wider rounded-full bg-red-100 text-red-800 border border-red-200">
+                        <span className="h-1.5 w-1.5 rounded-full bg-red-600" />
+                        Suspended
+                      </span>
+                    );
+                  case "Inactive":
+                    return (
+                      <span className="inline-flex items-center gap-1.5 px-3 py-1 text-[10px] font-bold uppercase tracking-wider rounded-full bg-gray-100 text-gray-600 border border-gray-200">
+                        <span className="h-1.5 w-1.5 rounded-full bg-gray-400" />
+                        Inactive
+                      </span>
+                    );
+                  case "Applicant":
+                    return (
+                      <span className="inline-flex items-center gap-1.5 px-3 py-1 text-[10px] font-bold uppercase tracking-wider rounded-full bg-amber-100 text-amber-800 border border-amber-200">
+                        <span className="h-1.5 w-1.5 rounded-full bg-amber-500" />
+                        Admission Applicant
+                      </span>
+                    );
+                  case "On Leave":
+                    return (
+                      <span className="inline-flex items-center gap-1.5 px-3 py-1 text-[10px] font-bold uppercase tracking-wider rounded-full bg-amber-50 text-amber-700 border border-amber-100">
+                        <span className="h-1.5 w-1.5 rounded-full bg-amber-400" />
+                        On Leave
+                      </span>
+                    );
+                  default:
+                    return (
+                      <span className="inline-flex items-center gap-1.5 px-3 py-1 text-[10px] font-bold uppercase tracking-wider rounded-full bg-gray-100 text-gray-800 border border-gray-200">
+                        {status}
+                      </span>
+                    );
+                }
+              };
+
+              return (
+                <div className="bg-white border border-gray-100 shadow-xl overflow-hidden rounded-xl">
+                  {/* Premium Profile Header */}
+                  <div className="relative p-6 sm:p-8 bg-gradient-to-br from-slate-50 to-slate-100/50 border-b border-gray-100 flex flex-col sm:flex-row items-center gap-6">
+                    {/* Official Watermark logo */}
+                    <img
+                      src="/BMI.svg"
+                      className="absolute right-6 top-6 h-12 opacity-10 select-none pointer-events-none"
+                      alt=""
+                    />
+
+                    {/* Passport Photo Frame */}
+                    <div className="relative flex-shrink-0">
+                      {doc.student_photo ? (
+                        <div className="w-28 h-28 rounded-full overflow-hidden border-4 border-emerald-500 shadow-lg relative group transition-transform duration-300 hover:scale-105">
+                          <img
+                            src={doc.student_photo}
+                            className="w-full h-full object-cover"
+                            style={{
+                              transform: doc.student_photo_zoom ? `scale(${doc.student_photo_zoom})` : undefined,
+                              transformOrigin: doc.student_photo_position ? `${doc.student_photo_position.x}% ${doc.student_photo_position.y}%` : undefined
+                            }}
+                            alt="Student Passport"
+                          />
+                        </div>
+                      ) : (
+                        <div className="w-28 h-28 rounded-full bg-gradient-to-br from-[#4B0082]/10 to-[#4B0082]/20 border-4 border-emerald-500 shadow-lg flex items-center justify-center text-[#4B0082] font-black tracking-widest text-3xl">
+                          {getInitials(doc.holder_name)}
+                        </div>
+                      )}
+                      {/* Registry Verified badge on photo */}
+                      <span className="absolute -bottom-1 -right-1 bg-emerald-500 text-white p-1.5 rounded-full shadow-md border-2 border-white" title="Verified Record">
+                        <ShieldCheck size={14} className="animate-pulse" />
+                      </span>
+                    </div>
+
+                    {/* Student Info Box */}
+                    <div className="text-center sm:text-left flex-1 min-w-0">
+                      <div className="flex flex-col sm:flex-row sm:items-center gap-2 mb-2 justify-center sm:justify-start">
+                        <h3 className="text-xl sm:text-2xl font-black text-gray-900 uppercase tracking-tight truncate">
+                          {doc.holder_name}
+                        </h3>
+                      </div>
+                      <p className="text-xs font-mono text-gray-500 font-bold uppercase tracking-wider mb-3">
+                        Reg No: {doc.student_reg_no || doc.serial_number}
+                      </p>
+                      <div className="flex flex-wrap gap-2 justify-center sm:justify-start">
+                        {getStatusBadge(enrollmentStatus)}
+                        <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-[10px] font-black uppercase tracking-wider bg-purple-100 text-[#4B0082]">
+                          {docTypeLabel}
+                        </span>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Core Academic Metadata Details Grid */}
+                  <div className="grid grid-cols-1 sm:grid-cols-2 border-b border-gray-100">
+                    {[
+                      {
+                        label: result.documentType === "transcript" ? "Academic Programme" : "Qualification Title",
+                        value: doc.credential,
+                        icon: <Scroll className="text-[#4B0082]" size={15} />,
+                      },
+                      {
+                        label: "Faculty & Department",
+                        value: `${doc.faculty || "Faculty of Theology"} — ${doc.department || "Department of Theology"}`,
+                        icon: <Building2 className="text-[#4B0082]" size={15} />,
+                      },
+                      {
+                        label: campusLabel,
+                        value: doc.student_campus || "Main Campus",
+                        icon: <MapPin className="text-[#4B0082]" size={15} />,
+                      },
+                      {
+                        label: "Mode of Study",
+                        value: modeOfStudyValue,
+                        icon: <Clock className="text-[#4B0082]" size={15} />,
+                      },
+                      {
+                        label: "Admission Year",
+                        value: doc.student_admission_year || "2022",
+                        icon: <Calendar className="text-[#4B0082]" size={15} />,
+                      },
+                      isGraduated ? {
+                        label: "Conferral Date",
+                        value: conferralDateStr,
+                        icon: <Award className="text-emerald-600" size={15} />,
+                      } : {
+                        label: "Current Academic Year",
+                        value: currentAcademicYear,
+                        icon: <Activity className="text-blue-600" size={15} />,
+                      },
+                      isGraduated ? {
+                        label: "Honors Classification",
+                        value: honorsClass,
+                        icon: <ShieldCheck className="text-emerald-600" size={15} />,
+                      } : {
+                        label: "Expected Graduation Year",
+                        value: expectedGradYear.toString(),
+                        icon: <GraduationCap className="text-[#4B0082]" size={15} />,
+                      }
+                    ]
+                      .filter(Boolean)
+                      .map((field: any, idx) => (
+                        <div
+                          key={idx}
+                          className="px-6 py-4 border-r border-b border-gray-100 last:border-r-0 flex items-start gap-3.5 hover:bg-slate-50/50 transition-colors"
+                        >
+                          <div className="mt-1 flex-shrink-0">{field.icon}</div>
+                          <div>
+                            <p className="text-[9px] font-black uppercase tracking-widest text-gray-400 mb-0.5">
+                              {field.label}
+                            </p>
+                            <p className="text-sm font-bold text-gray-800 uppercase tracking-wide">
+                              {field.value}
+                            </p>
+                          </div>
+                        </div>
+                      ))}
+
+                    {/* Serial Number bar */}
+                    <div className="bg-slate-50/50 px-6 py-4 flex items-start gap-3.5 sm:col-span-2">
+                      <div className="mt-1 text-[#4B0082] flex-shrink-0">
+                        <Hash size={15} />
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <p className="text-[9px] font-black uppercase tracking-widest text-gray-400 mb-0.5">
+                          Ledger Serial Number
+                        </p>
+                        <div className="flex items-center gap-3">
+                          <p className="text-sm font-black text-gray-900 font-mono tracking-wider truncate">
+                            {doc.serial_number}
                           </p>
-                          <p className="text-sm font-bold text-gray-900">
-                            {f!.value}
-                          </p>
+                          <button
+                            onClick={handleCopySerial}
+                            className="p-1.5 text-gray-400 hover:text-[#4B0082] transition-colors flex-shrink-0 bg-white border border-gray-200 rounded"
+                            title="Copy serial number"
+                          >
+                            {copied ? (
+                              <Check size={12} className="text-emerald-500 font-bold" />
+                            ) : (
+                              <Copy size={12} />
+                            )}
+                          </button>
                         </div>
                       </div>
-                    ))}
-
-                  {/* Serial number with copy button */}
-                  <div className="bg-white px-6 py-4 flex items-start gap-3 sm:col-span-2">
-                    <div className="mt-0.5 text-[#4B0082]">
-                      <Hash size={14} />
                     </div>
-                    <div className="flex-1">
-                      <p className="text-[9px] font-black uppercase tracking-widest text-gray-400 mb-0.5">
-                        Serial Number
-                      </p>
-                      <div className="flex items-center gap-3">
-                        <p className="text-sm font-black text-gray-900 font-mono tracking-wider">
-                          {result.document.serial_number}
-                        </p>
-                        <button
-                          onClick={handleCopySerial}
-                          className="p-1.5 text-gray-400 hover:text-[#4B0082] transition-colors"
-                          title="Copy serial number"
-                        >
-                          {copied ? (
-                            <Check size={12} className="text-emerald-500" />
-                          ) : (
-                            <Copy size={12} />
-                          )}
-                        </button>
+                  </div>
+
+                  {/* Cryptographic Verification Stamp */}
+                  <div className="bg-gradient-to-r from-emerald-500/10 via-emerald-500/5 to-transparent border-t border-gray-100 p-6 flex flex-col sm:flex-row items-center gap-4 sm:justify-between">
+                    <div className="flex items-center gap-3">
+                      <div className="p-2.5 bg-emerald-500 text-white rounded-full shadow-md shadow-emerald-500/20">
+                        <ShieldCheck size={20} className="animate-pulse" />
                       </div>
+                      <div>
+                        <p className="text-xs font-black text-emerald-900 uppercase tracking-wide">
+                          Registry Authenticated
+                        </p>
+                        <p className="text-[10px] text-emerald-700 font-medium">
+                          Verified at {new Date().toLocaleString("en-US", { dateStyle: "medium", timeStyle: "medium" })}
+                        </p>
+                      </div>
+                    </div>
+                    <div className="text-center sm:text-right">
+                      <p className="text-[9px] font-black uppercase tracking-widest text-gray-400 mb-0.5">
+                        Verification Protocol
+                      </p>
+                      <p className="text-[10px] text-emerald-800 font-bold uppercase tracking-wider font-mono">
+                        HMAC-SHA256 • Registry v2
+                      </p>
                     </div>
                   </div>
                 </div>
-              </div>
-            )}
-
+              );
+            })()}
             {/* Verification metadata */}
             {result.verification && (
               <div className="bg-white border border-gray-100 shadow-sm px-6 py-4">

@@ -30,6 +30,16 @@ export interface DocumentVerifyResult {
     graduation_class?: string;
     gpa?: number;
     academic_year?: string;
+    // student-specific (new for premium portal features)
+    student_photo?: string;
+    student_photo_zoom?: number;
+    student_photo_position?: { x: number; y: number };
+    student_status?: string;
+    student_reg_no?: string;
+    student_campus?: string;
+    student_mode_of_study?: string;
+    student_admission_year?: string;
+    student_year_of_study?: string;
   };
   verification?: {
     timestamp: string;

@@ -37,9 +37,9 @@ export interface AcademicRecord {
       first_name: string;
       last_name: string;
       gender: string;
-      campus_id: string;
-      admission_no: string;
-      expand?: { campus_id?: { id: string; name: string } };
+      study_center_id: string;
+      program_code?: string;
+      expand?: { study_center_id?: { id: string; name: string } };
     };
     course_id?: {
       id: string;
@@ -114,7 +114,7 @@ export function flattenRecord(r: AcademicRecord | any): AcademicRecordFlat {
   const student  = r.expand?.student_id;
   const course   = r.expand?.course_id;
   const module   = course?.expand?.module_id;
-  const campus   = student?.expand?.campus_id;
+  const campus   = student?.expand?.study_center_id;
 
   return {
     id:            r.id,
@@ -145,7 +145,7 @@ export function flattenRecord(r: AcademicRecord | any): AcademicRecordFlat {
 
 // ─── API helpers ──────────────────────────────────────────────────────────────
 
-const EXPAND = 'student_id,student_id.campus_id,course_id,course_id.module_id';
+const EXPAND = 'student_id,student_id.study_center_id,course_id,course_id.module_id';
 
 /**
  * GET /api/v1/grades  (backed by academic_records collection)
@@ -157,7 +157,7 @@ export async function getAcademicRecords(
   const params = new URLSearchParams();
   if (filters.studentId)   params.set('studentId',   filters.studentId);
   if (filters.courseId)    params.set('courseId',    filters.courseId);
-  if (filters.campusId)    params.set('campus_id',   filters.campusId);
+  if (filters.campusId)    params.set('study_center_id',   filters.campusId);
   if (filters.academicYear)params.set('academicYear',filters.academicYear);
   if (filters.semester)    params.set('semester',    filters.semester);
   if (filters.grade)       params.set('grade',       filters.grade);

@@ -65,7 +65,14 @@ const StudentSchema = z
       .enum(["Active", "Inactive", "Applicant", "On Leave", "Graduated", "Suspended"])
       .default("Active")
       .openapi({ example: "Active" }),
-    campus_id: z.string().optional().openapi({ example: "CAMP001" }),
+    study_center_id: z.string().optional().openapi({ example: "CAMP001" }),
+    photo: z.string().optional().openapi({ example: "data:image/jpeg;base64,..." }),
+    photo_zoom: z.number().optional().openapi({ example: 1 }),
+    photo_position: z.any().optional(),
+    mode_of_study: z.string().optional().openapi({ example: "Full-Time" }),
+    admissionYear: z.string().optional().openapi({ example: "2024" }),
+    year_of_study: z.number().optional().openapi({ example: 1 }),
+    graduation_date: z.string().optional().openapi({ example: "2026-05-19" }),
   })
   .openapi("Student");
 
@@ -89,7 +96,7 @@ const listStudentsRoute = createRoute({
       perPage: z.string().optional().openapi({ example: "50" }),
       status: z.string().optional().openapi({ example: "Active" }),
       search: z.string().optional().openapi({ example: "John" }),
-      campus_id: z.string().optional().openapi({ example: "CAMP001" }),
+      study_center_id: z.string().optional().openapi({ example: "CAMP001" }),
       programme: z.string().optional().openapi({ example: "Theology" }),
     }),
   },
@@ -190,14 +197,14 @@ const createStudentRoute = createRoute({
 // Implement routes
 studentsRouter.openapi(listStudentsRoute, async (c) => {
   try {
-    const { page: p, perPage: pp, status, search, campus_id, programme } = c.req.valid("query");
+    const { page: p, perPage: pp, status, search, study_center_id, programme } = c.req.valid("query");
     const page = parseInt(p || "1", 10);
     const perPage = Math.min(parseInt(pp || "50", 10), 100);
 
     const result = await StudentQueries.getWithRelations({
       page,
       perPage,
-      campusId: campus_id && campus_id !== "all" ? campus_id : undefined,
+      campusId: study_center_id && study_center_id !== "all" ? study_center_id : undefined,
       status: status || undefined,
       search: search || undefined,
       programme: programme || undefined,

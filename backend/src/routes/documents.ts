@@ -61,6 +61,16 @@ interface UnifiedVerifyResult {
     gpa?: number;
     // transcript-specific
     academic_year?: string;
+    // student-specific (new for premium portal features)
+    student_photo?: string;
+    student_photo_zoom?: number;
+    student_photo_position?: { x: number; y: number };
+    student_status?: string;
+    student_reg_no?: string;
+    student_campus?: string;
+    student_mode_of_study?: string;
+    student_admission_year?: string;
+    student_year_of_study?: string;
   };
   verification?: {
     timestamp: string;
@@ -194,6 +204,42 @@ documentsRouter.post("/verify", verifyRateLimiter, async (c) => {
         }
       }
 
+      let studentPhoto: string | undefined = undefined;
+      let studentPhotoZoom: number | undefined = undefined;
+      let studentPhotoPosition: { x: number; y: number } | undefined = undefined;
+      let studentStatus: string | undefined = undefined;
+      let studentRegNo: string | undefined = undefined;
+      let studentCampus: string | undefined = undefined;
+      let studentMode: string | undefined = undefined;
+      let studentAdmissionYear: string | undefined = undefined;
+      let studentYearOfStudy: string | undefined = undefined;
+
+      if (tr.student_id) {
+        try {
+          const student = await pb.collection("students").getOne(tr.student_id);
+          studentPhoto = student.photo || undefined;
+          studentPhotoZoom = typeof student.photo_zoom === "number" ? student.photo_zoom : undefined;
+          studentPhotoPosition = student.photo_position || undefined;
+          studentStatus = student.status || undefined;
+          studentRegNo = student.reg_no || student.student_code || undefined;
+          studentMode = student.mode_of_study || undefined;
+          studentAdmissionYear = student.admissionYear || undefined;
+          studentYearOfStudy = student.year_of_study || undefined;
+          if (student.study_center_id) {
+            try {
+              const campus = await pb.collection("study_centers").getOne(student.study_center_id);
+              studentCampus = campus.name;
+            } catch {
+              studentCampus = student.campus_name;
+            }
+          } else {
+            studentCampus = student.campus_name;
+          }
+        } catch {
+          // Ignore
+        }
+      }
+
       await pb.collection("transcripts").update(tr.id, {
         verification_count: (tr.verification_count || 0) + 1,
       });
@@ -210,6 +256,15 @@ documentsRouter.post("/verify", verifyRateLimiter, async (c) => {
           issued_at: tr.issued_at,
           status: "active",
           academic_year: tr.academic_year,
+          student_photo: studentPhoto,
+          student_photo_zoom: studentPhotoZoom,
+          student_photo_position: studentPhotoPosition,
+          student_status: studentStatus,
+          student_reg_no: studentRegNo,
+          student_campus: studentCampus,
+          student_mode_of_study: studentMode,
+          student_admission_year: studentAdmissionYear,
+          student_year_of_study: studentYearOfStudy,
         },
         verification: {
           timestamp: new Date().toISOString(),
@@ -347,38 +402,83 @@ documentsRouter.post("/verify", verifyRateLimiter, async (c) => {
       });
     }
 
-    await pb.collection("certificates").update(cert.id as string, {
-      verification_count: ((cert.verification_count as number) || 0) + 1,
-    });
-    await logAttempt(cleanSerial, "certificates", "valid", ip);
-    logger.info("Certificate verified via unified endpoint", {
-      serial: cleanSerial,
-      tokenVerified,
-    });
+      let studentPhoto: string | undefined = undefined;
+      let studentPhotoZoom: number | undefined = undefined;
+      let studentPhotoPosition: { x: number; y: number } | undefined = undefined;
+      let studentStatus: string | undefined = undefined;
+      let studentRegNo: string | undefined = undefined;
+      let studentCampus: string | undefined = undefined;
+      let studentMode: string | undefined = undefined;
+      let studentAdmissionYear: string | undefined = undefined;
+      let studentYearOfStudy: string | undefined = undefined;
 
-    return c.json<UnifiedVerifyResult>({
-      valid: true,
-      documentType: "certificate",
-      document: {
-        serial_number: cert.serial_number as string,
-        holder_name: cert.student_name as string,
-        credential: cert.degree as string,
-        institution: "BMI University",
-        issued_at: cert.issue_date as string,
-        status: "active",
-        faculty: cert.faculty as string | undefined,
-        department: cert.department as string | undefined,
-        graduation_class: cert.graduation_class as string | undefined,
-        gpa: typeof cert.gpa === "number" ? cert.gpa : undefined,
-      },
-      verification: {
-        timestamp: new Date().toISOString(),
-        method: token ? "qr_scan" : sig ? "hmac_sig" : hash ? "hash" : "serial_only",
-        token_verified: tokenVerified,
-        confidence: tokenVerified ? "high" : "low",
+      if (cert.student_id) {
+        try {
+          const student = await pb.collection("students").getOne(cert.student_id as string);
+          studentPhoto = student.photo || undefined;
+          studentPhotoZoom = typeof student.photo_zoom === "number" ? student.photo_zoom : undefined;
+          studentPhotoPosition = student.photo_position || undefined;
+          studentStatus = student.status || undefined;
+          studentRegNo = student.reg_no || student.student_code || undefined;
+          studentMode = student.mode_of_study || undefined;
+          studentAdmissionYear = student.admissionYear || undefined;
+          studentYearOfStudy = student.year_of_study || undefined;
+          if (student.study_center_id) {
+            try {
+              const campus = await pb.collection("study_centers").getOne(student.study_center_id);
+              studentCampus = campus.name;
+            } catch {
+              studentCampus = student.campus_name;
+            }
+          } else {
+            studentCampus = student.campus_name;
+          }
+        } catch {
+          // Ignore
+        }
+      }
+
+      await pb.collection("certificates").update(cert.id as string, {
         verification_count: ((cert.verification_count as number) || 0) + 1,
-      },
-    });
+      });
+      await logAttempt(cleanSerial, "certificates", "valid", ip);
+      logger.info("Certificate verified via unified endpoint", {
+        serial: cleanSerial,
+        tokenVerified,
+      });
+
+      return c.json<UnifiedVerifyResult>({
+        valid: true,
+        documentType: "certificate",
+        document: {
+          serial_number: cert.serial_number as string,
+          holder_name: cert.student_name as string,
+          credential: cert.degree as string,
+          institution: "BMI University",
+          issued_at: cert.issue_date as string,
+          status: "active",
+          faculty: cert.faculty as string | undefined,
+          department: cert.department as string | undefined,
+          graduation_class: cert.graduation_class as string | undefined,
+          gpa: typeof cert.gpa === "number" ? cert.gpa : undefined,
+          student_photo: studentPhoto,
+          student_photo_zoom: studentPhotoZoom,
+          student_photo_position: studentPhotoPosition,
+          student_status: studentStatus,
+          student_reg_no: studentRegNo,
+          student_campus: studentCampus,
+          student_mode_of_study: studentMode,
+          student_admission_year: studentAdmissionYear,
+          student_year_of_study: studentYearOfStudy,
+        },
+        verification: {
+          timestamp: new Date().toISOString(),
+          method: token ? "qr_scan" : sig ? "hmac_sig" : hash ? "hash" : "serial_only",
+          token_verified: tokenVerified,
+          confidence: tokenVerified ? "high" : "low",
+          verification_count: ((cert.verification_count as number) || 0) + 1,
+        },
+      });
   } catch (error: unknown) {
     logger.error("Unified document verification error:", errorMessage(error));
     return c.json<UnifiedVerifyResult>(

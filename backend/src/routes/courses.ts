@@ -88,7 +88,7 @@ const listCoursesRoute = createRoute({
       perPage: z.string().optional().openapi({ example: "20" }),
       search: z.string().optional().openapi({ example: "Theology" }),
       status: z.string().optional().openapi({ example: "Published" }),
-      campus_id: z.string().optional().openapi({ example: "CAMP001" }),
+      study_center_id: z.string().optional().openapi({ example: "CAMP001" }),
     }),
   },
   responses: {
@@ -350,7 +350,8 @@ coursesRouter.openapi(listCoursesRoute, async (c) => {
       perPage: pp,
       search,
       status,
-      campus_id,
+      study_center_id,
+      module_id,
     } = c.req.valid("query");
     const { page, perPage } = parsePagination(p, pp, {
       page: 1,
@@ -361,7 +362,7 @@ coursesRouter.openapi(listCoursesRoute, async (c) => {
     const result = await CourseQueries.getWithDetails({
       page,
       perPage,
-      campusId: campus_id && campus_id !== "all" ? campus_id : undefined,
+      campusId: study_center_id && study_center_id !== "all" ? study_center_id : undefined,
       status: status || undefined,
       search: search || undefined,
     });

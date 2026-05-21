@@ -51,7 +51,7 @@ import medicalRouter from "./routes/medical.js";
 import inventoryRouter from "./routes/inventory.js";
 import visitorRouter from "./routes/visitors.js";
 import attendanceRouter from "./routes/attendance.js";
-import campusesRouter from "./routes/campuses.js";
+import studyCentersRouter from "./routes/study_centers.js";
 import transcriptsRouter from "./routes/transcripts.js";
 import documentsRouter from "./routes/documents.js";
 
@@ -196,7 +196,8 @@ app.route("/api/v1/medical", medicalRouter);
 app.route("/api/v1/inventory", inventoryRouter);
 app.route("/api/v1/visitors", visitorRouter);
 app.route("/api/v1/attendance", attendanceRouter);
-app.route("/api/v1/campuses", campusesRouter);
+app.route("/api/v1/campuses", studyCentersRouter);
+app.route("/api/v1/study-centers", studyCentersRouter);
 app.route("/api/v1/transcripts", transcriptsRouter);
 app.route("/api/v1/documents", documentsRouter);
 

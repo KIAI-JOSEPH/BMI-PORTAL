@@ -49,14 +49,11 @@ const FacultyPortal: React.FC = () => {
     }
     setSubmitting(true);
     try {
-      // @ts-ignore - Backend accepts studentId/courseCode for compatibility
       await createAcademicRecord({
-        studentId: form.studentId,
-        courseCode: form.courseCode,
-        percentage: form.percentage,
-        numericGrade: form.percentage,
-        academicYear: form.academicYear,
-        semester: form.semester,
+        student_id: form.studentId,
+        course_id: form.courseCode,
+        total_score: form.percentage,
+        academic_year: form.academicYear,
       });
       showToast('success', 'Grade saved successfully.');
       setForm(f => ({ ...f, studentId: '', percentage: 0 }));

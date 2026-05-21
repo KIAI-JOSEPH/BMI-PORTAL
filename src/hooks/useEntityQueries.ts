@@ -15,7 +15,7 @@ import { getStaff } from '../services/staffService';
 import { getCourses } from '../services/courseService';
 import { getLibraryItems } from '../services/libraryService';
 import { getTransactions } from '../services/financeService';
-import { getAllCampuses } from '../services/campusService';
+import { getAllStudyCenters } from '../services/studyCenterService';
 
 // ── Query Keys ────────────────────────────────────────────────────────────────
 // Centralised so mutations can call queryClient.invalidateQueries({ queryKey: QUERY_KEYS.students() })
@@ -25,7 +25,7 @@ export const QUERY_KEYS = {
   courses: (filters?: Record<string, unknown>) => ['courses', filters ?? {}] as const,
   library: (filters?: Record<string, unknown>) => ['library', filters ?? {}] as const,
   transactions: (filters?: Record<string, unknown>) => ['transactions', filters ?? {}] as const,
-  campuses: () => ['campuses'] as const,
+  studyCenters: () => ['studyCenters'] as const,
 };
 
 // ── Students ──────────────────────────────────────────────────────────────────
@@ -34,7 +34,7 @@ export function useStudentsQuery(params?: {
   perPage?: number;
   search?: string;
   status?: string;
-  campus_id?: string;
+  study_center_id?: string;
   programme?: string;
 }) {
   return useQuery({
@@ -42,8 +42,8 @@ export function useStudentsQuery(params?: {
     queryFn: () => {
       if (!params) return getStudents({ perPage: 50 });
       // StudentFilters uses campusId (camelCase); map from the snake_case param
-      const { campus_id, ...rest } = params;
-      return getStudents({ ...rest, campusId: campus_id });
+      const { study_center_id, ...rest } = params;
+      return getStudents({ ...rest, campusId: study_center_id });
     },
     // Reference data changes rarely — cache for 5 minutes
     staleTime: 5 * 60 * 1000,
@@ -56,15 +56,15 @@ export function useStaffQuery(params?: {
   perPage?: number;
   department?: string;
   search?: string;
-  campus_id?: string;
+  study_center_id?: string;
   category?: string;
 }) {
   return useQuery({
     queryKey: QUERY_KEYS.staff(params as Record<string, unknown> | undefined),
     queryFn: () => {
       if (!params) return getStaff({ perPage: 50 });
-      const { campus_id, ...rest } = params;
-      return getStaff({ ...rest, campusId: campus_id });
+      const { study_center_id, ...rest } = params;
+      return getStaff({ ...rest, campusId: study_center_id });
     },
     staleTime: 5 * 60 * 1000,
   });
@@ -75,7 +75,7 @@ export function useCoursesQuery(params?: {
   page?: number;
   perPage?: number;
   search?: string;
-  campus_id?: string;
+  study_center_id?: string;
   status?: string;
   module_id?: string;
 }) {
@@ -83,8 +83,8 @@ export function useCoursesQuery(params?: {
     queryKey: QUERY_KEYS.courses(params as Record<string, unknown> | undefined),
     queryFn: () => {
       if (!params) return getCourses({ perPage: 100 });
-      const { campus_id, module_id, ...rest } = params;
-      return getCourses({ ...rest, campusId: campus_id, moduleId: module_id });
+      const { study_center_id, module_id, ...rest } = params;
+      return getCourses({ ...rest, campusId: study_center_id, moduleId: module_id });
     },
     // Courses change very rarely
     staleTime: 10 * 60 * 1000,
@@ -114,12 +114,12 @@ export function useTransactionsQuery(params?: {
   });
 }
 
-// ── Campuses ──────────────────────────────────────────────────────────────────
-export function useCampusesQuery() {
+// ── Study Centers ────────────────────────────────────────────────────────────
+export function useStudyCentersQuery() {
   return useQuery({
-    queryKey: QUERY_KEYS.campuses(),
-    queryFn: getAllCampuses,
-    // Campuses almost never change
+    queryKey: QUERY_KEYS.studyCenters(),
+    queryFn: getAllStudyCenters,
+    // Study centers almost never change
     staleTime: 30 * 60 * 1000,
   });
 }

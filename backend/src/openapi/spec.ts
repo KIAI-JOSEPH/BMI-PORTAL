@@ -37,7 +37,7 @@ export const openApiSpec = {
     { name: "Dashboard", description: "Aggregated statistics & trends" },
     { name: "Library", description: "Library catalogue" },
     { name: "Transcripts", description: "Transcript generation & verification" },
-    { name: "Campuses", description: "Campus registry" },
+    { name: "Study Centers", description: "Study center registry" },
     { name: "Hostels", description: "Hostel & room management" },
     { name: "Medical", description: "Health center visits" },
     { name: "Inventory", description: "Physical inventory" },
@@ -92,7 +92,7 @@ export const openApiSpec = {
             type: "string",
             enum: ["Active", "Inactive", "Graduated", "Suspended", "Applicant"],
           },
-          campus_id: { type: "string" },
+          study_center_id: { type: "string" },
         },
         required: ["id", "student_code", "full_name", "email"],
       },
@@ -265,7 +265,7 @@ export const openApiSpec = {
           { name: "perPage", in: "query", schema: { type: "integer", default: 50, maximum: 100 } },
           { name: "search", in: "query", schema: { type: "string" }, description: "Full-text search on name and student code" },
           { name: "status", in: "query", schema: { type: "string", enum: ["Active", "Inactive", "Graduated", "Suspended", "Applicant"] } },
-          { name: "campus_id", in: "query", schema: { type: "string" } },
+          { name: "study_center_id", in: "query", schema: { type: "string" } },
         ],
         responses: {
           200: {
@@ -572,7 +572,7 @@ export const openApiSpec = {
         requestBody: { required: true, content: { "application/json": { schema: { type: "object", properties: {
           staff_number: { type: "string" }, first_name: { type: "string" }, last_name: { type: "string" },
           email: { type: "string", format: "email" }, phone: { type: "string" }, role: { type: "string" },
-          campus_id: { type: "string" },
+          study_center_id: { type: "string" },
         }, required: ["staff_number", "first_name", "last_name", "role"] } } } },
         responses: { 201: { description: "Staff created" }, 400: { description: "Validation error" } } },
     },
@@ -590,7 +590,7 @@ export const openApiSpec = {
       ], responses: { 200: { description: "Course list" } } },
       post: { tags: ["Courses"], summary: "Create course",
         requestBody: { required: true, content: { "application/json": { schema: { type: "object", properties: {
-          code: { type: "string" }, title: { type: "string" }, credit_hours: { type: "integer" }, campus_id: { type: "string" },
+          code: { type: "string" }, title: { type: "string" }, credit_hours: { type: "integer" }, study_center_id: { type: "string" },
         }, required: ["code", "title"] } } } },
         responses: { 201: { description: "Course created" } } },
     },
@@ -626,14 +626,14 @@ export const openApiSpec = {
       post: { tags: ["Transcripts"], summary: "Verify transcript (public)", security: [], requestBody: { required: true, content: { "application/json": { schema: { type: "object", properties: { id: { type: "string" }, token: { type: "string" } }, required: ["id"] } } } }, responses: { 200: { description: "Verification result" }, 429: { description: "Rate limited" } } },
     },
 
-    // ── Campuses ──────────────────────────────────────────────────────────────────
-    "/api/v1/campuses": {
-      get: { tags: ["Campuses"], summary: "List campuses", responses: { 200: { description: "Campus list" } } },
-      post: { tags: ["Campuses"], summary: "Create campus (admin only)", requestBody: { required: true, content: { "application/json": { schema: { type: "object", properties: { name: { type: "string" }, location: { type: "string" } }, required: ["name"] } } } }, responses: { 201: { description: "Created" }, 403: { description: "Admin only" } } },
+    // ── Study Centers ────────────────────────────────────────────────────────────
+    "/api/v1/study-centers": {
+      get: { tags: ["Study Centers"], summary: "List study centers", responses: { 200: { description: "Study center list" } } },
+      post: { tags: ["Study Centers"], summary: "Create study center (admin only)", requestBody: { required: true, content: { "application/json": { schema: { type: "object", properties: { name: { type: "string" }, location: { type: "string" } }, required: ["name"] } } } }, responses: { 201: { description: "Created" }, 403: { description: "Admin only" } } },
     },
-    "/api/v1/campuses/{id}": {
-      patch: { tags: ["Campuses"], summary: "Update campus", parameters: [{ name: "id", in: "path", required: true, schema: { type: "string" } }], requestBody: { required: true, content: { "application/json": { schema: { type: "object" } } } }, responses: { 200: { description: "Updated" } } },
-      delete: { tags: ["Campuses"], summary: "Delete campus (admin only)", parameters: [{ name: "id", in: "path", required: true, schema: { type: "string" } }], responses: { 200: { description: "Deleted" }, 409: { description: "Has associated students/staff" } } },
+    "/api/v1/study-centers/{id}": {
+      patch: { tags: ["Study Centers"], summary: "Update study center", parameters: [{ name: "id", in: "path", required: true, schema: { type: "string" } }], requestBody: { required: true, content: { "application/json": { schema: { type: "object" } } } }, responses: { 200: { description: "Updated" } } },
+      delete: { tags: ["Study Centers"], summary: "Delete study center (admin only)", parameters: [{ name: "id", in: "path", required: true, schema: { type: "string" } }], responses: { 200: { description: "Deleted" }, 409: { description: "Has associated students/staff" } } },
     },
 
     // ── Hostels ───────────────────────────────────────────────────────────────────

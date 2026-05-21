@@ -152,22 +152,22 @@ const StudentPortal: React.FC = () => {
                 {grades.map((g) => (
                   <tr key={g.id} className="hover:bg-gray-50 dark:hover:bg-gray-700/30">
                     <td className="px-6 py-3 font-semibold text-gray-800 dark:text-gray-200">
-                      {g.courseName || g.courseCode}
+                      {g.courseTitle || g.courseCode}
                     </td>
                     <td className="px-6 py-3 text-gray-500">{g.semester} {g.academicYear}</td>
-                    <td className="px-6 py-3">{g.percentage ?? g.numericGrade ?? '—'}%</td>
+                    <td className="px-6 py-3">{g.totalScore ?? '—'}%</td>
                     <td className="px-6 py-3">
                       <span className={`px-2 py-0.5 text-[10px] font-black uppercase rounded-none ${
-                        g.letterGrade?.startsWith('A') ? 'bg-emerald-100 text-emerald-700'
-                        : g.letterGrade?.startsWith('B') ? 'bg-blue-100 text-blue-700'
-                        : g.letterGrade?.startsWith('C') ? 'bg-amber-100 text-amber-700'
+                        g.grade?.startsWith('A') ? 'bg-emerald-100 text-emerald-700'
+                        : g.grade?.startsWith('B') ? 'bg-blue-100 text-blue-700'
+                        : g.grade?.startsWith('C') ? 'bg-amber-100 text-amber-700'
                         : 'bg-red-100 text-red-700'
                       }`}>
-                        {g.letterGrade ?? '—'}
+                        {g.grade ?? '—'}
                       </span>
                     </td>
                     <td className="px-6 py-3 font-bold text-[#4B0082] dark:text-purple-300">
-                      {g.gpa?.toFixed(1) ?? '—'}
+                      {g.gradePoint?.toFixed(1) ?? '—'}
                     </td>
                   </tr>
                 ))}

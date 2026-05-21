@@ -38,7 +38,7 @@ export async function getStaff(filters?: {
     if (filters?.perPage) params.append('perPage', filters.perPage.toString());
     if (filters?.department) params.append('department', filters.department);
     if (filters?.search) params.append('search', filters.search);
-    if (filters?.campusId) params.append('campus_id', filters.campusId);
+    if (filters?.campusId) params.append('study_center_id', filters.campusId);
     if (filters?.category) params.append('category', filters.category);
 
     const queryString = params.toString();

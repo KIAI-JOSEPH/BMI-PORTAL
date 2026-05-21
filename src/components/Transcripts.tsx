@@ -3224,7 +3224,14 @@ export const Transcripts: React.FC<TranscriptsProps> = (props) => {
                         MODE OF STUDY:
                       </span>
                       <span className="uppercase text-gray-950 font-montserrat font-bold tracking-wide">
-                        {selectedStudent.mode_of_study || "FULL-TIME"}
+                        {(() => {
+                          const isSeminary = selectedStudent.programme?.toLowerCase().includes("diploma") || 
+                                             selectedStudent.programme?.toLowerCase().includes("ministry") || 
+                                             selectedStudent.programme?.toLowerCase().includes("theology");
+                          return (selectedStudent.mode_of_study === "Part-Time" && isSeminary)
+                            ? "PART-TIME (SEMINARY MODE)"
+                            : (selectedStudent.mode_of_study || "FULL-TIME").toUpperCase();
+                        })()}
                       </span>
                     </div>
                     <div className="flex justify-between border-b border-gray-100 pb-0.5">

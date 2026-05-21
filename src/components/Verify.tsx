@@ -236,7 +236,7 @@ const Verify: React.FC<VerifyProps> = ({ students }) => {
                 Campus Location
               </span>
               <span className="text-xs font-black text-gray-800 uppercase">
-                {student?.expand?.campus_id?.name || student?.campus_name || "Main Campus"}
+                {student?.expand?.study_center_id?.name || student?.campus_name || "Main Campus"}
               </span>
             </div>
 

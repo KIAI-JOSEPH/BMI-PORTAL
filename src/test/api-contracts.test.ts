@@ -108,7 +108,7 @@ describe('Student API contract', () => {
       programme: 'Diploma in Christian Ministry and Theology',
       admission_date: '2024-09-01',
       status: 'Active',
-      campus_id: 'campus1',
+      study_center_id: 'campus1',
       avatar_color: '#4B0082',
     };
 

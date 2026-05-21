@@ -27,7 +27,8 @@ import {
 import { getPrograms } from "../services/catalogService";
 import { BulkEntryModal } from "./BulkEntryModal";
 import { postStudentBatch } from "../services/batchService";
-import { getAllCampuses, Campus } from "../services/campusService";
+import { getAllStudyCenters, StudyCenter } from "../services/studyCenterService";
+import { StudyCenterSelector } from "./StudyCenterSelector";
 
 import { useDataStore } from "../stores/dataStore";
 import { usePagination } from "../hooks/usePagination";
@@ -80,8 +81,8 @@ const Students: React.FC<StudentsProps> = (props) => {
   const [programRows, setProgramRows] = useState<
     Array<{ id: string; label: string }>
   >([]);
-  const [campusFilter, setCampusFilter] = useState("All Campuses");
-  const [campuses, setCampuses] = useState<Campus[]>([]);
+  const [campusFilter, setCampusFilter] = useState("All Study Centers");
+  const [campuses, setCampuses] = useState<StudyCenter[]>([]);
   const [bulkStudentsOpen, setBulkStudentsOpen] = useState(false);
   const [statusFilter, setStatusFilter] = useState("All Status");
   const [academicLevelFilter, setAcademicLevelFilter] = useState("All Levels");
@@ -105,7 +106,7 @@ const Students: React.FC<StudentsProps> = (props) => {
     perPage,
     search: searchTerm,
     status: statusFilter !== "All Status" ? statusFilter : undefined,
-    campus_id: campusFilter !== "All Campuses" ? campusFilter : undefined,
+    study_center_id: campusFilter !== "All Study Centers" ? campusFilter : undefined,
     programme: programFilter !== "All Programs" ? programFilter : undefined,
   });
 
@@ -151,14 +152,15 @@ const Students: React.FC<StudentsProps> = (props) => {
 
   useEffect(() => {
     let cancelled = false;
-    (async () => {
+    async function loadStudyCenters() {
       try {
-        const data = await getAllCampuses();
+        const data = await getAllStudyCenters();
         if (!cancelled) setCampuses(data);
       } catch (error) {
-        console.error("Failed to load campuses:", error);
+        console.error("Failed to load study centers:", error);
       }
-    })();
+    }
+    loadStudyCenters();
     return () => {
       cancelled = true;
     };
@@ -182,7 +184,7 @@ const Students: React.FC<StudentsProps> = (props) => {
         academicLevelFilter === "All Levels" ||
         student.programme === academicLevelFilter;
       const matchesCampus =
-        campusFilter === "All Campuses" || student.campus_id === campusFilter;
+        campusFilter === "All Study Centers" || student.study_center_id === campusFilter;
       return (
         matchesSearch &&
         matchesProgram &&
@@ -249,7 +251,7 @@ const Students: React.FC<StudentsProps> = (props) => {
       const activeCampusId =
         targetCampusId !== undefined
           ? targetCampusId
-          : campusFilter === "All Campuses"
+          : campusFilter === "All Study Centers"
             ? undefined
             : campusFilter;
       // Sync fetches page 1 and stores result in the global store for
@@ -398,19 +400,11 @@ const Students: React.FC<StudentsProps> = (props) => {
               onChange={(e) => setSearchTerm(e.target.value)}
             />
           </div>
-          <select
+          <StudyCenterSelector
             value={campusFilter}
-            onChange={(e) => setCampusFilter(e.target.value)}
-            className="px-4 py-2 bg-gray-50 dark:bg-gray-700 border border-gray-200 dark:border-gray-600 text-[10px] font-black uppercase outline-none cursor-pointer dark:text-white max-w-[220px]"
-            title="Filter by campus"
-          >
-            <option value="All Campuses">All Campuses</option>
-            {campuses.map((campus) => (
-              <option key={campus.id} value={campus.id}>
-                {campus.name}
-              </option>
-            ))}
-          </select>
+            onChange={setCampusFilter}
+            includeAll={true}
+          />
           <select
             value={programFilter}
             onChange={(e) => setProgramFilter(e.target.value)}

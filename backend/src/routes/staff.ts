@@ -128,7 +128,7 @@ const listStaffRoute = createRoute({
       department: z.string().optional().openapi({ example: "Theology" }),
       category: z.string().optional().openapi({ example: "Academic" }),
       search: z.string().optional().openapi({ example: "Jane" }),
-      campus_id: z.string().optional().openapi({ example: "CAMP001" }),
+      study_center_id: z.string().optional().openapi({ example: "CAMP001" }),
     }),
   },
   responses: {
@@ -421,7 +421,7 @@ staffRouter.openapi(listStaffRoute, async (c) => {
       department,
       category,
       search,
-      campus_id,
+      study_center_id,
     } = c.req.valid("query");
     const { page, perPage } = parsePagination(p, pp, {
       page: 1,
@@ -432,7 +432,7 @@ staffRouter.openapi(listStaffRoute, async (c) => {
     const result = await StaffQueries.getWithDetails({
       page,
       perPage,
-      campusId: campus_id && campus_id !== "all" ? campus_id : undefined,
+      campusId: study_center_id && study_center_id !== "all" ? study_center_id : undefined,
       department: department || undefined,
       category: category || undefined,
       search: search || undefined,

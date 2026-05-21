@@ -27,15 +27,15 @@ function calculateGrade(percentage: number) {
 export async function importRelationalData(data: any) {
   const pb = getPocketBase();
 
-  // Load campuses map
-  const campusMap = new Map<string, string>();
+  // Load study centers map
+  const studyCenterMap = new Map<string, string>();
   try {
-    const campusesList = await pb.collection("campuses").getFullList();
-    campusesList.forEach(c => {
-      campusMap.set(c.name.toLowerCase().trim(), c.id);
+    const centersList = await pb.collection("study_centers").getFullList();
+    centersList.forEach(c => {
+      studyCenterMap.set(c.name.toLowerCase().trim(), c.id);
     });
   } catch (e) {
-    logger.warn("Failed to load campuses for import mapping: " + errorMessage(e));
+    logger.warn("Failed to load study centers for import mapping: " + errorMessage(e));
   }
 
   // We will build maps of Codes -> PB IDs
@@ -216,13 +216,12 @@ export async function importRelationalData(data: any) {
         }
       }
       
-      let campusId = "";
-      if (row.campus) {
-        const key = String(row.campus).toLowerCase().trim();
-        let normKey = key;
-        if (key === "karatina a") normKey = "karatina 1";
-        if (key === "karatina b") normKey = "karatina 2";
-        campusId = campusMap.get(normKey) || "";
+      let studyCenterId = "";
+      if (row.study_center) {
+        const key = String(row.study_center).toLowerCase().trim();
+        const normKey =
+          key === "main" || key === "nairobi" ? "nairobi (main)" : key;
+        studyCenterId = studyCenterMap.get(normKey) || "";
       }
 
       const programName = programNames.get(progId) || "";
@@ -239,7 +238,7 @@ export async function importRelationalData(data: any) {
           admission_no: row.admission_no || row.student_number,
           full_name: row.full_name || `${row.first_name || ""} ${row.last_name || ""}`.trim(),
           status: statusVal,
-          campus_id: campusId || undefined
+          study_center_id: studyCenterId || undefined
         },
         "students",
         row.student_number,

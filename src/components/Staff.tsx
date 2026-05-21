@@ -24,7 +24,8 @@ import {
 } from "lucide-react";
 import { StaffMember } from "../types";
 import { getStaff } from "../services/staffService";
-import { getAllCampuses, Campus } from "../services/campusService";
+import { getAllStudyCenters, StudyCenter } from "../services/studyCenterService";
+import { StudyCenterSelector } from "./StudyCenterSelector";
 import { useDataStore } from "../stores/dataStore";
 import { usePagination } from "../hooks/usePagination";
 import { useStaffQuery } from "../hooks/useEntityQueries";
@@ -56,8 +57,8 @@ const Staff: React.FC = () => {
   };
   const [searchTerm, setSearchTerm] = useState("");
   const [deptFilter, setDeptFilter] = useState("All Departments");
-  const [campusFilter, setCampusFilter] = useState("All Campuses");
-  const [campuses, setCampuses] = useState<Campus[]>([]);
+  const [campusFilter, setCampusFilter] = useState("All Study Centers");
+  const [campuses, setCampuses] = useState<StudyCenter[]>([]);
   const [activeTab, setActiveTab] = useState<
     "All" | "Academic" | "Administrative" | "Management"
   >("All");
@@ -90,7 +91,7 @@ const Staff: React.FC = () => {
     page,
     perPage,
     search: searchTerm,
-    campus_id: campusFilter !== "All Campuses" ? campusFilter : undefined,
+    study_center_id: campusFilter !== "All Study Centers" ? campusFilter : undefined,
     department: deptFilter !== "All Departments" ? deptFilter : undefined,
     category: activeTab !== "All" ? activeTab : undefined,
   });
@@ -112,14 +113,15 @@ const Staff: React.FC = () => {
 
   useEffect(() => {
     let cancelled = false;
-    (async () => {
+    async function loadStudyCenters() {
       try {
-        const data = await getAllCampuses();
+        const data = await getAllStudyCenters();
         if (!cancelled) setCampuses(data);
       } catch (error) {
         console.error("Failed to load campuses:", error);
       }
-    })();
+    }
+    loadStudyCenters();
     return () => {
       cancelled = true;
     };
@@ -139,7 +141,7 @@ const Staff: React.FC = () => {
         (member.role || "").toLowerCase().includes(searchTerm.toLowerCase());
       const matchesTab = activeTab === "All" || member.category === activeTab;
       const matchesCampus =
-        campusFilter === "All Campuses" || member.campus_id === campusFilter;
+        campusFilter === "All Study Centers" || member.study_center_id === campusFilter;
       return matchesSearch && matchesTab && matchesCampus;
     });
   }, [staff, searchTerm, activeTab, campusFilter]);
@@ -334,18 +336,11 @@ const Staff: React.FC = () => {
                 className="w-full pl-10 pr-4 py-2.5 bg-gray-50 dark:bg-gray-700 border border-gray-200 dark:border-gray-600 rounded-none outline-none text-sm dark:text-white font-semibold focus:ring-1 focus:ring-[#4B0082]"
               />
             </div>
-            <select
+            <StudyCenterSelector
               value={campusFilter}
-              onChange={(e) => setCampusFilter(e.target.value)}
-              className="px-4 py-2.5 bg-gray-50 dark:bg-gray-700 border border-gray-200 dark:border-gray-600 rounded-none text-xs font-bold uppercase tracking-widest outline-none dark:text-white cursor-pointer"
-            >
-              <option value="All Campuses">All Campuses</option>
-              {campuses.map((c) => (
-                <option key={c.id} value={c.id}>
-                  {c.name}
-                </option>
-              ))}
-            </select>
+              onChange={setCampusFilter}
+              includeAll
+            />
             <select
               value={deptFilter}
               onChange={(e) => setDeptFilter(e.target.value)}

@@ -403,7 +403,7 @@ dashboardRouter.get("/academic-stats", async (c) => {
       pb
         .collection("grades")
         .getList(1, 1000, { fields: "grade_letter,percentage" }),
-      pb.collection("campuses").getFullList({ fields: "id,name" }),
+      pb.collection("study_centers").getFullList({ fields: "id,name" }),
     ]);
 
     // Grade distribution
@@ -433,7 +433,7 @@ dashboardRouter.get("/academic-stats", async (c) => {
     for (const campus of campusList) {
       const rec = pbRecord<CampusRecord>(campus);
       const count = await pb.collection("students").getList(1, 1, {
-        filter: `campus_id = "${rec.id}"`,
+        filter: `study_center_id = "${rec.id}"`,
       });
       campusStats.push({ name: rec.name, students: count.totalItems });
     }

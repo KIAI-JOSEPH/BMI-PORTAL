@@ -88,7 +88,7 @@ function mapExpandedGradeToFrontendShape(
   const student = enroll?.expand?.student_number as ExpandedRecord | undefined;
   const course = enroll?.expand?.course_code as ExpandedRecord | undefined;
   const module = course?.expand?.module_id as ExpandedRecord | undefined;
-  const campus = student?.expand?.campus_id as ExpandedRecord | undefined;
+  const campus = student?.expand?.study_center_id as ExpandedRecord | undefined;
 
   const percentage =
     typeof expanded.total_score === "number"
@@ -139,7 +139,7 @@ function mapExpandedGradeToFrontendShape(
       "Unknown",
     gender: student?.gender || "",
     campusName: campus?.name || "",
-    campusId: student?.campus_id || "",
+    campusId: student?.study_center_id || "",
     courseCode: course?.code || course?.course_code || "",
     courseName: course?.title || course?.name || "Unknown Course",
     credits: creditHours,
@@ -390,7 +390,7 @@ gradeRouter.openapi(listGradesRoute, async (c) => {
     // Fetch from the normalized V2 'grades' collection
     const result = await pb.collection("grades").getList(page, perPage, {
       filter: filterString,
-      expand: "enrollment_id.student_number.campus_id,enrollment_id.course_code.module_id",
+      expand: "enrollment_id.student_number.study_center_id,enrollment_id.course_code.module_id",
       sort: "-created",
     });
 
@@ -474,7 +474,7 @@ gradeRouter.openapi(createGradeRoute, async (c) => {
     sheetsSyncQueue.enqueueGradeSync(record.id);
 
     const expanded = await pb.collection("grades").getOne(record.id, {
-      expand: "enrollment_id.student_number.campus_id,enrollment_id.course_code.module_id",
+      expand: "enrollment_id.student_number.study_center_id,enrollment_id.course_code.module_id",
     });
 
     return c.json(
@@ -507,12 +507,12 @@ gradeRouter.openapi(getStudentTranscriptRoute, async (c) => {
     const pb = getPocketBase();
 
     const student = await pb.collection("students").getOne(studentId, {
-      expand: "campus_id,program_code.dept_code.faculty_code",
+      expand: "study_center_id,program_code.dept_code.faculty_code",
     });
 
     const gradesResult = await pb.collection("grades").getFullList({
       filter: `enrollment_id.student_number = "${sanitizeFilter(studentId)}"`,
-      expand: "enrollment_id.student_number.campus_id,enrollment_id.course_code.module_id",
+      expand: "enrollment_id.student_number.study_center_id,enrollment_id.course_code.module_id",
       sort: "created",
     });
 
@@ -691,7 +691,7 @@ gradeRouter.openapi(getGradeRoute, async (c) => {
     const pb = getPocketBase();
 
     const record = await pb.collection("grades").getOne(id, {
-      expand: "enrollment_id.student_number.campus_id,enrollment_id.course_code.module_id",
+      expand: "enrollment_id.student_number.study_center_id,enrollment_id.course_code.module_id",
     });
 
     return c.json({
@@ -729,7 +729,7 @@ gradeRouter.openapi(updateGradeRoute, async (c) => {
     await pb.collection("grades").update(id, updateData);
 
     const expanded = await pb.collection("grades").getOne(id, {
-      expand: "enrollment_id.student_number.campus_id,enrollment_id.course_code.module_id",
+      expand: "enrollment_id.student_number.study_center_id,enrollment_id.course_code.module_id",
     });
 
     sheetsSyncQueue.enqueueGradeSync(id);
