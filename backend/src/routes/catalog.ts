@@ -56,6 +56,20 @@ catalogRouter.get('/programs', async (c) => {
   }
 });
 
+catalogRouter.get('/terms', async (c) => {
+  try {
+    const pb = getPocketBase();
+    const rows = await pb.collection('academic_terms').getFullList({ sort: '-start_date' });
+    return c.json({ success: true, data: rows });
+  } catch (e: any) {
+    if (e?.status === 404) {
+      return c.json({ success: true, data: [] });
+    }
+    logger.error('catalog terms', e);
+    return c.json({ success: false, error: 'Failed to load academic terms' }, 500);
+  }
+});
+
 catalogRouter.get('/program-courses', async (c) => {
   try {
     const pb = getPocketBase();

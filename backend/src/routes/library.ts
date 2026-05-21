@@ -7,8 +7,6 @@ import { logger } from "../utils/logger.js";
 import { LibraryQueries, CacheManager } from "../services/queryOptimizer.js";
 import {
   parsePagination,
-  sanitizeFilter,
-  buildFilter,
 } from "../utils/helpers.js";
 import { ApiResponseSchema, ErrorResponseSchema } from "../openapi/common.js";
 import type { LibraryItem } from "../types/index.js";
@@ -19,6 +17,38 @@ const libraryRouter = new OpenAPIHono<AppEnv>();
 // Apply middleware
 libraryRouter.use("*", authMiddleware);
 libraryRouter.use("*", auditMiddleware);
+
+libraryRouter.use("/", async (c, next) => {
+  if (c.req.method === "POST") {
+    return requireRole("admin", "registrar", "staff")(c, () => logAction("CREATE", "library")(c, next));
+  }
+  await next();
+});
+
+libraryRouter.use("/:id", async (c, next) => {
+  const method = c.req.method;
+  if (method === "PATCH") {
+    return requireRole("admin", "registrar", "staff")(c, () => logAction("UPDATE", "library")(c, next));
+  }
+  if (method === "DELETE") {
+    return requireRole("admin")(c, () => logAction("DELETE", "library")(c, next));
+  }
+  await next();
+});
+
+libraryRouter.use("/:id/borrow", async (c, next) => {
+  if (c.req.method === "POST") {
+    return requireRole("admin", "registrar", "staff")(c, () => logAction("UPDATE", "library")(c, next));
+  }
+  await next();
+});
+
+libraryRouter.use("/:id/return", async (c, next) => {
+  if (c.req.method === "POST") {
+    return requireRole("admin", "registrar", "staff")(c, () => logAction("UPDATE", "library")(c, next));
+  }
+  await next();
+});
 
 // Validation schemas
 const LibraryItemSchema = z
@@ -366,7 +396,7 @@ libraryRouter.openapi(listLibraryItemsRoute, async (c) => {
         perPage: result.perPage,
         total: result.totalItems,
       },
-    });
+    }, 200);
   } catch (error) {
     logger.error("Get library items error:", error);
     return c.json(
@@ -389,7 +419,7 @@ libraryRouter.openapi(getLibraryItemRoute, async (c) => {
     return c.json({
       success: true,
       data: item as unknown as LibraryItem,
-    });
+    }, 200);
   } catch (error) {
     logger.error("Get library item error:", error);
     return c.json(
@@ -404,8 +434,6 @@ libraryRouter.openapi(getLibraryItemRoute, async (c) => {
 
 libraryRouter.openapi(
   createLibraryItemRoute,
-  requireRole("admin", "registrar", "staff"),
-  logAction("CREATE", "library"),
   async (c) => {
     try {
       const data = c.req.valid("json");
@@ -447,8 +475,6 @@ libraryRouter.openapi(
 
 libraryRouter.openapi(
   updateLibraryItemRoute,
-  requireRole("admin", "registrar", "staff"),
-  logAction("UPDATE", "library"),
   async (c) => {
     try {
       const { id } = c.req.valid("param");
@@ -464,7 +490,7 @@ libraryRouter.openapi(
         success: true,
         data: updated as unknown as LibraryItem,
         message: "Library item updated successfully",
-      });
+      }, 200);
     } catch (error) {
       logger.error("Update library item error:", error);
       return c.json(
@@ -480,8 +506,6 @@ libraryRouter.openapi(
 
 libraryRouter.openapi(
   deleteLibraryItemRoute,
-  requireRole("admin"),
-  logAction("DELETE", "library"),
   async (c) => {
     try {
       const { id } = c.req.valid("param");
@@ -496,7 +520,7 @@ libraryRouter.openapi(
         success: true,
         data: null,
         message: "Library item deleted successfully",
-      });
+      }, 200);
     } catch (error) {
       logger.error("Delete library item error:", error);
       return c.json(
@@ -512,8 +536,6 @@ libraryRouter.openapi(
 
 libraryRouter.openapi(
   borrowItemRoute,
-  requireRole("admin", "registrar", "staff"),
-  logAction("UPDATE", "library"),
   async (c) => {
     try {
       const { id } = c.req.valid("param");
@@ -544,7 +566,7 @@ libraryRouter.openapi(
         success: true,
         data: updated as unknown as LibraryItem,
         message: "Item marked as borrowed",
-      });
+      }, 200);
     } catch (error) {
       logger.error("Borrow item error:", error);
       return c.json(
@@ -560,8 +582,6 @@ libraryRouter.openapi(
 
 libraryRouter.openapi(
   returnItemRoute,
-  requireRole("admin", "registrar", "staff"),
-  logAction("UPDATE", "library"),
   async (c) => {
     try {
       const { id } = c.req.valid("param");
@@ -584,7 +604,7 @@ libraryRouter.openapi(
         success: true,
         data: updated as unknown as LibraryItem,
         message: "Item marked as available",
-      });
+      }, 200);
     } catch (error) {
       logger.error("Return item error:", error);
       return c.json(

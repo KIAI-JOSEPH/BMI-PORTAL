@@ -264,7 +264,7 @@ dashboardRouter.get("/recent-activity", async (c) => {
     ]
       .sort(
         (a, b) =>
-          new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime(),
+          new Date(b.timestamp || "").getTime() - new Date(a.timestamp || "").getTime(),
       )
       .slice(0, 10);
 

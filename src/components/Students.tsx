@@ -29,6 +29,7 @@ import { BulkEntryModal } from "./BulkEntryModal";
 import { postStudentBatch } from "../services/batchService";
 import { getAllStudyCenters, StudyCenter } from "../services/studyCenterService";
 import { StudyCenterSelector } from "./StudyCenterSelector";
+import StudentEnrollmentForm from "./StudentEnrollmentForm";
 
 import { useDataStore } from "../stores/dataStore";
 import { usePagination } from "../hooks/usePagination";
@@ -88,6 +89,7 @@ const Students: React.FC<StudentsProps> = (props) => {
   const [academicLevelFilter, setAcademicLevelFilter] = useState("All Levels");
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [isImportOpen, setIsImportOpen] = useState(false);
+  const [isEnrollOpen, setIsEnrollOpen] = useState(false);
   const [editingStudent, setEditingStudent] = useState<Student | undefined>(
     undefined,
   );
@@ -313,6 +315,12 @@ const Students: React.FC<StudentsProps> = (props) => {
               <Globe size={12} />
             )}
             {isSyncing ? "Syncing..." : "Sync Web Apps"}
+          </button>
+          <button
+            onClick={() => setIsEnrollOpen(true)}
+            className="hidden md:flex items-center gap-2 px-3 py-1.5 bg-teal-600 text-white rounded-none font-bold text-[9px] uppercase tracking-widest hover:bg-teal-700 transition-all shadow-sm"
+          >
+            <GraduationCap size={12} /> Enroll Student
           </button>
           <button
             onClick={() => setBulkStudentsOpen(true)}
@@ -728,6 +736,21 @@ const Students: React.FC<StudentsProps> = (props) => {
             return { ok: false, message: "Invalid JSON on one or more lines." };
           }
         }}
+      />
+
+      {/* ── Student Enrollment Modal ───────────────────────────────────── */}
+      <StudentEnrollmentForm
+        isOpen={isEnrollOpen}
+        onClose={() => setIsEnrollOpen(false)}
+        onSuccess={() => {
+          setIsEnrollOpen(false);
+          queryClient.invalidateQueries({ queryKey: ["students"] });
+        }}
+        students={filteredStudents.map((s) => ({
+          id: s.id,
+          name: s.full_name || `${s.first_name} ${s.last_name}`,
+          admissionNo: s.student_code,
+        }))}
       />
     </div>
   );

@@ -2,6 +2,8 @@ import { ReactNode } from "react";
 
 // Re-export core entities from shared types
 export * from "../shared/types";
+export * from "./types/index";
+export type { ApiResponse } from "./types/index";
 
 // UI-specific types (Frontend only)
 export interface NavItem {

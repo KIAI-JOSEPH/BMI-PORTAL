@@ -15,22 +15,23 @@ function normalizePayload(collectionName: string, data: any): any {
 
   // Handle FormData
   if (typeof FormData !== "undefined" && data instanceof FormData) {
-    for (const key of data.keys()) {
-      const val = data.get(key);
+    const formData = data as any;
+    for (const key of formData.keys()) {
+      const val = formData.get(key);
       if (typeof val === "string") {
         if (key === "first_name" || key === "last_name" || key === "full_name") {
-          data.set(key, normalizeText(val, "name"));
+          formData.set(key, normalizeText(val, "name"));
         } else if (key === "name") {
           const isPersonCollection = ["students", "staff", "users"].includes(collectionName);
-          data.set(key, normalizeText(val, isPersonCollection ? "name" : "title"));
+          formData.set(key, normalizeText(val, isPersonCollection ? "name" : "title"));
         } else if (
           ["title", "programme", "department", "faculty", "location", "category"].includes(key)
         ) {
-          data.set(key, normalizeText(val, "title"));
+          formData.set(key, normalizeText(val, "title"));
         }
       }
     }
-    return data;
+    return formData;
   }
 
   // Handle plain objects
@@ -210,7 +211,6 @@ export async function verifyCollections(): Promise<void> {
 
     logger.info(`Existing collections: ${existingNames.join(", ")}`);
 
-    // Define required collections
     const requiredCollections = [
       "study_centers",
       "modules",
@@ -236,6 +236,11 @@ export async function verifyCollections(): Promise<void> {
       "visitors",
       "attendance_records",
       "users",
+      "faculties",
+      "departments",
+      "programs",
+      "program_courses",
+      "academic_terms",
     ];
 
     const missing = requiredCollections.filter(

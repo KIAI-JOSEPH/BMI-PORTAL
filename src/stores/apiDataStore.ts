@@ -77,6 +77,7 @@ interface AttendanceRecord {
     studentName: string;
     status: 'Present' | 'Absent' | 'Late' | 'Excused';
   }>;
+  updated?: string;
 }
 
 interface ApiDataState {

@@ -35,6 +35,24 @@ const coursesRouter = new OpenAPIHono<AppEnv>();
 coursesRouter.use("*", authMiddleware);
 coursesRouter.use("*", auditMiddleware);
 
+coursesRouter.use("/", async (c, next) => {
+  if (c.req.method === "POST") {
+    return requireRole("admin", "registrar", "staff")(c, () => logAction("CREATE", "courses")(c, next));
+  }
+  await next();
+});
+
+coursesRouter.use("/:id", async (c, next) => {
+  const method = c.req.method;
+  if (method === "PATCH") {
+    return requireRole("admin", "registrar", "staff")(c, () => logAction("UPDATE", "courses")(c, next));
+  }
+  if (method === "DELETE") {
+    return requireRole("admin")(c, () => logAction("DELETE", "courses")(c, next));
+  }
+  await next();
+});
+
 // Validation schemas
 const CourseSchema = z
   .object({
@@ -351,7 +369,6 @@ coursesRouter.openapi(listCoursesRoute, async (c) => {
       search,
       status,
       study_center_id,
-      module_id,
     } = c.req.valid("query");
     const { page, perPage } = parsePagination(p, pp, {
       page: 1,
@@ -377,7 +394,7 @@ coursesRouter.openapi(listCoursesRoute, async (c) => {
         perPage: result.perPage,
         total: result.totalItems,
       },
-    });
+    }, 200);
   } catch (error) {
     logger.error("Get courses error:", error);
     return c.json(
@@ -447,7 +464,7 @@ coursesRouter.openapi(getCourseStatsRoute, async (c) => {
       ),
     };
 
-    return c.json({ success: true, data: stats });
+    return c.json({ success: true, data: stats }, 200);
   } catch (error) {
     logger.error("Get course stats error:", error);
     return c.json(
@@ -466,7 +483,7 @@ coursesRouter.openapi(getCourseRoute, async (c) => {
     return c.json({
       success: true,
       data: mapCourseRecord(course as unknown as Record<string, unknown>),
-    });
+    }, 200);
   } catch (error) {
     logger.error("Get course error:", error);
     return c.json(
@@ -481,8 +498,6 @@ coursesRouter.openapi(getCourseRoute, async (c) => {
 
 coursesRouter.openapi(
   createCourseRoute,
-  requireRole("admin", "registrar", "staff"),
-  logAction("CREATE", "courses"),
   async (c) => {
     try {
       const data = c.req.valid("json");
@@ -532,8 +547,6 @@ coursesRouter.openapi(
 
 coursesRouter.openapi(
   updateCourseRoute,
-  requireRole("admin", "registrar", "staff"),
-  logAction("UPDATE", "courses"),
   async (c) => {
     try {
       const { id } = c.req.valid("param");
@@ -548,7 +561,7 @@ coursesRouter.openapi(
         success: true,
         data: mapCourseRecord(updated as unknown as Record<string, unknown>),
         message: "Course updated successfully",
-      });
+      }, 200);
     } catch (error) {
       logger.error("Update course error:", error);
       return c.json(
@@ -564,8 +577,6 @@ coursesRouter.openapi(
 
 coursesRouter.openapi(
   deleteCourseRoute,
-  requireRole("admin"),
-  logAction("DELETE", "courses"),
   async (c) => {
     try {
       const { id } = c.req.valid("param");
@@ -577,7 +588,7 @@ coursesRouter.openapi(
         success: true,
         data: null,
         message: "Course deleted successfully",
-      });
+      }, 200);
     } catch (error) {
       logger.error("Delete course error:", error);
       return c.json(

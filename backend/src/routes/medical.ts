@@ -59,7 +59,7 @@ medicalRouter.post('/', requireRole('admin', 'staff', 'faculty'), zValidator('js
 // PATCH /api/v1/medical/:id — Update a medical visit
 medicalRouter.patch('/:id', requireRole('admin', 'staff'), zValidator('json', medicalVisitSchema.partial()), async (c) => {
   try {
-    const id = c.req.param('id');
+    const id = c.req.param('id')!;
     const data = c.req.valid('json');
     const pb = getPocketBase();
     const record = await pb.collection('medical_visits').update(id, data);
@@ -73,7 +73,7 @@ medicalRouter.patch('/:id', requireRole('admin', 'staff'), zValidator('json', me
 // DELETE /api/v1/medical/:id — Delete a medical visit
 medicalRouter.delete('/:id', requireRole('admin', 'staff'), async (c) => {
   try {
-    const id = c.req.param('id');
+    const id = c.req.param('id')!;
     const pb = getPocketBase();
     await pb.collection('medical_visits').delete(id);
     return c.json<ApiResponse<any>>({ success: true, data: null });

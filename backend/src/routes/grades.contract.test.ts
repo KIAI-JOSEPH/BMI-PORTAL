@@ -201,10 +201,11 @@ describe("Grades contract", () => {
     expect(json.success).toBe(true);
     expect(json.data.numericGrade).toBe(90);
     expect(json.data.letterGrade).toBe("A");
-    expect(updateSpy).toHaveBeenCalledWith("g1", {
-      percentage: 90,
-      grade_letter: "A",
-      gpa: 4.0,
-    });
+    expect(updateSpy).toHaveBeenCalledWith("g1", expect.objectContaining({
+      total_score: 90,
+      letter_grade: "A",
+      grade_points: 4.0,
+      status: "Provisional",
+    }));
   });
 });

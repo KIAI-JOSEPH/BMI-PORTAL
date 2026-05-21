@@ -376,7 +376,7 @@ const Courses: React.FC = () => {
                     {course.title}
                   </h3>
                   <p className="text-[10px] font-bold text-[#4B0082] dark:text-purple-300 uppercase tracking-widest mt-2">
-                    {course.category ?? ""} • {(course as any).department}
+                    {(course as any).category ?? ""} • {(course as any).department}
                   </p>
                   <div className="mt-4 text-xs font-medium text-gray-500 dark:text-gray-400 line-clamp-3">
                     {(course as any).description}
@@ -453,7 +453,7 @@ const Courses: React.FC = () => {
                       {(course as any).department}
                     </p>
                     <p className="text-[9px] font-black text-[#4B0082] dark:text-purple-300 uppercase tracking-widest mt-0.5 truncate">
-                      {course.category ?? ""}
+                      {(course as any).category ?? ""}
                     </p>
                   </div>
                   <div className="px-6 py-5 text-center font-bold text-gray-600 dark:text-gray-400 text-xs">

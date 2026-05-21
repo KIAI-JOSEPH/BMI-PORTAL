@@ -448,7 +448,7 @@ staffRouter.openapi(listStaffRoute, async (c) => {
         perPage: result.perPage,
         total: result.totalItems,
       },
-    });
+    }, 200);
   } catch (error) {
     logger.error("Get staff error:", error);
     return c.json(
@@ -514,7 +514,7 @@ staffRouter.openapi(getStaffStatsRoute, async (c) => {
       byDepartment,
     };
 
-    return c.json({ success: true, data: stats });
+    return c.json({ success: true, data: stats }, 200);
   } catch (error) {
     logger.error("Get staff stats error:", error);
     return c.json(
@@ -537,7 +537,7 @@ staffRouter.openapi(getDepartmentsRoute, async (c) => {
           .filter(Boolean),
       ),
     ].sort();
-    return c.json({ success: true, data: departments });
+    return c.json({ success: true, data: departments }, 200);
   } catch (error) {
     logger.error("Get departments error:", error);
     return c.json(
@@ -556,7 +556,7 @@ staffRouter.openapi(getStaffRoute, async (c) => {
     return c.json({
       success: true,
       data: mapStaffRecord(staff as unknown as Record<string, unknown>),
-    });
+    }, 200);
   } catch (error) {
     logger.error("Get staff member error:", error);
     return c.json(
@@ -611,7 +611,7 @@ staffRouter.openapi(updateStaffRoute, async (c) => {
     return c.json({
       success: true,
       data: mapStaffRecord(record as unknown as Record<string, unknown>),
-    });
+    }, 200);
   } catch (error) {
     logger.error("Update staff error:", error);
     return c.json(
@@ -634,7 +634,7 @@ staffRouter.openapi(deleteStaffRoute, async (c) => {
     return c.json({
       success: true,
       data: null,
-    });
+    }, 200);
   } catch (error) {
     logger.error("Delete staff error:", error);
     return c.json(

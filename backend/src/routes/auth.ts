@@ -253,6 +253,14 @@ const mfaVerifyRoute = createRoute({
       },
       description: "Invalid MFA code or token",
     },
+    403: {
+      content: {
+        "application/json": {
+          schema: ErrorResponseSchema,
+        },
+      },
+      description: "Account deactivated or forbidden",
+    },
   },
 });
 
@@ -356,6 +364,14 @@ const forgotPasswordRoute = createRoute({
         },
       },
       description: "Validation error",
+    },
+    500: {
+      content: {
+        "application/json": {
+          schema: ErrorResponseSchema,
+        },
+      },
+      description: "Server error",
     },
   },
 });
@@ -577,7 +593,7 @@ authRouter.openapi(loginRoute, async (c) => {
           mfaRequired: true,
           mfaToken,
         },
-      });
+      }, 200);
     }
 
     const { accessToken, refreshToken, refreshExpiry } = await generateTokens(
@@ -586,10 +602,12 @@ authRouter.openapi(loginRoute, async (c) => {
     );
 
     // Parse expiry to get days (e.g., '30d' -> 30)
-    const maxAgeDays = parseInt(refreshExpiry, 10) || 7;
+    const maxAgeDays = parseInt(refreshExpiry || "", 10) || 7;
 
     // Set refresh token in HTTP-only cookie
-    setRefreshCookie(c, refreshToken, maxAgeDays);
+    if (refreshToken) {
+      setRefreshCookie(c, refreshToken, maxAgeDays);
+    }
 
     // Update last login using global admin instance
     const adminPb = getPocketBase();
@@ -615,7 +633,7 @@ authRouter.openapi(loginRoute, async (c) => {
           updated: user.updated,
         },
       },
-    });
+    }, 200);
   } catch (error: unknown) {
     const pbError = error as {
       status?: number;
@@ -676,12 +694,14 @@ authRouter.openapi(refreshRoute, async (c) => {
 
     // Generate new pair (Token Rotation)
     const tokens = await generateTokens(user);
-    setRefreshCookie(c, tokens.refreshToken);
+    if (tokens.refreshToken) {
+      setRefreshCookie(c, tokens.refreshToken);
+    }
 
     return c.json({
       success: true,
       data: { token: tokens.accessToken },
-    });
+    }, 200);
   } catch (error) {
     logger.error("Refresh token error:", error);
     deleteCookie(c, COOKIE_NAME);
@@ -718,7 +738,7 @@ authRouter.openapi(logoutRoute, async (c) => {
     success: true,
     data: null,
     message: "Logged out successfully",
-  });
+  }, 200);
 });
 
 authRouter.openapi(meRoute, async (c) => {
@@ -736,7 +756,7 @@ authRouter.openapi(meRoute, async (c) => {
   return c.json({
     success: true,
     data: user,
-  });
+  }, 200);
 });
 
 authRouter.openapi(mfaVerifyRoute, async (c) => {
@@ -779,7 +799,9 @@ authRouter.openapi(mfaVerifyRoute, async (c) => {
 
     // Login successful
     const { accessToken, refreshToken, refreshExpiry } = await generateTokens(user);
-    setRefreshCookie(c, refreshToken, parseInt(refreshExpiry, 10) || 7);
+    if (refreshToken) {
+      setRefreshCookie(c, refreshToken, parseInt(refreshExpiry || "", 10) || 7);
+    }
 
     return c.json({
       success: true,
@@ -798,7 +820,7 @@ authRouter.openapi(mfaVerifyRoute, async (c) => {
           updated: user.updated,
         },
       },
-    });
+    }, 200);
   } catch (error) {
     logger.error("MFA verification error:", error);
     return c.json({ success: false, error: "Invalid or expired MFA token" }, 401);
@@ -806,20 +828,20 @@ authRouter.openapi(mfaVerifyRoute, async (c) => {
 });
 
 authRouter.openapi(mfaSetupRoute, async (c) => {
-  const user = getUser(c);
+  const user = getUser(c)!;
   const secret = MfaService.generateSecret();
-  const otpAuthUrl = MfaService.generateOtpAuthUrl(user.email, secret);
+  const otpAuthUrl = MfaService.generateOtpAuthUrl(user.email || "", secret);
   const qrCode = await MfaService.generateQrCode(otpAuthUrl);
 
   return c.json({
     success: true,
     data: { secret, qrCode },
-  });
+  }, 200);
 });
 
 authRouter.openapi(mfaEnableRoute, async (c) => {
   const { secret, code } = c.req.valid("json");
-  const user = getUser(c);
+  const user = getUser(c)!;
 
   const isValid = MfaService.verifyToken(code, secret);
   if (!isValid) {
@@ -829,7 +851,7 @@ authRouter.openapi(mfaEnableRoute, async (c) => {
   const recoveryCodes = MfaService.generateRecoveryCodes();
   const pb = getPocketBase();
   
-  await pb.collection("users").update(user.id, {
+  await pb.collection("users").update(user.id || "", {
     mfaSecret: secret,
     mfaEnabled: true,
     mfaRecoveryCodes: recoveryCodes,
@@ -840,7 +862,7 @@ authRouter.openapi(mfaEnableRoute, async (c) => {
   return c.json({
     success: true,
     data: { recoveryCodes },
-  });
+  }, 200);
 });
 
 authRouter.openapi(forgotPasswordRoute, async (c) => {
@@ -858,7 +880,7 @@ authRouter.openapi(forgotPasswordRoute, async (c) => {
       success: true,
       data: null,
       message: "Password reset instructions sent",
-    });
+    }, 200);
   } catch (error) {
     logger.error("Forgot password error:", error);
     return c.json({ success: false, error: "Failed to request password reset" }, 500);
@@ -876,7 +898,7 @@ authRouter.openapi(resetPasswordRoute, async (c) => {
       success: true,
       data: null,
       message: "Password reset successful",
-    });
+    }, 200);
   } catch (error) {
     logger.error("Reset password error:", error);
     return c.json({ success: false, error: "Failed to reset password" }, 400);
@@ -902,7 +924,7 @@ authRouter.openapi(changePasswordRoute, async (c) => {
     }
 
     // Update the password
-    await pb.collection("users").update(user.sub || user.id, {
+    await pb.collection("users").update(user.sub || user.id || "", {
       password: newPassword,
       passwordConfirm: newPassword,
     });
@@ -911,7 +933,7 @@ authRouter.openapi(changePasswordRoute, async (c) => {
       success: true,
       data: null,
       message: "Password changed successfully",
-    });
+    }, 200);
   } catch (error) {
     logger.error("Change password error:", error);
     return c.json({ success: false, error: "Failed to change password" }, 500);
